@@ -4,26 +4,22 @@
 # 기능
 
 ## 회원 관리
-### 기술: JWT / DB 스케쥴링 or Spring Schedular / RDB
-### Entity: 사용자, 알림, 자산, 카테고리
-- JWT 로그인
-- 권한 설정
-- 고정 수입 설정
-- 고정 지출 설정
-- 예산 관련 알림 설정
-- 공동구매를 위한 관심 카테고리 설정
+### 기술: Spring Security + JWT + OAuth2 Client / Redis / FCM + Spring Application Event / Spring Boot Starter Mail + Google SMTP
+### Entity: User, UserSetting, Notification, InterestCategory
+- **인증 및 로그인**: 일반 회원가입/로그인, 소셜 간편 로그인 연동, 로그인 유지 기능
+- **계정 관리**: 이메일 인증을 통한 계정 찾기, 로그아웃, 회원 탈퇴
+- **권한 및 프로필**: 일반/관리자 권한 접근 제어, 마이페이지 프로필 설정
+- **사용자 맞춤 설정**: 정기 고정 수입/지출 스케줄 설정
+- **알림 설정**: 예산 소진 알림 조건 설정, 공동구매 관심 카테고리 알림 설정
 
 ## 가계부 포트폴리오
-### 기술: RDB / DB Indexing / Caching(Redis)
-### Entity: 계좌 정보, 수입, 지출
-- 현재 계좌 잔고 입력/수정
-- 수입/지출 입력
-- 수입/지출 수정
-- 달 별 지출 총액 확인
-- 달 별 수입 총액 확인
-- 달 별 예산 지정
-- 달 별 예상 지출 지정
-- 다른 사용자에게의 공개 여부 설정
+### 기술: RDB(DB Indexing) / Redis(Caching) / Spring @Scheduled + ShedLock / Apache POI
+### Entity: Account, Transaction, FixedTransaction, Category, Budget
+- **자산 및 내역 관리**: 계좌 초기 잔고 설정 및 실시간 잔고 업데이트, 수입/지출 내역
+- **카테고리 관리**: 시스템 기본 카테고리 제공 및 사용자 맞춤형 커스텀 카테고리 기능
+- **소비 분석**: 월별 및 사용자 지정 기간별 수입/지출 총액 및 상세 내역 조회
+- **예산 관리**: 다가오는 달 및 이번 달 총 예산 설정, 추가 예상 지출 지정
+- **데이터 관리 및 공유**: 가계부 내역 파일 내보내기(CSV/Excel 다운로드), 포트폴리오 타인 공개 여부 설정
 
 ## 다른 사용자와의 예산 및 지출 비교
 ### 기술: DB Indexing / Spring Scheduler / Kakao Geocoding API / Redis GEO
