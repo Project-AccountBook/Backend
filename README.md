@@ -26,18 +26,19 @@
 - 다른 사용자에게의 공개 여부 설정
 
 ## 다른 사용자와의 예산 및 지출 비교
-### 기술: Spring Scheduler / 위치 정보 처리
+### 기술: DB Indexing / Spring Scheduler / Kakao Geocoding API / Redis GEO
 ### Entity: -
-- 다른 사용자의 가계부 포트폴리오 확인
-- 나이대 별 평균 수입/지출 확인 및 비교
-- 카테고리별 수입/지출 확인 및 비교
-- 위치 기반으로 사용자 근처 주부들의 가계부 포트폴리오 확인 및 비교
+- 타 사용자와의 예산, 지출, 수입 비교
+- 나이대, 단순 금액, 카테고리 별 비교
+- 위치 기반으로 사용자 근처 사용자들의 평균 수입 포트폴리오와의 나이대, 단순 금액, 카테고리 별 비교
 
 ## Q&A 게시판 및 노하우 공유 게시판
-### 기술: RDB / RESTful API / Elasticsearch or RDB Full-Text Search
-### Entity: Q&A게시물, 댓글, 노하우게시물
+### 기술: RDB / JPA / QueryDSL / Elasticsearch / Redis Cache
+### Entity: Board, Comment, Image
 - 특정 주제에 대해 Q&A를 진행 가능한 게시판
 - 특정 주제에 대한 노하우 공유 게시판
+- 게시물 목록 조회, 작성, 수정, 삭제, 조회, 검색
+- 댓글 작성, 댓글 수정, 댓글 삭제, 대댓글 작성, 대댓글 수정, 대댓글 삭제 
 
 ## 공동구매
 ### 기술: RDB 동시성 제어 / Message queue(Redis) / Spring Schedular or DB Transaction
