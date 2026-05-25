@@ -37,7 +37,7 @@
 - 댓글 작성, 댓글 수정, 댓글 삭제, 대댓글 작성, 대댓글 수정, 대댓글 삭제 
 
 ## 공동구매
-### 기술: RDB 동시성 제어 / Message queue(Redis) / Spring Schedular or DB Transaction
+### 기술: RDB 동시성 제어 / Message queue(Redis) / Spring Schedular or DB Transaction / EventListener
 ### Entity: 공동구매게시글, 공동구매참여인원정보
 - 공동구매를 원하는 물품, 인원 수 등록
 - 관심 카테고리로 설정해 둔 사용자에게 알림 전송
