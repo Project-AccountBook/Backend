@@ -1,4 +1,4 @@
-package com.chaewookim.accountbookformoms.global.jwt;
+package com.chaewookim.accountbookformoms.global.security.jwt;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -41,7 +41,7 @@ public class JwtFilter extends OncePerRequestFilter {
     private String resolveToken(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
-            return bearerToken.substring(7); // "Bearer " 이후의 문자열만 가져옴
+            return bearerToken.substring(7);
         }
         return null;
     }
