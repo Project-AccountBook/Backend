@@ -2,6 +2,7 @@ package com.chaewookim.accountbookformoms.domain.user.api;
 
 import com.chaewookim.accountbookformoms.domain.user.application.AuthService;
 import com.chaewookim.accountbookformoms.domain.user.dto.request.LoginRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.ReissueRequest;
 import com.chaewookim.accountbookformoms.domain.user.dto.response.TokenResponse;
 import com.chaewookim.accountbookformoms.global.common.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,6 +31,14 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(authService.login(request)));
     }
 
+    @Operation(summary = "토큰 재발급", description = "RefreshToken을 이용해 AccessToken 재발급")
+    @PostMapping("/reissue")
+    public ResponseEntity<ApiResponse<TokenResponse>> refreshToken(
+            @RequestBody @Valid ReissueRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(authService.reissue(request)));
+    }
+
 //    @Operation(summary = "로그아웃", description = "로그아웃 진행")
 //    @PostMapping("/logout")
 //    public ResponseEntity<ApiResponse<String>> logout(@RequestBody @Valid LogoutRequest request) {
@@ -37,12 +46,5 @@ public class AuthController {
 //        authService.logout(request);
 //
 //        return ResponseEntity.ok(ApiResponse.success("로그아웃 성공"));
-//    }
-//
-//    @Operation(summary = "토큰 재발급", description = "RefreshToken을 이용해 AccessToken 재발급")
-//    @PostMapping("/reissue")
-//    public ResponseEntity<ApiResponse<TokenResponse>> refreshToken(@RequestBody @Valid TokenReissueRequest request) {
-//
-//        return ResponseEntity.ok(ApiResponse.success(authService.reissue(request)));
 //    }
 }
