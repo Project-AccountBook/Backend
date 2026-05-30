@@ -11,20 +11,20 @@ import java.util.Collection;
 import java.util.List;
 
 @Getter
-public class CustomUserDetails implements UserDetails {
+public class UserPrincipal implements UserDetails {
     private final Long userId;
     private final String email;
     private final String password;
     private final UserRole role;
 
-    public CustomUserDetails(User user) {
+    public UserPrincipal(User user) {
         this.userId = user.getId();
         this.email = user.getEmail();
         this.password = user.getPassword();
         this.role = user.getRole();
     }
 
-    public CustomUserDetails(Long userId, String email, String password, UserRole role) {
+    public UserPrincipal(Long userId, String email, String password, UserRole role) {
         this.userId = userId;
         this.email = email;
         this.password = password;

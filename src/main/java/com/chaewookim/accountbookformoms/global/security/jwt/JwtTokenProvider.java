@@ -1,7 +1,7 @@
 package com.chaewookim.accountbookformoms.global.security.jwt;
 
 import com.chaewookim.accountbookformoms.domain.user.enums.UserRole;
-import com.chaewookim.accountbookformoms.global.security.principal.CustomUserDetails;
+import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtBuilder;
@@ -96,7 +96,7 @@ public class JwtTokenProvider {
         String authClaim = claims.get(AUTHORITIES_KEY) != null ? claims.get(AUTHORITIES_KEY).toString() : "";
 
         UserRole userRole = UserRole.valueOf(authClaim);
-        UserDetails userDetails = new CustomUserDetails(null, email, "", userRole);
+        UserDetails userDetails = new UserPrincipal(null, email, "", userRole);
 
         return new UsernamePasswordAuthenticationToken(userDetails, "", userDetails.getAuthorities());
     }
