@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Pattern;
 
 import java.time.LocalDate;
 
-public record SignUpRequest(
+public record SignupRequest(
 
         @NotBlank(message = "이메일은 필수 입력 값입니다.")
         @Email(message = "이메일 형식이 올바르지 않습니다.")

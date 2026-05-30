@@ -1,8 +1,9 @@
 package com.chaewookim.accountbookformoms.domain.user.application;
 
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.SignupRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.response.SignupResponse;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
-import com.chaewookim.accountbookformoms.domain.user.dto.request.SignUpRequest;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import com.chaewookim.accountbookformoms.global.error.ErrorCode;
 import com.chaewookim.accountbookformoms.global.event.UserSignedUpEvent;
@@ -23,7 +24,7 @@ public class UserService {
 //    private final RefreshTokenRepository refreshTokenRepository;
 
     @Transactional
-    public Long signUp(SignUpRequest request) {
+    public SignupResponse signUp(SignupRequest request) {
 
         if (userRepository.existsByEmail(request.email())) {
             throw new CustomException(ErrorCode.DUPLICATE_EMAIL);
@@ -41,7 +42,7 @@ public class UserService {
 
         User savedUser = userRepository.save(user);
         eventPublisher.publishEvent(new UserSignedUpEvent(savedUser.getId()));
-        return savedUser.getId();
+        return new SignupResponse(savedUser.getId(), savedUser.getEmail(), savedUser.getUsername());
     }
 
 //    public User getUserByUsername(String username) {

@@ -1,7 +1,8 @@
 package com.chaewookim.accountbookformoms.domain.user.api;
 
 import com.chaewookim.accountbookformoms.domain.user.application.UserService;
-import com.chaewookim.accountbookformoms.domain.user.dto.request.SignUpRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.SignupRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.response.SignupResponse;
 import com.chaewookim.accountbookformoms.global.common.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,8 +24,8 @@ public class UserController {
 
     @Operation(summary = "회원가입", description = "새로운 회원 등록")
     @PostMapping("/signup")
-    public ResponseEntity<ApiResponse<Long>> signup(
-            @RequestBody @Valid SignUpRequest request
+    public ResponseEntity<ApiResponse<SignupResponse>> signup(
+            @RequestBody @Valid SignupRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success(userService.signUp(request)));
     }
