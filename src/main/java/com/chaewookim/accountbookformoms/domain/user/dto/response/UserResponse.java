@@ -1,9 +1,7 @@
 package com.chaewookim.accountbookformoms.domain.user.dto.response;
 
-import com.chaewookim.accountbookformoms.domain.user.domain.User;
-import com.chaewookim.accountbookformoms.domain.user.domain.UserRole;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import com.chaewookim.accountbookformoms.domain.user.entity.User;
+import com.chaewookim.accountbookformoms.domain.user.enums.UserRole;
 
 import java.time.LocalDate;
 

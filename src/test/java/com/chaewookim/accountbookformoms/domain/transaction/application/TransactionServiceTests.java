@@ -14,7 +14,7 @@ import com.chaewookim.accountbookformoms.domain.transaction.dto.response.transac
 import com.chaewookim.accountbookformoms.domain.transaction.entity.Transaction;
 import com.chaewookim.accountbookformoms.domain.transaction.enums.TransactionTypeEnum;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
-import com.chaewookim.accountbookformoms.domain.user.domain.User;
+import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import com.chaewookim.accountbookformoms.global.error.ErrorCode;
 import org.junit.jupiter.api.BeforeEach;
