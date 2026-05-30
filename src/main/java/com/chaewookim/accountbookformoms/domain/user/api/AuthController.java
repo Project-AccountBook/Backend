@@ -5,11 +5,13 @@ import com.chaewookim.accountbookformoms.domain.user.dto.request.LoginRequest;
 import com.chaewookim.accountbookformoms.domain.user.dto.request.ReissueRequest;
 import com.chaewookim.accountbookformoms.domain.user.dto.response.TokenResponse;
 import com.chaewookim.accountbookformoms.global.common.ApiResponse;
+import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -39,12 +41,12 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(authService.reissue(request)));
     }
 
-//    @Operation(summary = "로그아웃", description = "로그아웃 진행")
-//    @PostMapping("/logout")
-//    public ResponseEntity<ApiResponse<String>> logout(@RequestBody @Valid LogoutRequest request) {
-//
-//        authService.logout(request);
-//
-//        return ResponseEntity.ok(ApiResponse.success("로그아웃 성공"));
-//    }
+    @Operation(summary = "로그아웃", description = "토큰 삭제 후 로그아웃")
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout(
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        authService.logout(principal.getUsername());
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
 }
