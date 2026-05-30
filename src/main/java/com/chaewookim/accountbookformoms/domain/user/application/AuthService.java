@@ -73,21 +73,8 @@ public class AuthService {
         return new TokenResponse(newAccessToken, newRefreshTokenValue);
     }
 
-//    private Long getUserIdByEmail(String email) {
-//
-//        return userRepository.findByEmail(email).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND))
-//                .getId();
-//    }
-//
-//    @Transactional
-//    public Void logout(LogoutRequest request) {
-//
-//        if (!jwtTokenProvider.validateToken(request.refreshToken())) {
-//            throw new CustomException(ErrorCode.INVALID_REFRESH_TOKEN);
-//        }
-//
-//        refreshTokenRepository.deleteByToken(request.refreshToken());
-//
-//        return null;
-//    }
+    @Transactional
+    public void logout(String email) {
+        refreshTokenRepository.deleteById(email);
+    }
 }
