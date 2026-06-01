@@ -1,7 +1,7 @@
-package com.chaewookim.accountbookformoms.global.config;
+package com.chaewookim.accountbookformoms.global.security.config;
 
-import com.chaewookim.accountbookformoms.global.jwt.JwtFilter;
-import com.chaewookim.accountbookformoms.global.jwt.JwtTokenProvider;
+import com.chaewookim.accountbookformoms.global.security.jwt.JwtFilter;
+import com.chaewookim.accountbookformoms.global.security.jwt.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -62,11 +62,9 @@ public class SecurityConfig {
                         ).permitAll()
 
                         .requestMatchers(
-                                HttpMethod.GET,
-                                // user service 부분
-                                "/api/v1/users/me",
+                                // user 부분
+                                "/api/v1/users/**",
                                 "/api/v1/auth/logout",
-                                "/api/v1/users/withdraw",
 
                                 // account 부분
                                 "/api/v1/account/**",
