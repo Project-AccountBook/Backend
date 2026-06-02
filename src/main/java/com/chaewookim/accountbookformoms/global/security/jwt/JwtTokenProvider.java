@@ -26,6 +26,7 @@ import java.util.Date;
 public class JwtTokenProvider {
 
     private static final String AUTHORITIES_KEY = "auth";
+    private static final String USER_ID_KEY = "userId";
     private static final long ACCESS_TOKEN_EXPIRE_TIME = 1000L * 60 * 30;            // 30분
     private static final long REFRESH_TOKEN_EXPIRE_TIME = 1000L * 60 * 60 * 24 * 14; // 14일
 
@@ -38,22 +39,23 @@ public class JwtTokenProvider {
     }
 
     // Access Token 생성
-    public String createAccessToken(String email, String role) {
-        return createToken(email, role, ACCESS_TOKEN_EXPIRE_TIME);
+    public String createAccessToken(Long userId, String email, String role) {
+        return createToken(userId, email, role, ACCESS_TOKEN_EXPIRE_TIME);
     }
 
     // Refresh Token 생성
-    public String createRefreshToken(String email) {
-        return createToken(email, null, REFRESH_TOKEN_EXPIRE_TIME);
+    public String createRefreshToken(Long userId, String email) {
+        return createToken(userId, email, null, REFRESH_TOKEN_EXPIRE_TIME);
     }
 
     // 공통 토큰 빌더
-    private String createToken(String email, String role, long validityTime) {
+    private String createToken(Long userId, String email, String role, long validityTime) {
         Date now = new Date();
         Date validity = new Date(now.getTime() + validityTime);
 
         JwtBuilder builder = Jwts.builder()
                 .setSubject(email)
+                .claim(USER_ID_KEY, userId)
                 .setIssuedAt(now)
                 .setExpiration(validity)
                 .signWith(key, SignatureAlgorithm.HS256);
@@ -94,9 +96,10 @@ public class JwtTokenProvider {
 
         String email = claims.getSubject();
         String authClaim = claims.get(AUTHORITIES_KEY) != null ? claims.get(AUTHORITIES_KEY).toString() : "";
+        Long userId = claims.get(USER_ID_KEY, Number.class).longValue();
 
         UserRole userRole = UserRole.valueOf(authClaim);
-        UserDetails userDetails = new UserPrincipal(null, email, "", userRole);
+        UserDetails userDetails = new UserPrincipal(userId, email, "", userRole);
 
         return new UsernamePasswordAuthenticationToken(userDetails, "", userDetails.getAuthorities());
     }
