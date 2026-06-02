@@ -21,10 +21,8 @@ public record SignupRequest(
         @NotBlank(message = "닉네임은 필수 입력 값입니다.")
         String username,
 
-        @NotNull(message = "생년월일은 필수 입력값입니다.")
         LocalDate birthDate,
 
-        @NotBlank(message = "주소는 필수 입력 값입니다.")
         String address
 ) {
 }

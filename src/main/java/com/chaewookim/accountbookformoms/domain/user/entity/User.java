@@ -32,16 +32,13 @@ public class User extends BaseEntity {
     @Column(nullable = false,  unique = true)
     private String email;
 
-    @Column(nullable = false)
     private String password;
 
     @Column(nullable = false)
     private String username;
 
-    @Column(nullable = false)
     private LocalDate birthDate;
 
-    @Column(nullable = false)
     private String address;
 
     @Column(nullable = false)
@@ -63,22 +60,8 @@ public class User extends BaseEntity {
         this.provider = (provider != null) ? provider : SocialProvider.LOCAL;
     }
 
-//    public User updateUser(@Valid UpdateRequest request) {
-//        this.username = request.username();
-//        this.email = request.email();
-//        this.address = request.address();
-//        return this;
-//    }
-
-    @Builder(builderMethodName = "forTestBuilder")
-    public User(Long id, String email, String password, String username, LocalDate birthDate, String address, UserRole role, SocialProvider provider) {
-        this.id = id;
-        this.email = email;
-        this.password = password;
+    public User update(String username) {
         this.username = username;
-        this.birthDate = birthDate;
-        this.address = address;
-        this.role = (role != null) ? role : UserRole.ROLE_USER;
-        this.provider = (provider != null) ? provider : SocialProvider.LOCAL;
+        return this;
     }
 }
