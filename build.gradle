@@ -1,5 +1,6 @@
 plugins {
     id 'java'
+    id 'jacoco'
     id 'org.springframework.boot' version '3.2.2' // 🔥 가장 안정적인 버전으로 고정
     id 'io.spring.dependency-management' version '1.1.4'
 }
@@ -53,4 +54,65 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+    finalizedBy jacocoTestReport
 }
+
+jacoco {
+    toolVersion = '0.8.12'
+}
+
+def jacocoExcludes = [
+        '**/AccountBookForMomsApplication*',
+        '**/dto/**',
+        '**/entity/**',
+        '**/enums/**',
+        '**/error/**',
+        '**/global/config/**',
+        '**/global/common/**',
+        '**/global/event/**',
+        '**/domain/grouppruchase/domain/**',
+]
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        html.required = true
+        xml.required = true
+    }
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, excludes: jacocoExcludes)
+        }))
+    }
+}
+
+// 점진 적용: 테스트가 갖춰진 도메인만 검증 대상. 새 도메인 테스트 추가 시 includes에 합류시킨다.
+def jacocoVerificationIncludes = [
+        '**/domain/board/application/**',
+]
+
+jacocoTestCoverageVerification {
+    dependsOn test
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, includes: jacocoVerificationIncludes, excludes: jacocoExcludes)
+        }))
+    }
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.8
+            }
+            limit {
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = 0.8
+            }
+        }
+    }
+}
+
+check.dependsOn jacocoTestCoverageVerification
