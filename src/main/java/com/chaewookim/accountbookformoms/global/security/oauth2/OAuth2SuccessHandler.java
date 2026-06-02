@@ -1,5 +1,7 @@
 package com.chaewookim.accountbookformoms.global.security.oauth2;
 
+import com.chaewookim.accountbookformoms.domain.user.dao.RefreshTokenRepository;
+import com.chaewookim.accountbookformoms.domain.user.entity.RefreshToken;
 import com.chaewookim.accountbookformoms.global.security.jwt.JwtTokenProvider;
 import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,6 +19,7 @@ import java.io.IOException;
 public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException {
@@ -27,6 +30,8 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
         String accessToken = jwtTokenProvider.createAccessToken(email, role);
         String refreshToken = jwtTokenProvider.createRefreshToken(email);
+
+        refreshTokenRepository.save(new RefreshToken(email, refreshToken));
 
         String targetUrl = UriComponentsBuilder.fromUriString("http://localhost:5173/oauth2/redirect")
                 .queryParam("accessToken", accessToken)
