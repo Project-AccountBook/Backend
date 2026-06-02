@@ -2,6 +2,8 @@ package com.chaewookim.accountbookformoms.global.security.config;
 
 import com.chaewookim.accountbookformoms.global.security.jwt.JwtFilter;
 import com.chaewookim.accountbookformoms.global.security.jwt.JwtTokenProvider;
+import com.chaewookim.accountbookformoms.global.security.oauth2.CustomOAuth2UserService;
+import com.chaewookim.accountbookformoms.global.security.oauth2.OAuth2SuccessHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,6 +23,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final CustomOAuth2UserService customOAuth2UserService;
+    private final OAuth2SuccessHandler oAuth2SuccessHandler;
 
     // 비밀번호 암호화
     @Bean
@@ -78,6 +82,13 @@ public class SecurityConfig {
 
                         // 그 외 모든 요청은 인증 필요
                         .anyRequest().authenticated()
+                )
+                // OAuth2 로그인 설정
+                .oauth2Login(oauth -> oauth
+                        .userInfoEndpoint(userInfo -> userInfo
+                                .userService(customOAuth2UserService)
+                        )
+                        .successHandler(oAuth2SuccessHandler)
                 )
                 // JWT 필터 추가
                 .addFilterBefore(new JwtFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class);
