@@ -1,0 +1,73 @@
+package com.chaewookim.accountbookformoms.domain.grouppruchase.api;
+
+import com.chaewookim.accountbookformoms.domain.grouppruchase.application.GroupPurchaseService;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseCreateRequest;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseUpdateRequest;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseResponse;
+import com.chaewookim.accountbookformoms.global.common.ApiResponse;
+import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@Tag(name = "공동구매(GroupPurchase)", description = "공동구매 생성/수정/삭제/조회 API")
+@RestController
+@RequestMapping("/api/v1/group-purchases")
+@RequiredArgsConstructor
+public class GroupPurchaseController {
+
+    private final GroupPurchaseService groupPurchaseService;
+
+    @Operation(summary = "공동구매 개설", description = "새로운 공동구매 글을 등록합니다.")
+    @PostMapping
+    public ResponseEntity<ApiResponse<GroupPurchaseResponse>> create(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @RequestBody @Valid GroupPurchaseCreateRequest request
+    ) {
+        GroupPurchaseResponse response = groupPurchaseService.createGroupPurchase(userPrincipal.getUserId(), request);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(summary = "공동구매 단건 조회", description = "ID에 해당하는 공동구매 상세 정보를 조회합니다.")
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<GroupPurchaseResponse>> getOne(
+            @PathVariable Long id
+    ) {
+        GroupPurchaseResponse response = groupPurchaseService.getGroupPurchase(id);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(summary = "공동구매 목록 조회", description = "전체 공동구매 목록을 조회합니다.")
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<GroupPurchaseResponse>>> getAll() {
+        List<GroupPurchaseResponse> response = groupPurchaseService.getAllGroupPurchases();
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(summary = "공동구매 수정", description = "ID에 해당하는 공동구매 상세 정보를 수정합니다. 개설자만 수정 가능합니다.")
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<GroupPurchaseResponse>> update(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @RequestBody @Valid GroupPurchaseUpdateRequest request
+    ) {
+        GroupPurchaseResponse response = groupPurchaseService.updateGroupPurchase(id, userPrincipal.getUserId(), request);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(summary = "공동구매 삭제", description = "ID에 해당하는 공동구매 정보를 삭제(Soft Delete)합니다. 개설자만 삭제 가능합니다.")
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<String>> delete(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        groupPurchaseService.deleteGroupPurchase(id, userPrincipal.getUserId());
+        return ResponseEntity.ok(ApiResponse.success("공동구매가 성공적으로 삭제되었습니다."));
+    }
+}
