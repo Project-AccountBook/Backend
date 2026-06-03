@@ -2,12 +2,14 @@ package com.chaewookim.accountbookformoms.domain.grouppruchase.application;
 
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseRepository;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.GroupPurchase;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.PurchaseStatus;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseCreateRequest;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseUpdateRequest;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseResponse;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import com.chaewookim.accountbookformoms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,8 +47,16 @@ public class GroupPurchaseService {
         return GroupPurchaseResponse.from(groupPurchase);
     }
 
-    public List<GroupPurchaseResponse> getAllGroupPurchases() {
-        return groupPurchaseRepository.findAll().stream()
+    public List<GroupPurchaseResponse> getAllGroupPurchases(String region, String sortBy) {
+        String filterRegion = (region != null && !region.trim().isEmpty()) ? region.trim() : null;
+
+        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt"); // 기본 최신순
+        if ("deadline".equalsIgnoreCase(sortBy)) {
+            sort = Sort.by(Sort.Direction.ASC, "deadline"); // 마감임박순
+        }
+
+        return groupPurchaseRepository.findActiveGroupPurchases(PurchaseStatus.RECRUITING, filterRegion, sort)
+                .stream()
                 .map(GroupPurchaseResponse::from)
                 .collect(Collectors.toList());
     }
