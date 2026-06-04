@@ -50,6 +50,9 @@ public enum ErrorCode implements BaseErrorCode {
     // 계좌 찾을 수 없음
     ASSET_NOT_FOUND(HttpStatus.NOT_FOUND, "계좌를 찾을 수 없거나 접근 권한이 없습니다."),
 
+    // 소셜 로그인 관련 에러
+    UNSUPPORTED_SOCIAL_TYPE(HttpStatus.BAD_REQUEST, "지원하지 않는 소셜 로그인 방식입니다."),
+
     // 금액은 NULL이 될 수 없음
     AMOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "금액은 비어있을 수 없습니다."),
 
