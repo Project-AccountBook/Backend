@@ -4,8 +4,8 @@ import com.chaewookim.accountbookformoms.domain.user.application.UserCommonServi
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.enums.SocialProvider;
+import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
-import com.chaewookim.accountbookformoms.global.error.ErrorCode;
 import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
@@ -31,7 +31,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
             case "google" -> new GoogleUserInfo(oAuth2User.getAttributes());
             case "kakao" -> new KakaoUserInfo(oAuth2User.getAttributes());
             case "naver" -> new NaverUserInfo(oAuth2User.getAttributes());
-            default -> throw new CustomException(ErrorCode.UNSUPPORTED_SOCIAL_TYPE);
+            default -> throw new CustomException(UserErrorCode.UNSUPPORTED_SOCIAL_TYPE);
         };
 
         User user = userRepository.findByEmailIncludingDeleted(userInfo.getEmail())

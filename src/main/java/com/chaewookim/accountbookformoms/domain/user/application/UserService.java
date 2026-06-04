@@ -10,8 +10,8 @@ import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.entity.UserNotificationSetting;
 import com.chaewookim.accountbookformoms.domain.user.entity.UserSetting;
 import com.chaewookim.accountbookformoms.domain.user.enums.SocialProvider;
+import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
-import com.chaewookim.accountbookformoms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -34,7 +34,7 @@ public class UserService {
         return userRepository.findByEmailIncludingDeleted(request.email())
                 .map(user -> {
                     if (user.getDeletedAt() == null) {
-                        throw new CustomException(ErrorCode.DUPLICATE_EMAIL);
+                        throw new CustomException(UserErrorCode.DUPLICATE_EMAIL);
                     }
                     userCommonService.restoreUser(user, request.username(), encoded, request.birthDate(), request.address());
                     return new SignupResponse(user.getId(), user.getEmail(), user.getUsername());
@@ -48,7 +48,7 @@ public class UserService {
     public UserProfileResponse getMyProfile(Long userId) {
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
         UserSetting settings = user.getUserSetting();
         UserNotificationSetting notificationSetting = user.getUserNotificationSetting();
 
@@ -63,7 +63,7 @@ public class UserService {
     public void updateMyProfile(Long userId, UpdateProfileRequest request) {
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
         user.updateProfile(request.username(), request.birthDate(), request.address());
         user.getUserSetting().updateSettings(request.budgetAlertThreshold(), request.isPortfolioPublic());
@@ -78,12 +78,12 @@ public class UserService {
     public void updatePassword(Long userId, UpdatePasswordRequest request) {
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
         if (user.getProvider() == SocialProvider.LOCAL) {
             if (request.currentPassword() == null ||
                     !passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
-                throw new CustomException(ErrorCode.PASSWORD_NOT_MATCH);
+                throw new CustomException(UserErrorCode.PASSWORD_NOT_MATCH);
             }
         }
 
@@ -95,7 +95,7 @@ public class UserService {
     public void withdraw(Long userId) {
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
         userRepository.delete(user);
     }
