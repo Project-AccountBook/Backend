@@ -44,4 +44,20 @@ public class UserCommonService {
     public User saveSocialUser(String email, String username, SocialProvider provider) {
         return saveUser(email, null, username, provider, null, null);
     }
+
+    // 탈퇴 후 재가입
+    public User restoreUser(User user, String username, String password, LocalDate birthDate, String address) {
+
+        user.restore(username, password, birthDate, address);
+
+        if (user.getUserSetting() == null) {
+            user.setSettings(
+                    UserSetting.builder().user(user).build(),
+                    UserNotificationSetting.builder().user(user).build()
+            );
+        }
+
+        eventPublisher.publishEvent(new UserSignedUpEvent(user.getId()));
+        return userRepository.save(user);
+    }
 }

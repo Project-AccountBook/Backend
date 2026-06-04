@@ -29,14 +29,20 @@ public class UserService {
     @Transactional
     public SignupResponse signUp(SignupRequest request) {
 
-        if (userRepository.existsByEmail(request.email())) {
-            throw new CustomException(ErrorCode.DUPLICATE_EMAIL);
-        }
-
         String encoded = passwordEncoder.encode(request.password());
-        User savedUser = userCommonService.saveUser(request.email(), encoded, request.username(), SocialProvider.LOCAL, request.birthDate(), request.address());
 
-        return new SignupResponse(savedUser.getId(), savedUser.getEmail(), savedUser.getUsername());
+        return userRepository.findByEmailIncludingDeleted(request.email())
+                .map(user -> {
+                    if (user.getDeletedAt() == null) {
+                        throw new CustomException(ErrorCode.DUPLICATE_EMAIL);
+                    }
+                    userCommonService.restoreUser(user, request.username(), encoded, request.birthDate(), request.address());
+                    return new SignupResponse(user.getId(), user.getEmail(), user.getUsername());
+                })
+                .orElseGet(() -> {
+                    User savedUser = userCommonService.saveUser(request.email(), encoded, request.username(), SocialProvider.LOCAL, request.birthDate(), request.address());
+                    return new SignupResponse(savedUser.getId(), savedUser.getEmail(), savedUser.getUsername());
+                });
     }
 
     public UserProfileResponse getMyProfile(Long userId) {

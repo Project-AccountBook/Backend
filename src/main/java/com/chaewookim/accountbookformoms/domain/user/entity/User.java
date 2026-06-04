@@ -87,4 +87,12 @@ public class User extends BaseEntity {
     public void updatePassword(String password) {
         this.password = password;
     }
+
+    public void restore(String username, String password, LocalDate birthDate, String address) {
+        super.restore();
+        this.password = password;
+        this.username = username;
+        this.birthDate = birthDate;
+        this.address = address;
+    }
 }

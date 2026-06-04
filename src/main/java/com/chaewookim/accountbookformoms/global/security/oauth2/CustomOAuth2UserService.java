@@ -34,8 +34,13 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
             default -> throw new CustomException(ErrorCode.UNSUPPORTED_SOCIAL_TYPE);
         };
 
-        User user = userRepository.findByEmail(userInfo.getEmail())
-                .map(entity -> entity.update(userInfo.getName()))
+        User user = userRepository.findByEmailIncludingDeleted(userInfo.getEmail())
+                .map(entity -> {
+                    if (entity.getDeletedAt() != null) {
+                        return userCommonService.restoreUser(entity, userInfo.getName(), null, null, null);
+                    }
+                    return entity.update(userInfo.getName());
+                })
                 .orElseGet(() -> userCommonService.saveSocialUser(
                         userInfo.getEmail(),
                         userInfo.getName(),
