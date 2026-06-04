@@ -7,8 +7,8 @@ import com.chaewookim.accountbookformoms.domain.user.dto.response.TokenResponse;
 import com.chaewookim.accountbookformoms.domain.user.entity.RefreshToken;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.dto.request.LoginRequest;
+import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
-import com.chaewookim.accountbookformoms.global.error.ErrorCode;
 import com.chaewookim.accountbookformoms.global.security.jwt.JwtTokenProvider;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,10 +32,10 @@ public class AuthService {
     public TokenResponse login(LoginRequest request) {
 
         User user = userRepository.findByEmail(request.email())
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
         if (!encoder.matches(request.password(), user.getPassword())) {
-            throw new CustomException(ErrorCode.USER_NOT_FOUND);
+            throw new CustomException(UserErrorCode.USER_NOT_FOUND);
         }
 
         String accessToken = jwtTokenProvider.createAccessToken(user.getEmail(), user.getRole().name());
@@ -54,14 +54,14 @@ public class AuthService {
         String refreshTokenValue = request.refreshToken();
 
         if (!jwtTokenProvider.validateToken(request.refreshToken())) {
-            throw new CustomException(ErrorCode.INVALID_REFRESH_TOKEN);
+            throw new CustomException(UserErrorCode.INVALID_REFRESH_TOKEN);
         }
 
         RefreshToken savedToken = refreshTokenRepository.findByToken(refreshTokenValue)
-                .orElseThrow(() -> new CustomException(ErrorCode.INVALID_REFRESH_TOKEN));
+                .orElseThrow(() -> new CustomException(UserErrorCode.INVALID_REFRESH_TOKEN));
 
         User user = userRepository.findByEmail(savedToken.getEmail())
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
         String newAccessToken = jwtTokenProvider.createAccessToken(user.getEmail(), user.getRole().name());
         String newRefreshTokenValue = jwtTokenProvider.createRefreshToken(user.getEmail());
