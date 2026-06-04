@@ -15,10 +15,12 @@ public interface GroupPurchaseRepository extends JpaRepository<GroupPurchase, Lo
 
     @Query("SELECT gp FROM GroupPurchase gp " +
            "WHERE gp.status = :status " +
-           "AND (:region IS NULL OR gp.pickupLocation LIKE %:region%)")
+           "AND (:region IS NULL OR gp.pickupLocation LIKE %:region%) " +
+           "AND (:categoryId IS NULL OR gp.categoryId = :categoryId)")
     List<GroupPurchase> findActiveGroupPurchases(
             @Param("status") PurchaseStatus status,
             @Param("region") String region,
+            @Param("categoryId") Long categoryId,
             Sort sort
     );
 }

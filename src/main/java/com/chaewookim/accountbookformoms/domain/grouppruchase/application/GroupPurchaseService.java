@@ -47,15 +47,15 @@ public class GroupPurchaseService {
         return GroupPurchaseResponse.from(groupPurchase);
     }
 
-    public List<GroupPurchaseResponse> getAllGroupPurchases(String region, String sortBy) {
+    public List<GroupPurchaseResponse> getAllGroupPurchases(String region, Long categoryId, String sortBy) {
         String filterRegion = (region != null && !region.trim().isEmpty()) ? region.trim() : null;
 
-        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt"); // 기본 최신순
+        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
         if ("deadline".equalsIgnoreCase(sortBy)) {
-            sort = Sort.by(Sort.Direction.ASC, "deadline"); // 마감임박순
+            sort = Sort.by(Sort.Direction.ASC, "deadline");
         }
 
-        return groupPurchaseRepository.findActiveGroupPurchases(PurchaseStatus.RECRUITING, filterRegion, sort)
+        return groupPurchaseRepository.findActiveGroupPurchases(PurchaseStatus.RECRUITING, filterRegion, categoryId, sort)
                 .stream()
                 .map(GroupPurchaseResponse::from)
                 .collect(Collectors.toList());
