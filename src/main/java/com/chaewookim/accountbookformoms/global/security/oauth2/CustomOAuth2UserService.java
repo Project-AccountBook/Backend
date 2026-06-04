@@ -1,9 +1,11 @@
 package com.chaewookim.accountbookformoms.global.security.oauth2;
 
+import com.chaewookim.accountbookformoms.domain.user.application.UserCommonService;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.enums.SocialProvider;
-import com.chaewookim.accountbookformoms.domain.user.enums.UserRole;
+import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
+import com.chaewookim.accountbookformoms.global.error.CustomException;
 import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
@@ -17,6 +19,7 @@ import org.springframework.stereotype.Service;
 public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
     private final UserRepository userRepository;
+    private final UserCommonService userCommonService;
 
     @Override
     public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
@@ -28,17 +31,21 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
             case "google" -> new GoogleUserInfo(oAuth2User.getAttributes());
             case "kakao" -> new KakaoUserInfo(oAuth2User.getAttributes());
             case "naver" -> new NaverUserInfo(oAuth2User.getAttributes());
-            default -> throw new RuntimeException("지원하지 않는 소셜 로그인입니다.");
+            default -> throw new CustomException(UserErrorCode.UNSUPPORTED_SOCIAL_TYPE);
         };
 
-        User user = userRepository.findByEmail(userInfo.getEmail())
-                .map(entity -> entity.update(userInfo.getName()))
-                .orElseGet(() -> userRepository.save(User.builder()
-                        .email(userInfo.getEmail())
-                        .username(userInfo.getName())
-                        .role(UserRole.ROLE_USER)
-                        .provider(SocialProvider.from(userInfo.getProvider()))
-                        .build()));
+        User user = userRepository.findByEmailIncludingDeleted(userInfo.getEmail())
+                .map(entity -> {
+                    if (entity.getDeletedAt() != null) {
+                        return userCommonService.restoreUser(entity, userInfo.getName(), null, null, null);
+                    }
+                    return entity.update(userInfo.getName());
+                })
+                .orElseGet(() -> userCommonService.saveSocialUser(
+                        userInfo.getEmail(),
+                        userInfo.getName(),
+                        SocialProvider.from(userInfo.getProvider())
+                ));
 
         return UserPrincipal.create(user, oAuth2User.getAttributes());
     }

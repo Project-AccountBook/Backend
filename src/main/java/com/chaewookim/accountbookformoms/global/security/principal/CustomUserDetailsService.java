@@ -2,8 +2,8 @@ package com.chaewookim.accountbookformoms.global.security.principal;
 
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
+import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
-import com.chaewookim.accountbookformoms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -19,7 +19,7 @@ public class CustomUserDetailsService implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
         return UserPrincipal.create(user);
     }

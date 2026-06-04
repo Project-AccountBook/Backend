@@ -45,7 +45,7 @@ class AuthServiceTest {
     private AuthService authService;
 
     @Test
-    @DisplayName("로그인_성공")
+    @DisplayName("로그인 - 성공")
     void login_success() {
 
         // given
@@ -67,7 +67,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("토큰 재발급_성공")
+    @DisplayName("토큰 재발급 - 성공")
     void reissue_success() {
 
         // given
@@ -94,7 +94,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("토큰 재발급_유효하지 않은 토큰 예외 발생")
+    @DisplayName("토큰 재발급 - 유효하지 않은 토큰 예외 발생")
     void reissue_fail_invalid_token() {
 
         // given
@@ -106,7 +106,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("로그아웃_성공")
+    @DisplayName("로그아웃 - 성공")
     void logout_success() {
 
         // given
