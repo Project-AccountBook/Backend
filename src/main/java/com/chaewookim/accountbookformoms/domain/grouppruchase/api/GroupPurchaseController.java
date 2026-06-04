@@ -43,10 +43,13 @@ public class GroupPurchaseController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    @Operation(summary = "공동구매 목록 조회", description = "전체 공동구매 목록을 조회합니다.")
+    @Operation(summary = "공동구매 목록 조회", description = "진행 중인 공동구매 목록을 조회합니다. 최신순/마감임박순 정렬 및 지역 필터링이 가능합니다.")
     @GetMapping
-    public ResponseEntity<ApiResponse<List<GroupPurchaseResponse>>> getAll() {
-        List<GroupPurchaseResponse> response = groupPurchaseService.getAllGroupPurchases();
+    public ResponseEntity<ApiResponse<List<GroupPurchaseResponse>>> getAll(
+            @RequestParam(required = false) String region,
+            @RequestParam(required = false, defaultValue = "latest") String sortBy
+    ) {
+        List<GroupPurchaseResponse> response = groupPurchaseService.getAllGroupPurchases(region, sortBy);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
