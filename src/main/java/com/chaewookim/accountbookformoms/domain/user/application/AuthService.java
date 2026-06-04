@@ -38,8 +38,8 @@ public class AuthService {
             throw new CustomException(ErrorCode.USER_NOT_FOUND);
         }
 
-        String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getEmail(), user.getRole().name());
-        String refreshTokenValue = jwtTokenProvider.createRefreshToken(user.getId(), user.getEmail());
+        String accessToken = jwtTokenProvider.createAccessToken(user.getEmail(), user.getRole().name());
+        String refreshTokenValue = jwtTokenProvider.createRefreshToken(user.getEmail());
 
         RefreshToken refreshToken = new RefreshToken(user.getEmail(), refreshTokenValue);
         refreshTokenRepository.save(refreshToken);
@@ -63,8 +63,8 @@ public class AuthService {
         User user = userRepository.findByEmail(savedToken.getEmail())
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        String newAccessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getEmail(), user.getRole().name());
-        String newRefreshTokenValue = jwtTokenProvider.createRefreshToken(user.getId(), user.getEmail());
+        String newAccessToken = jwtTokenProvider.createAccessToken(user.getEmail(), user.getRole().name());
+        String newRefreshTokenValue = jwtTokenProvider.createRefreshToken(user.getEmail());
 
         refreshTokenRepository.delete(savedToken);
         RefreshToken newRefreshToken = new RefreshToken(user.getEmail(), newRefreshTokenValue);
