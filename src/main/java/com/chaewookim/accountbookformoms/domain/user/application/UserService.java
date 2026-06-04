@@ -2,13 +2,17 @@ package com.chaewookim.accountbookformoms.domain.user.application;
 
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.dto.request.SignupRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.UpdatePasswordRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.UpdateProfileRequest;
 import com.chaewookim.accountbookformoms.domain.user.dto.response.SignupResponse;
+import com.chaewookim.accountbookformoms.domain.user.dto.response.UserProfileResponse;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
+import com.chaewookim.accountbookformoms.domain.user.entity.UserNotificationSetting;
+import com.chaewookim.accountbookformoms.domain.user.entity.UserSetting;
+import com.chaewookim.accountbookformoms.domain.user.enums.SocialProvider;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import com.chaewookim.accountbookformoms.global.error.ErrorCode;
-import com.chaewookim.accountbookformoms.global.event.UserSignedUpEvent;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,10 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class UserService {
 
+    private final UserCommonService userCommonService;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final ApplicationEventPublisher eventPublisher;
-//    private final RefreshTokenRepository refreshTokenRepository;
 
     @Transactional
     public SignupResponse signUp(SignupRequest request) {
@@ -31,45 +34,63 @@ public class UserService {
         }
 
         String encoded = passwordEncoder.encode(request.password());
+        User savedUser = userCommonService.saveUser(request.email(), encoded, request.username(), SocialProvider.LOCAL, request.birthDate(), request.address());
 
-        User user = User.builder()
-                .email(request.email())
-                .password(encoded)
-                .username(request.username())
-                .birthDate(request.birthDate())
-                .address(request.address())
-                .build();
-
-        User savedUser = userRepository.save(user);
-        eventPublisher.publishEvent(new UserSignedUpEvent(savedUser.getId()));
         return new SignupResponse(savedUser.getId(), savedUser.getEmail(), savedUser.getUsername());
     }
 
-//    public User getUserByUsername(String username) {
-//
-//        return userRepository.findByUsername(username).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-//    }
-//
-//    @Transactional
-//    public Long updateUser(String username, @Valid UpdateRequest request) {
-//
-//        return userRepository.findByUsername(username).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND))
-//                .updateUser(request)
-//                .getId();
-//    }
-//
-//    @Transactional
-//    public void withdrawUser(UserDetails userDetails, @Valid WithdrawRequest request) {
-//
-//        String username = userDetails.getUsername();
-//        User user = userRepository.findByUsername(username)
-//                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-//
-//        if (!passwordEncoder.matches(request.password(), user.getPassword())) {
-//            throw new CustomException(ErrorCode.PASSWORD_NOT_MATCH);
-//        }
-//
-//        refreshTokenRepository.deleteByUserId(user.getId());
-//        userRepository.delete(user);
-//    }
+    public UserProfileResponse getMyProfile(Long userId) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        UserSetting settings = user.getUserSetting();
+        UserNotificationSetting notificationSetting = user.getUserNotificationSetting();
+
+        return new UserProfileResponse(
+                user.getEmail(), user.getUsername(), user.getBirthDate(), user.getAddress(),
+                settings.getBudgetAlertThreshold(), settings.getIsPortfolioPublic(),
+                notificationSetting.getIsBudgetAlertEnabled(), notificationSetting.getIsInterestCategoryEnabled(), notificationSetting.getIsSecurityAlertEnabled()
+        );
+    }
+
+    @Transactional
+    public void updateMyProfile(Long userId, UpdateProfileRequest request) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        user.updateProfile(request.username(), request.birthDate(), request.address());
+        user.getUserSetting().updateSettings(request.budgetAlertThreshold(), request.isPortfolioPublic());
+        user.getUserNotificationSetting().updateNotificationSettings(
+                request.isBudgetAlertEnabled(),
+                request.isInterestCategoryEnabled(),
+                request.isSecurityAlertEnabled()
+        );
+    }
+
+    @Transactional
+    public void updatePassword(Long userId, UpdatePasswordRequest request) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        if (user.getProvider() == SocialProvider.LOCAL) {
+            if (request.currentPassword() == null ||
+                    !passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
+                throw new CustomException(ErrorCode.PASSWORD_NOT_MATCH);
+            }
+        }
+
+        String newEncodedPassword = passwordEncoder.encode(request.newPassword());
+        user.updatePassword(newEncodedPassword);
+    }
+
+    @Transactional
+    public void withdraw(Long userId) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        userRepository.delete(user);
+    }
 }
