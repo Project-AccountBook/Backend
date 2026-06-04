@@ -48,6 +48,9 @@ public class Board extends BaseEntity {
     @Column(nullable = false)
     private int views;
 
+    @Column(name = "admin_deleted", nullable = false)
+    private boolean adminDeleted;
+
     @Builder
     public Board(Long userId, Long categoryId, String title, String content, BOARD_TYPE type) {
         this.userId = userId;
@@ -56,6 +59,7 @@ public class Board extends BaseEntity {
         this.content = content;
         this.type = type;
         this.views = 0;
+        this.adminDeleted = false;
     }
 
     public void update(String title, String content, BOARD_TYPE type) {
@@ -66,5 +70,9 @@ public class Board extends BaseEntity {
 
     public void increaseViews(int delta) {
         this.views += delta;
+    }
+
+    public void markAsAdminDeleted() {
+        this.adminDeleted = true;
     }
 }

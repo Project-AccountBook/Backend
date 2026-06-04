@@ -70,6 +70,9 @@ public class SecurityConfig {
                                 "/api/v1/auth/reissue"
                         ).permitAll()
 
+                        // 관리자 전용 API
+                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+
                         .requestMatchers(
                                 // user 부분
                                 "/api/v1/users/**",

@@ -16,13 +16,16 @@ public record BoardResponse(
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
+    private static final String ADMIN_DELETED_MESSAGE = "관리자가 삭제한 게시물입니다.";
+
     public static BoardResponse from(Board board) {
+        boolean adminDeleted = board.isAdminDeleted();
         return new BoardResponse(
                 board.getId(),
                 board.getUserId(),
                 board.getCategoryId(),
-                board.getTitle(),
-                board.getContent(),
+                adminDeleted ? ADMIN_DELETED_MESSAGE : board.getTitle(),
+                adminDeleted ? ADMIN_DELETED_MESSAGE : board.getContent(),
                 board.getType(),
                 board.getViews(),
                 board.getCreatedAt(),
