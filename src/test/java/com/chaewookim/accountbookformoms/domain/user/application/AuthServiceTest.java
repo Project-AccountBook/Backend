@@ -54,8 +54,8 @@ class AuthServiceTest {
 
         given(userRepository.findByEmail(request.email())).willReturn(Optional.of(user));
         given(encoder.matches(request.password(), user.getPassword())).willReturn(true);
-        given(jwtTokenProvider.createAccessToken(any(), any())).willReturn("new-access");
-        given(jwtTokenProvider.createRefreshToken(any())).willReturn("new-refresh");
+        given(jwtTokenProvider.createAccessToken(any(), any(), any())).willReturn("new-access");
+        given(jwtTokenProvider.createRefreshToken(any(), any())).willReturn("new-refresh");
 
         // when
         TokenResponse response = authService.login(request);
@@ -80,8 +80,8 @@ class AuthServiceTest {
         given(jwtTokenProvider.validateToken(oldToken)).willReturn(true);
         given(refreshTokenRepository.findByToken(oldToken)).willReturn(Optional.of(savedToken));
         given(userRepository.findByEmail(email)).willReturn(Optional.of(user));
-        given(jwtTokenProvider.createAccessToken(any(), any())).willReturn("new-access");
-        given(jwtTokenProvider.createRefreshToken(any())).willReturn("new-refresh");
+        given(jwtTokenProvider.createAccessToken(any(), any(), any())).willReturn("new-access");
+        given(jwtTokenProvider.createRefreshToken(any(), any())).willReturn("new-refresh");
 
         // when
         TokenResponse response = authService.reissue(request);

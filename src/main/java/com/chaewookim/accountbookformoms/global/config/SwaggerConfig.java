@@ -72,6 +72,16 @@ public class SwaggerConfig {
     }
 
     @Bean
+    public GroupedOpenApi adminBoardGroup() {
+        return GroupedOpenApi.builder()
+                .group("Admin Board API")
+                .pathsToMatch(
+                        "/api/v1/admin/boards/**"
+                )
+                .build();
+    }
+
+    @Bean
     public GroupedOpenApi allGroup() {
         return GroupedOpenApi.builder()
                 .group("전체 API")

@@ -12,8 +12,11 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -26,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+@Slf4j
 @Tag(name = "Board API")
 @RestController
 @RequestMapping("/api/v1/boards")
@@ -36,7 +40,9 @@ public class BoardController {
 
     @Operation(summary = "게시물 목록 조회", description = "QnA 게시판 게시물 목록 조회")
     @GetMapping
-    public ResponseEntity<ApiResponse<Page<BoardResponse>>> list(Pageable pageable) {
+    public ResponseEntity<ApiResponse<Page<BoardResponse>>> list(
+            @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
         return ResponseEntity.ok(ApiResponse.success(boardService.list(pageable)));
     }
 
@@ -83,7 +89,7 @@ public class BoardController {
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<Page<BoardResponse>>> search(
             @RequestParam String keyword,
-            Pageable pageable
+            @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success(boardService.search(keyword, pageable)));
     }
