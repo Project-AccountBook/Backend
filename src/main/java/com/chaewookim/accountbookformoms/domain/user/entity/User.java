@@ -58,8 +58,14 @@ public class User extends BaseEntity {
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private UserNotificationSetting userNotificationSetting;
 
+    @Column(nullable = true)
+    private Double latitude;
+
+    @Column(nullable = true)
+    private Double longitude;
+
     @Builder
-    public User(String email, String password, String username, LocalDate birthDate, String address, UserRole role, SocialProvider provider) {
+    public User(String email, String password, String username, LocalDate birthDate, String address, UserRole role, SocialProvider provider, Double latitude, Double longitude) {
         this.email = email;
         this.password = password;
         this.username = username;
@@ -67,6 +73,8 @@ public class User extends BaseEntity {
         this.address = address;
         this.role = (role != null) ? role : UserRole.ROLE_USER;
         this.provider = (provider != null) ? provider : SocialProvider.LOCAL;
+        this.latitude = latitude;
+        this.longitude = longitude;
     }
 
     public void setSettings(UserSetting userSetting, UserNotificationSetting notificationSetting) {
@@ -95,5 +103,19 @@ public class User extends BaseEntity {
         this.username = username;
         this.birthDate = birthDate;
         this.address = address;
+    }
+
+    @Builder(builderMethodName = "forTestBuilder")
+    public User(Long id, String email, String password, String username, LocalDate birthDate, String address, UserRole role, SocialProvider provider, Double latitude, Double longitude) {
+        this.id = id;
+        this.email = email;
+        this.password = password;
+        this.username = username;
+        this.birthDate = birthDate;
+        this.address = address;
+        this.role = (role != null) ? role : UserRole.ROLE_USER;
+        this.provider = (provider != null) ? provider : SocialProvider.LOCAL;
+        this.latitude = latitude;
+        this.longitude = longitude;
     }
 }
