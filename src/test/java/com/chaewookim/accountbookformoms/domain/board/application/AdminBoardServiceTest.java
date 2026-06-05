@@ -5,12 +5,15 @@ import com.chaewookim.accountbookformoms.domain.board.entity.Board;
 import com.chaewookim.accountbookformoms.domain.board.enums.BOARD_TYPE;
 import com.chaewookim.accountbookformoms.domain.board.error.BoardErrorCode;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
+import com.chaewookim.accountbookformoms.global.event.BoardChangedEvent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Optional;
@@ -18,12 +21,16 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class AdminBoardServiceTest {
 
     @Mock
     private BoardRepository boardRepository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private AdminBoardService adminBoardService;
@@ -57,6 +64,11 @@ class AdminBoardServiceTest {
         // then
         assertThat(deletedId).isEqualTo(POST_ID);
         assertThat(board.isAdminDeleted()).isTrue();
+
+        ArgumentCaptor<BoardChangedEvent> captor = ArgumentCaptor.forClass(BoardChangedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().boardId()).isEqualTo(POST_ID);
+        assertThat(captor.getValue().type()).isEqualTo(BoardChangedEvent.Type.DELETE);
     }
 
     @Test
