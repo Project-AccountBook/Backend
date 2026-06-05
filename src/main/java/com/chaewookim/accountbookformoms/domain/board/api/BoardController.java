@@ -5,6 +5,7 @@ import com.chaewookim.accountbookformoms.domain.board.dto.request.BoardCreateReq
 import com.chaewookim.accountbookformoms.domain.board.dto.request.BoardUpdateRequest;
 import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardCreateResponse;
 import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardResponse;
+import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardSearchResponse;
 import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardUpdateResponse;
 import com.chaewookim.accountbookformoms.global.common.ApiResponse;
 import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
@@ -85,11 +86,11 @@ public class BoardController {
         return ResponseEntity.ok(ApiResponse.success(boardService.delete(postId, userId)));
     }
 
-    @Operation(summary = "게시물 검색", description = "키워드 기반 게시물 검색")
+    @Operation(summary = "게시물 검색", description = "Elasticsearch nori 기반 게시물 검색")
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<BoardResponse>>> search(
+    public ResponseEntity<ApiResponse<Page<BoardSearchResponse>>> search(
             @RequestParam String keyword,
-            @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+            @PageableDefault(size = 10) Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success(boardService.search(keyword, pageable)));
     }
