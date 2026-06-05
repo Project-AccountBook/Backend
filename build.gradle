@@ -53,6 +53,9 @@ dependencies {
 
     // 8. OAuth2 Client (소셜 로그인)
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+
+    // 9. Elasticsearch (게시판 검색 — nori 분석기)
+    implementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
 }
 
 tasks.named('test') {
