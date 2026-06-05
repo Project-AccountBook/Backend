@@ -45,6 +45,18 @@ public class AccountService {
                 .collect(Collectors.toList());
     }
 
+    public AccountResponse getAccount(Long userId, Long accountId) {
+
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new CustomException(AccountErrorCode.ACCOUNT_NOT_FOUND));
+
+        if (!account.getUser().getId().equals(userId)) {
+            throw new CustomException(UserErrorCode.ACCESS_DENIED);
+        }
+
+        return new AccountResponse(account);
+    }
+
     @Transactional
     public void updateAccount(Long userId,Long accountId, AccountRequest request) {
 

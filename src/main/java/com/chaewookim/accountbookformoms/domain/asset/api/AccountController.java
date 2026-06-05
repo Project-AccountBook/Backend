@@ -29,6 +29,14 @@ public class AccountController {
 
     private final AccountService accountService;
 
+    @PostMapping
+    public ResponseEntity<ApiResponse<Long>> createAccount(
+            @AuthenticationPrincipal UserPrincipal user,
+            @Valid @RequestBody AccountRequest dto
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(accountService.createAccount(user.getUserId(), dto)));
+    }
+
     @GetMapping
     public ResponseEntity<List<AccountResponse>> getAccounts(
             @AuthenticationPrincipal UserPrincipal user
@@ -36,12 +44,12 @@ public class AccountController {
         return ResponseEntity.ok(accountService.getAccounts(user.getUserId()));
     }
 
-    @PostMapping
-    public ResponseEntity<ApiResponse<Long>> createAccount(
+    @GetMapping("/{accountId}")
+    public ResponseEntity<ApiResponse<AccountResponse>> getAccount(
             @AuthenticationPrincipal UserPrincipal user,
-            @Valid @RequestBody AccountRequest dto
+            @PathVariable Long accountId
     ) {
-        return ResponseEntity.ok(ApiResponse.success(accountService.createAccount(user.getUserId(), dto)));
+        return ResponseEntity.ok(ApiResponse.success(accountService.getAccount(user.getUserId(), accountId)));
     }
 
     @PatchMapping("/{accountId}")

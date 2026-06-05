@@ -2,6 +2,7 @@ package com.chaewookim.accountbookformoms.domain.asset.application;
 
 import com.chaewookim.accountbookformoms.domain.asset.dao.AccountRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.AccountRequest;
+import com.chaewookim.accountbookformoms.domain.asset.dto.response.AccountResponse;
 import com.chaewookim.accountbookformoms.domain.asset.entity.Account;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
@@ -15,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -50,6 +52,49 @@ class AccountServiceTest {
 
         // then
         verify(accountRepository).save(any(Account.class));
+    }
+
+    @Test
+    @DisplayName("계좌 목록 조회 - 성공")
+    void getAccounts_success() {
+
+        // given
+        Long userId = 1L;
+        User user = User.builder().build();
+        ReflectionTestUtils.setField(user, "id", userId);
+
+        Account account1 = Account.builder().user(user).accountName("계좌1").build();
+        Account account2 = Account.builder().user(user).accountName("계좌2").build();
+
+        given(accountRepository.findByUserId(userId)).willReturn(List.of(account1, account2));
+
+        // when
+        List<AccountResponse> accounts = accountService.getAccounts(userId);
+
+        // then
+        assertThat(accounts).hasSize(2);
+        assertThat(accounts.get(0).accountName()).isEqualTo("계좌1");
+        assertThat(accounts.get(1).accountName()).isEqualTo("계좌2");
+    }
+
+    @Test
+    @DisplayName("계좌 단건 조회 - 성공")
+    void getAccount_success() {
+
+        // given
+        Long userId = 1L;
+        Long accountId = 1L;
+        User user = User.builder().build();
+        ReflectionTestUtils.setField(user, "id", userId);
+        Account account = Account.builder().user(user).accountName("통장").build();
+
+        given(accountRepository.findById(accountId)).willReturn(Optional.of(account));
+
+        // when
+        AccountResponse response = accountService.getAccount(userId, accountId);
+
+        // then
+        assertThat(response.accountName()).isEqualTo("통장");
     }
 
     @Test
