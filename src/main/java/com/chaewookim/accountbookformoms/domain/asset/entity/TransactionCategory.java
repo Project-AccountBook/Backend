@@ -25,7 +25,7 @@ import org.hibernate.annotations.SQLRestriction;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @SQLDelete(sql = "UPDATE category SET deleted_at = NOW() WHERE id = ?")
 @SQLRestriction("deleted_at IS NULL")
-public class Category extends BaseEntity {
+public class TransactionCategory extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -43,7 +43,7 @@ public class Category extends BaseEntity {
     private String name;
 
     @Builder
-    public Category(User user, TransactionType type, String name) {
+    public TransactionCategory(User user, TransactionType type, String name) {
         this.user = user;
         this.type = type;
         this.name = name;

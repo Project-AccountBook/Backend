@@ -44,7 +44,7 @@ public class Transaction extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")
-    private Category category;
+    private TransactionCategory transactionCategory;
 
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
@@ -59,11 +59,11 @@ public class Transaction extends BaseEntity {
     private String description;
 
     @Builder
-    public Transaction(User user, Account account, Category category, TransactionType type,
+    public Transaction(User user, Account account, TransactionCategory transactionCategory, TransactionType type,
                        BigDecimal amount, LocalDate transactionDate, String description) {
         this.user = user;
         this.account = account;
-        this.category = category;
+        this.transactionCategory = transactionCategory;
         this.type = type;
         this.amount = amount;
         this.transactionDate = transactionDate;

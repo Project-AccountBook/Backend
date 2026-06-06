@@ -47,7 +47,7 @@ public class FixedTransaction extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")
-    private Category category;
+    private TransactionCategory transactionCategory;
 
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
@@ -76,12 +76,12 @@ public class FixedTransaction extends BaseEntity {
     private Boolean isActive;
 
     @Builder
-    public FixedTransaction(User user, Account account, Category category, TransactionType type,
+    public FixedTransaction(User user, Account account, TransactionCategory transactionCategory, TransactionType type,
                             BigDecimal amount, TransactionFrequency frequency, Integer repeatDay,
                             LocalDate startDate, LocalDate endDate, String description) {
         this.user = user;
         this.account = account;
-        this.category = category;
+        this.transactionCategory = transactionCategory;
         this.type = type;
         this.amount = amount;
         this.frequency = frequency;
