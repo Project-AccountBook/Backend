@@ -31,6 +31,6 @@ public record UpdateProfileRequest(
         Boolean isInterestCategoryEnabled,
 
         @NotNull(message = "보안 알림 여부는 필수 입력 값입니다.")
-        Boolean isSecurityAlertEnabled
+        Boolean isSystemAlertEnabled
 ) {
 }

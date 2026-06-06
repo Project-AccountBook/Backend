@@ -32,19 +32,19 @@ public class UserNotificationSetting {
     private Boolean isInterestCategoryEnabled;  // 관심 카테고리 알림
 
     @Column(nullable = false)
-    private Boolean isSecurityAlertEnabled;     // 보안 알림
+    private Boolean isSystemAlertEnabled;     // 시스템 알림
 
     @Builder
-    public UserNotificationSetting(User user, Boolean isBudgetAlertEnabled, Boolean isInterestCategoryEnabled, Boolean isSecurityAlertEnabled) {
+    public UserNotificationSetting(User user, Boolean isBudgetAlertEnabled, Boolean isInterestCategoryEnabled, Boolean isSystemAlertEnabled) {
         this.user = user;
         this.isBudgetAlertEnabled = (isBudgetAlertEnabled != null) ? isBudgetAlertEnabled : true;
         this.isInterestCategoryEnabled = (isInterestCategoryEnabled != null) ? isInterestCategoryEnabled : true;
-        this.isSecurityAlertEnabled = (isSecurityAlertEnabled != null) ? isSecurityAlertEnabled : true;
+        this.isSystemAlertEnabled = (isSystemAlertEnabled != null) ? isSystemAlertEnabled : true;
     }
 
-    public void updateNotificationSettings(Boolean isBudgetAlertEnabled, Boolean isInterestCategoryEnabled, Boolean isSecurityAlertEnabled) {
+    public void updateNotificationSettings(Boolean isBudgetAlertEnabled, Boolean isInterestCategoryEnabled, Boolean isSystemAlertEnabled) {
         if (isBudgetAlertEnabled != null) this.isBudgetAlertEnabled = isBudgetAlertEnabled;
         if (isInterestCategoryEnabled != null) this.isInterestCategoryEnabled = isInterestCategoryEnabled;
-        if (isSecurityAlertEnabled != null) this.isSecurityAlertEnabled = isSecurityAlertEnabled;
+        if (isSystemAlertEnabled != null) this.isSystemAlertEnabled = isSystemAlertEnabled;
     }
 }
