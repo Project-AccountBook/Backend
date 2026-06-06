@@ -76,9 +76,8 @@ public class FixedTransaction extends BaseEntity {
     private Boolean isActive;
 
     @Builder
-    public FixedTransaction(User user, Account account, TransactionCategory transactionCategory, TransactionType type,
-                            BigDecimal amount, TransactionFrequency frequency, Integer repeatDay,
-                            LocalDate startDate, LocalDate endDate, String description) {
+    public FixedTransaction(User user, Account account, TransactionCategory transactionCategory, TransactionType type, BigDecimal amount,
+                            TransactionFrequency frequency, Integer repeatDay, LocalDate startDate, LocalDate endDate, String description) {
         this.user = user;
         this.account = account;
         this.transactionCategory = transactionCategory;
