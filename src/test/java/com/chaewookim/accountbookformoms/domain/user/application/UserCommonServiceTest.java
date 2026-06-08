@@ -3,7 +3,7 @@ package com.chaewookim.accountbookformoms.domain.user.application;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.enums.SocialProvider;
-import com.chaewookim.accountbookformoms.global.event.UserSignedUpEvent;
+import com.chaewookim.accountbookformoms.domain.user.event.UserSignedUpEvent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
