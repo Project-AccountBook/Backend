@@ -5,7 +5,7 @@ import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.entity.UserNotificationSetting;
 import com.chaewookim.accountbookformoms.domain.user.entity.UserSetting;
 import com.chaewookim.accountbookformoms.domain.user.enums.SocialProvider;
-import com.chaewookim.accountbookformoms.global.event.UserSignedUpEvent;
+import com.chaewookim.accountbookformoms.domain.user.event.UserSignedUpEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;

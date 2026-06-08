@@ -55,7 +55,7 @@ public class UserService {
         return new UserProfileResponse(
                 user.getEmail(), user.getUsername(), user.getBirthDate(), user.getAddress(),
                 settings.getBudgetAlertThreshold(), settings.getIsPortfolioPublic(),
-                notificationSetting.getIsBudgetAlertEnabled(), notificationSetting.getIsInterestCategoryEnabled(), notificationSetting.getIsSecurityAlertEnabled()
+                notificationSetting.getIsBudgetAlertEnabled(), notificationSetting.getIsInterestCategoryEnabled(), notificationSetting.getIsSystemAlertEnabled()
         );
     }
 
@@ -70,7 +70,7 @@ public class UserService {
         user.getUserNotificationSetting().updateNotificationSettings(
                 request.isBudgetAlertEnabled(),
                 request.isInterestCategoryEnabled(),
-                request.isSecurityAlertEnabled()
+                request.isSystemAlertEnabled()
         );
     }
 

@@ -50,8 +50,6 @@ public class GroupPurchaseService {
         return GroupPurchaseResponse.from(groupPurchase);
     }
 
-    public List<GroupPurchaseResponse> getAllGroupPurchases(String region, Long categoryId, String sortBy) {
-
     public List<GroupPurchaseResponse> getAllGroupPurchases(String region, Long categoryId, Boolean nearMe, Long currentUserId, String sortBy) {
         String filterRegion = (region != null && !region.trim().isEmpty()) ? region.trim() : null;
 
@@ -60,8 +58,6 @@ public class GroupPurchaseService {
             sort = Sort.by(Sort.Direction.ASC, "deadline");
         }
 
-        return groupPurchaseRepository.findActiveGroupPurchases(PurchaseStatus.RECRUITING, filterRegion, categoryId, sort)
-                .stream()
         List<GroupPurchase> list = groupPurchaseRepository.findActiveGroupPurchases(PurchaseStatus.RECRUITING, filterRegion, categoryId, sort);
 
         if (Boolean.TRUE.equals(nearMe) && currentUserId != null) {

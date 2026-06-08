@@ -43,30 +43,17 @@ public class GroupPurchaseController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    @Operation(summary = "공동구매 목록 조회", description = "진행 중인 공동구매 목록을 조회합니다. 최신순/마감임박순 정렬, 지역 필터링 및 카테고리 필터링이 가능합니다.")
-
-    @Operation(summary = "공동구매 목록 조회", description = "진행 중인 공동구매 목록을 조회합니다. 최신순/마감임박순 정렬, 지역 필터링 및 카테고리 필터링이 가능합니다.")
-
     @Operation(summary = "공동구매 목록 조회", description = "진행 중인 공동구매 목록을 조회합니다. 정렬, 지역, 카테고리 필터링 및 동네 필터링(nearMe)이 가능합니다.")
-
     @GetMapping
     public ResponseEntity<ApiResponse<List<GroupPurchaseResponse>>> getAll(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
             @RequestParam(required = false) String region,
             @RequestParam(required = false) Long categoryId,
-            @RequestParam(required = false, defaultValue = "latest") String sortBy
-    ) {
-        List<GroupPurchaseResponse> response = groupPurchaseService.getAllGroupPurchases(region, categoryId, sortBy);
-
-            @RequestParam(required = false, defaultValue = "latest") String sortBy
-    ) {
-        List<GroupPurchaseResponse> response = groupPurchaseService.getAllGroupPurchases(region, categoryId, sortBy);
             @RequestParam(required = false) Boolean nearMe,
             @RequestParam(required = false, defaultValue = "latest") String sortBy
     ) {
         Long userId = (userPrincipal != null) ? userPrincipal.getUserId() : null;
         List<GroupPurchaseResponse> response = groupPurchaseService.getAllGroupPurchases(region, categoryId, nearMe, userId, sortBy);
-
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
