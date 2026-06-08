@@ -1,15 +1,20 @@
 package com.chaewookim.accountbookformoms.domain.board.application;
 
 import com.chaewookim.accountbookformoms.domain.board.dao.BoardRepository;
+import com.chaewookim.accountbookformoms.domain.board.dao.BoardSearchQueryRepository;
+import com.chaewookim.accountbookformoms.domain.board.document.BoardDocument;
 import com.chaewookim.accountbookformoms.domain.board.dto.request.BoardCreateRequest;
 import com.chaewookim.accountbookformoms.domain.board.dto.request.BoardUpdateRequest;
 import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardCreateResponse;
 import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardResponse;
+import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardSearchResponse;
 import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardUpdateResponse;
 import com.chaewookim.accountbookformoms.domain.board.entity.Board;
 import com.chaewookim.accountbookformoms.domain.board.error.BoardErrorCode;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
+import com.chaewookim.accountbookformoms.global.event.BoardChangedEvent;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -21,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class BoardService {
 
     private final BoardRepository boardRepository;
+    private final BoardSearchQueryRepository boardSearchQueryRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public Page<BoardResponse> list(Pageable pageable) {
         return boardRepository.findAll(pageable).map(BoardResponse::from);
@@ -37,6 +44,7 @@ public class BoardService {
                 .build();
 
         Board saved = boardRepository.save(board);
+        eventPublisher.publishEvent(BoardChangedEvent.upsert(saved.getId()));
         return new BoardCreateResponse(saved.getId(), saved.getTitle());
     }
 
@@ -51,6 +59,7 @@ public class BoardService {
         validateOwner(board, userId);
 
         board.update(request.title(), request.content(), request.type());
+        eventPublisher.publishEvent(BoardChangedEvent.upsert(board.getId()));
         return new BoardUpdateResponse(board.getId(), board.getTitle());
     }
 
@@ -60,12 +69,13 @@ public class BoardService {
         validateOwner(board, userId);
 
         boardRepository.delete(board);
+        eventPublisher.publishEvent(BoardChangedEvent.delete(board.getId()));
         return board.getId();
     }
 
-    // TODO: Elasticsearch nori 전환 예정 — 현재는 JPA LIKE fallback
-    public Page<BoardResponse> search(String keyword, Pageable pageable) {
-        return boardRepository.searchByKeyword(keyword, pageable).map(BoardResponse::from);
+    public Page<BoardSearchResponse> search(String keyword, Pageable pageable) {
+        Page<BoardDocument> hits = boardSearchQueryRepository.search(keyword, pageable);
+        return hits.map(BoardSearchResponse::from);
     }
 
     private Board findBoardOrThrow(Long postId) {
