@@ -4,7 +4,7 @@ import com.chaewookim.accountbookformoms.domain.asset.dao.AccountRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.AccountRequest;
 import com.chaewookim.accountbookformoms.domain.asset.dto.response.AccountResponse;
 import com.chaewookim.accountbookformoms.domain.asset.entity.Account;
-import com.chaewookim.accountbookformoms.domain.asset.error.AccountErrorCode;
+import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
@@ -48,7 +48,7 @@ public class AccountService {
     public AccountResponse getAccount(Long userId, Long accountId) {
 
         Account account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new CustomException(AccountErrorCode.ACCOUNT_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
 
         if (!account.getUser().getId().equals(userId)) {
             throw new CustomException(UserErrorCode.ACCESS_DENIED);
@@ -61,7 +61,7 @@ public class AccountService {
     public void updateAccount(Long userId,Long accountId, AccountRequest request) {
 
         Account account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new CustomException(AccountErrorCode.ACCOUNT_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
 
         if (!account.getUser().getId().equals(userId)) {
             throw new CustomException(UserErrorCode.ACCESS_DENIED);
@@ -74,7 +74,7 @@ public class AccountService {
     public void deleteAccount(Long userId, Long accountId) {
 
         Account account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new CustomException(AccountErrorCode.ACCOUNT_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
 
         if (!account.getUser().getId().equals(userId)) {
             throw new CustomException(UserErrorCode.ACCESS_DENIED);

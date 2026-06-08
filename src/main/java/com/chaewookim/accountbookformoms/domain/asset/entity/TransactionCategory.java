@@ -1,9 +1,12 @@
 package com.chaewookim.accountbookformoms.domain.asset.entity;
 
+import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.entity.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -17,14 +20,12 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
-import java.math.BigDecimal;
-
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@SQLDelete(sql = "UPDATE account SET deleted_at = NOW() WHERE id = ?")
+@SQLDelete(sql = "UPDATE category SET deleted_at = NOW() WHERE id = ?")
 @SQLRestriction("deleted_at IS NULL")
-public class Account extends BaseEntity {
+public class TransactionCategory extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -35,27 +36,16 @@ public class Account extends BaseEntity {
     private User user;
 
     @Column(nullable = false)
-    private String accountName;
+    @Enumerated(EnumType.STRING)
+    private TransactionType type;
 
     @Column(nullable = false)
-    private BigDecimal initialBalance;
-
-    @Column(nullable = false)
-    private BigDecimal currentBalance;
+    private String name;
 
     @Builder
-    public Account(User user, String accountName, BigDecimal initialBalance) {
+    public TransactionCategory(User user, TransactionType type, String name) {
         this.user = user;
-        this.accountName = accountName;
-        this.initialBalance = initialBalance;
-        this.currentBalance = initialBalance;
-    }
-
-    public void updateAccountName(String accountName) {
-        this.accountName = accountName;
-    }
-
-    public void updateBalance(BigDecimal amount) {
-        this.currentBalance = this.currentBalance.add(amount);
+        this.type = type;
+        this.name = name;
     }
 }

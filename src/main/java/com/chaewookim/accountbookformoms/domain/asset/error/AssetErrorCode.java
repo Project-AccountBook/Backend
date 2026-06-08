@@ -7,9 +7,13 @@ import org.springframework.http.HttpStatus;
 
 @Getter
 @RequiredArgsConstructor
-public enum AccountErrorCode implements BaseErrorCode {
+public enum AssetErrorCode implements BaseErrorCode {
 
-    ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "계좌를 찾을 수 없습니다.");
+    // Account
+    ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "계좌를 찾을 수 없습니다."),
+
+    // FixedTransaction
+    INVALID_REPEAT_DAY(HttpStatus.BAD_REQUEST, "반복 일자는 1~31일 사이여야 합니다.");
 
     private final HttpStatus status;
     private final String message;

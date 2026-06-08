@@ -1,9 +1,12 @@
 package com.chaewookim.accountbookformoms.domain.asset.entity;
 
+import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.entity.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -18,13 +21,14 @@ import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@SQLDelete(sql = "UPDATE account SET deleted_at = NOW() WHERE id = ?")
+@SQLDelete(sql = "UPDATE transaction SET deleted_at = NOW() WHERE id = ?")
 @SQLRestriction("deleted_at IS NULL")
-public class Account extends BaseEntity {
+public class Transaction extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -34,28 +38,35 @@ public class Account extends BaseEntity {
     @JoinColumn(name = "user_id")
     private User user;
 
-    @Column(nullable = false)
-    private String accountName;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "account_id")
+    private Account account;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
+    private TransactionCategory transactionCategory;
 
     @Column(nullable = false)
-    private BigDecimal initialBalance;
+    @Enumerated(EnumType.STRING)
+    private TransactionType type;
 
     @Column(nullable = false)
-    private BigDecimal currentBalance;
+    private BigDecimal amount;
+
+    @Column(nullable = false)
+    private LocalDate transactionDate;
+
+    private String description;
 
     @Builder
-    public Account(User user, String accountName, BigDecimal initialBalance) {
+    public Transaction(User user, Account account, TransactionCategory transactionCategory, TransactionType type,
+                       BigDecimal amount, LocalDate transactionDate, String description) {
         this.user = user;
-        this.accountName = accountName;
-        this.initialBalance = initialBalance;
-        this.currentBalance = initialBalance;
-    }
-
-    public void updateAccountName(String accountName) {
-        this.accountName = accountName;
-    }
-
-    public void updateBalance(BigDecimal amount) {
-        this.currentBalance = this.currentBalance.add(amount);
+        this.account = account;
+        this.transactionCategory = transactionCategory;
+        this.type = type;
+        this.amount = amount;
+        this.transactionDate = transactionDate;
+        this.description = description;
     }
 }
