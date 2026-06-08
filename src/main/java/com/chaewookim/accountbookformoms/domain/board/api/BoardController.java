@@ -5,14 +5,17 @@ import com.chaewookim.accountbookformoms.domain.board.dto.request.BoardCreateReq
 import com.chaewookim.accountbookformoms.domain.board.dto.request.BoardUpdateRequest;
 import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardCreateResponse;
 import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardResponse;
+import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardSearchResponse;
 import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardUpdateResponse;
 import com.chaewookim.accountbookformoms.global.common.ApiResponse;
 import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springdoc.core.converters.models.PageableAsQueryParam;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -39,8 +42,10 @@ public class BoardController {
     private final BoardService boardService;
 
     @Operation(summary = "게시물 목록 조회", description = "QnA 게시판 게시물 목록 조회")
+    @PageableAsQueryParam
     @GetMapping
     public ResponseEntity<ApiResponse<Page<BoardResponse>>> list(
+            @Parameter(hidden = true)
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success(boardService.list(pageable)));
@@ -85,11 +90,13 @@ public class BoardController {
         return ResponseEntity.ok(ApiResponse.success(boardService.delete(postId, userId)));
     }
 
-    @Operation(summary = "게시물 검색", description = "키워드 기반 게시물 검색")
+    @Operation(summary = "게시물 검색", description = "Elasticsearch nori 기반 게시물 검색")
+    @PageableAsQueryParam
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<BoardResponse>>> search(
+    public ResponseEntity<ApiResponse<Page<BoardSearchResponse>>> search(
             @RequestParam String keyword,
-            @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+            @Parameter(hidden = true)
+            @PageableDefault(size = 10) Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success(boardService.search(keyword, pageable)));
     }

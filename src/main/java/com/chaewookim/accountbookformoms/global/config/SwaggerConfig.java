@@ -92,6 +92,16 @@ public class SwaggerConfig {
     }
 
     @Bean
+    public GroupedOpenApi adminCommentGroup() {
+        return GroupedOpenApi.builder()
+                .group("Admin Comment API")
+                .pathsToMatch(
+                        "/api/v1/admin/comments/**"
+                )
+                .build();
+    }
+
+    @Bean
     public GroupedOpenApi allGroup() {
         return GroupedOpenApi.builder()
                 .group("전체 API")

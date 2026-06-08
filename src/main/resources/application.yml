@@ -16,6 +16,9 @@ spring:
       hibernate:
         format_sql: true
 
+  elasticsearch:
+    uris: ${ELASTICSEARCH_URIS:http://localhost:9200}
+
   config:
     import:
       - classpath:/application-secret.yml
