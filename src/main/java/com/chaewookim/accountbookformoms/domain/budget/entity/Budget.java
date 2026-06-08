@@ -27,9 +27,9 @@ import java.math.BigDecimal;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @SQLDelete(sql = "UPDATE budget SET deleted_at = NOW() WHERE id = ?")
 @SQLRestriction("deleted_at IS NULL")
-@Table(uniqueConstraints = {
+@Table(name = "budget", uniqueConstraints = {
         @UniqueConstraint(name = "uk_budget_user_month_category",
-                columnNames = {"user_id", "yearMonth", "category_id"})
+                columnNames = {"user_id", "`year_month`", "category_id"})
 })
 public class Budget extends BaseEntity {
 
@@ -45,7 +45,7 @@ public class Budget extends BaseEntity {
     @JoinColumn(name = "category_id")
     private TransactionCategory transactionCategory;
 
-    @Column(nullable = false)
+    @Column(nullable = false, name = "`year_month`")
     private String yearMonth;
 
     @Column(nullable = false)
