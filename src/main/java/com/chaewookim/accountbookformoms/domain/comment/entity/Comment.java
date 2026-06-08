@@ -50,6 +50,9 @@ public class Comment extends BaseEntity {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "admin_deleted", nullable = false)
+    private boolean adminDeleted;
+
     @Builder
     public Comment(Long userId, Long referenceId, ReferenceType referenceType, Long parentId, String content) {
         this.userId = userId;
@@ -57,10 +60,15 @@ public class Comment extends BaseEntity {
         this.referenceType = referenceType;
         this.parentId = parentId;
         this.content = content;
+        this.adminDeleted = false;
     }
 
     public void update(String content) {
         this.content = content;
+    }
+
+    public void markAsAdminDeleted() {
+        this.adminDeleted = true;
     }
 
     public boolean isDeleted() {

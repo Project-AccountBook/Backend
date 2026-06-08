@@ -17,17 +17,27 @@ public record CommentResponse(
         LocalDateTime updatedAt
 ) {
     private static final String DELETED_MESSAGE = "삭제된 댓글입니다.";
+    private static final String ADMIN_DELETED_MESSAGE = "관리자가 삭제한 댓글입니다.";
 
     public static CommentResponse from(Comment comment) {
         boolean deleted = comment.isDeleted();
+        boolean adminDeleted = comment.isAdminDeleted();
+        String content;
+        if (adminDeleted) {
+            content = ADMIN_DELETED_MESSAGE;
+        } else if (deleted) {
+            content = DELETED_MESSAGE;
+        } else {
+            content = comment.getContent();
+        }
         return new CommentResponse(
                 comment.getId(),
                 comment.getUserId(),
                 comment.getReferenceId(),
                 comment.getReferenceType(),
                 comment.getParentId(),
-                deleted ? DELETED_MESSAGE : comment.getContent(),
-                deleted,
+                content,
+                deleted || adminDeleted,
                 comment.getCreatedAt(),
                 comment.getUpdatedAt()
         );

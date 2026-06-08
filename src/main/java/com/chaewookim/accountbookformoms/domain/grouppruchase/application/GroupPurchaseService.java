@@ -51,6 +51,7 @@ public class GroupPurchaseService {
     }
 
     public List<GroupPurchaseResponse> getAllGroupPurchases(String region, Long categoryId, String sortBy) {
+
     public List<GroupPurchaseResponse> getAllGroupPurchases(String region, Long categoryId, Boolean nearMe, Long currentUserId, String sortBy) {
         String filterRegion = (region != null && !region.trim().isEmpty()) ? region.trim() : null;
 
