@@ -97,6 +97,11 @@ public class User extends BaseEntity {
         this.password = password;
     }
 
+    public void updateLocation(Double latitude, Double longitude) {
+        this.latitude = latitude;
+        this.longitude = longitude;
+    }
+
     public void restore(String username, String password, LocalDate birthDate, String address) {
         super.restore();
         this.password = password;
