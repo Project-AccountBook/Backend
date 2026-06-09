@@ -1,0 +1,150 @@
+package com.chaewookim.accountbookformoms.domain.asset.application;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.*;
+
+import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionCategoryRepository;
+import com.chaewookim.accountbookformoms.domain.asset.dto.request.CategoryRequest;
+import com.chaewookim.accountbookformoms.domain.asset.dto.response.CategoryResponse;
+import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory;
+import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
+import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
+import com.chaewookim.accountbookformoms.domain.user.entity.User;
+import com.chaewookim.accountbookformoms.global.error.CustomException;
+import java.util.List;
+import java.util.Optional;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class CategoryServiceTest {
+
+    @Mock
+    private TransactionCategoryRepository categoryRepository;
+
+    @InjectMocks
+    private CategoryService categoryService;
+
+    @Test
+    @DisplayName("카테고리 목록 조회 - 성공")
+    void getCategories_Success() {
+
+        // given
+        Long userId = 1L;
+        TransactionCategory category = TransactionCategory.builder().name("식비").type(TransactionType.EXPENSE).build();
+        given(categoryRepository.findAllByUserOrSystem(userId)).willReturn(List.of(category));
+
+        // when
+        List<CategoryResponse> result = categoryService.getCategories(userId);
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).name()).isEqualTo("식비");
+    }
+
+    @Test
+    @DisplayName("카테고리 생성 - 성공")
+    void createCustomCategory_Success() {
+
+        // given
+        User user = mock(User.class);
+        CategoryRequest request = new CategoryRequest("쇼핑", TransactionType.EXPENSE);
+        TransactionCategory savedCategory = request.toEntity(user);
+        given(categoryRepository.save(any())).willReturn(savedCategory);
+
+        // when
+        CategoryResponse response = categoryService.createCustomCategory(user, request);
+
+        // then
+        assertThat(response.name()).isEqualTo("쇼핑");
+    }
+
+    @Test
+    @DisplayName("카테고리 수정 - 성공")
+    void updateCategory_Success() {
+
+        // given
+        Long categoryId = 1L;
+        Long userId = 1L;
+        User user = mock(User.class);
+        given(user.getId()).willReturn(userId);
+
+        TransactionCategory category = TransactionCategory.builder().user(user).name("기존").type(TransactionType.EXPENSE).build();
+        given(categoryRepository.findById(categoryId)).willReturn(Optional.of(category));
+
+        CategoryRequest request = new CategoryRequest("변경", TransactionType.INCOME);
+
+        // when
+        categoryService.updateCategory(categoryId, userId, request);
+
+        // then
+        assertThat(category.getName()).isEqualTo("변경");
+        assertThat(category.getType()).isEqualTo(TransactionType.INCOME);
+    }
+
+    @Test
+    @DisplayName("카테고리 수정 - 기본 카테고리 수정 시 예외 발생")
+    void updateCategory_Fail_Immutable() {
+
+        // given
+        Long categoryId = 1L;
+        TransactionCategory systemCategory = TransactionCategory.builder().user(null).build();
+        given(categoryRepository.findById(categoryId)).willReturn(Optional.of(systemCategory));
+
+        // when & then
+        assertThatThrownBy(() -> categoryService.updateCategory(categoryId, 1L, null))
+                .isInstanceOf(CustomException.class)
+                .satisfies(ex -> {
+                    CustomException customEx = (CustomException) ex;
+                    assertThat(customEx.getErrorCode()).isEqualTo(AssetErrorCode.CATEGORY_IMMUTABLE);
+                });
+    }
+
+    @Test
+    @DisplayName("카테고리 삭제 - 성공")
+    void deleteCategory_Success() {
+
+        // given
+        Long categoryId = 1L;
+        Long userId = 1L;
+        User user = mock(User.class);
+        given(user.getId()).willReturn(userId);
+
+        TransactionCategory category = TransactionCategory.builder().user(user).build();
+        given(categoryRepository.findById(categoryId)).willReturn(Optional.of(category));
+
+        // when
+        categoryService.deleteCategory(categoryId, userId);
+
+        // then
+        verify(categoryRepository, times(1)).delete(category);
+    }
+
+    @Test
+    @DisplayName("카테고리 삭제 - 타인 카테고리 삭제 시 예외 발생")
+    void deleteCategory_Fail_Forbidden() {
+
+        // given
+        Long categoryId = 1L;
+        User owner = mock(User.class);
+        given(owner.getId()).willReturn(2L);
+
+        TransactionCategory category = TransactionCategory.builder().user(owner).build();
+        given(categoryRepository.findById(categoryId)).willReturn(Optional.of(category));
+
+        // when & then
+        assertThatThrownBy(() -> categoryService.deleteCategory(categoryId, 1L))
+                .isInstanceOf(CustomException.class)
+                .satisfies(ex -> {
+                    CustomException customEx = (CustomException) ex;
+                    assertThat(customEx.getErrorCode()).isEqualTo(AssetErrorCode.CATEGORY_FORBIDDEN);
+                });
+    }
+}

@@ -23,7 +23,7 @@ import org.hibernate.annotations.SQLRestriction;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@SQLDelete(sql = "UPDATE category SET deleted_at = NOW() WHERE id = ?")
+@SQLDelete(sql = "UPDATE transaction_category SET deleted_at = NOW() WHERE id = ?")
 @SQLRestriction("deleted_at IS NULL")
 public class TransactionCategory extends BaseEntity {
 
@@ -36,16 +36,21 @@ public class TransactionCategory extends BaseEntity {
     private User user;
 
     @Column(nullable = false)
+    private String name;
+
+    @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     private TransactionType type;
 
-    @Column(nullable = false)
-    private String name;
-
     @Builder
-    public TransactionCategory(User user, TransactionType type, String name) {
+    public TransactionCategory(User user, String name, TransactionType type) {
         this.user = user;
-        this.type = type;
         this.name = name;
+        this.type = type;
+    }
+
+    public void update(String name, TransactionType transactionType) {
+        this.name = name;
+        this.type = transactionType;
     }
 }
