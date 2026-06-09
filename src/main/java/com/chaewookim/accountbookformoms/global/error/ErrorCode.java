@@ -44,7 +44,10 @@ public enum ErrorCode implements BaseErrorCode {
 
     // 공동구매 신청 관련 에러
     APPLICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 공동구매 신청을 찾을 수 없습니다."),
-    UNAUTHORIZED_APPLICATION(HttpStatus.FORBIDDEN, "해당 신청에 대한 권한이 없습니다.");
+    UNAUTHORIZED_APPLICATION(HttpStatus.FORBIDDEN, "해당 신청에 대한 권한이 없습니다."),
+
+    // 상품 관련 에러
+    PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 상품을 찾을 수 없습니다.");
 
     private final HttpStatus status;
     private final String message;
