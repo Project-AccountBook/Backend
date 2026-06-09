@@ -17,13 +17,21 @@ public class FirebaseConfig {
     private Resource serviceAccount;
 
     @PostConstruct
-    public void init() throws IOException {
-        if (FirebaseApp.getApps().isEmpty()) {
-            FirebaseOptions options = FirebaseOptions.builder()
-                    .setCredentials(GoogleCredentials.fromStream(serviceAccount.getInputStream()))
-                    .build();
+    public void init() {
+        try {
+            if (serviceAccount.exists()) {
+                if (FirebaseApp.getApps().isEmpty()) {
+                    FirebaseOptions options = FirebaseOptions.builder()
+                            .setCredentials(GoogleCredentials.fromStream(serviceAccount.getInputStream()))
+                            .build();
 
-            FirebaseApp.initializeApp(options);
+                    FirebaseApp.initializeApp(options);
+                }
+            } else {
+                System.out.println("WARN: Firebase service account file [jointliving-notification.json] not found. Push notifications will be disabled.");
+            }
+        } catch (IOException e) {
+            System.err.println("ERROR: Failed to initialize Firebase App: " + e.getMessage());
         }
     }
 }
