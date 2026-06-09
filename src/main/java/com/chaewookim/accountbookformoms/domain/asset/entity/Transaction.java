@@ -1,5 +1,6 @@
 package com.chaewookim.accountbookformoms.domain.asset.entity;
 
+import com.chaewookim.accountbookformoms.domain.asset.dto.request.TransactionRequest;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.entity.BaseEntity;
@@ -68,5 +69,19 @@ public class Transaction extends BaseEntity {
         this.amount = amount;
         this.transactionDate = transactionDate;
         this.description = description;
+    }
+
+    public void update(TransactionRequest request, TransactionCategory category) {
+        this.transactionCategory = category;
+        this.type = request.type();
+        this.amount = request.amount();
+        this.transactionDate = request.transactionDate();
+        this.description = request.description();
+    }
+
+    public BigDecimal getBalanceChangeAmount() {
+        return (this.type == TransactionType.EXPENSE || this.type == TransactionType.TRANSFER)
+                ? this.amount.negate()
+                : this.amount;
     }
 }

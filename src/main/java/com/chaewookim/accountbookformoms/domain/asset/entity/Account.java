@@ -1,7 +1,9 @@
 package com.chaewookim.accountbookformoms.domain.asset.entity;
 
+import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.entity.BaseEntity;
+import com.chaewookim.accountbookformoms.global.error.CustomException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -56,6 +58,13 @@ public class Account extends BaseEntity {
     }
 
     public void updateBalance(BigDecimal amount) {
+        this.currentBalance = this.currentBalance.add(amount);
+    }
+
+    public void changeBalance(BigDecimal amount) {
+        if (amount.compareTo(BigDecimal.ZERO) < 0 && this.currentBalance.add(amount).compareTo(BigDecimal.ZERO) < 0) {
+            throw new CustomException(AssetErrorCode.INSUFFICIENT_BALANCE);
+        }
         this.currentBalance = this.currentBalance.add(amount);
     }
 }
