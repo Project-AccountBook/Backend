@@ -1,5 +1,6 @@
 package com.chaewookim.accountbookformoms.domain.asset.entity;
 
+import com.chaewookim.accountbookformoms.domain.asset.dto.request.FixedTransactionRequest;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionFrequency;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
@@ -109,5 +110,20 @@ public class FixedTransaction extends BaseEntity {
         }
 
         return targetDate;
+    }
+
+    public void update(Account account, TransactionCategory category, FixedTransactionRequest request) {
+        this.account = account;
+        this.transactionCategory = category;
+        this.amount = request.amount();
+        this.frequency = request.frequency();
+        this.repeatDay = request.repeatDay();
+        this.startDate = request.startDate();
+        this.endDate = request.endDate();
+        this.description = request.description();
+    }
+
+    public void toggleActive() {
+        this.isActive = !this.isActive;
     }
 }
