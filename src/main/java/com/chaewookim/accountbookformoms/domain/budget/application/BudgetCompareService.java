@@ -6,8 +6,12 @@ import com.chaewookim.accountbookformoms.domain.budget.dto.request.PublicBudgetF
 import com.chaewookim.accountbookformoms.domain.budget.dto.response.BudgetCompareResponse;
 import com.chaewookim.accountbookformoms.domain.budget.dto.response.CategoryBudgetResponse;
 import com.chaewookim.accountbookformoms.domain.budget.dto.response.MyBudgetResponse;
+import com.chaewookim.accountbookformoms.domain.budget.dto.response.PairBudgetDetailResponse;
 import com.chaewookim.accountbookformoms.domain.budget.dto.response.PublicMonthlyBudgetResponse;
+import com.chaewookim.accountbookformoms.domain.budget.dto.response.UserBudgetCompareResponse;
+import com.chaewookim.accountbookformoms.domain.budget.dto.response.UserBudgetDetailResponse;
 import com.chaewookim.accountbookformoms.domain.budget.entity.Budget;
+import com.chaewookim.accountbookformoms.domain.budget.enums.BudgetCompareType;
 import com.chaewookim.accountbookformoms.domain.budget.error.BudgetErrorCode;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
@@ -69,6 +73,103 @@ public class BudgetCompareService {
                 .toList();
     }
 
+    public PairBudgetDetailResponse getPairBudgetDetails(Long myUserId, Long targetUserId, String yearMonth) {
+
+        validateYearMonth(yearMonth);
+        if (myUserId.equals(targetUserId)) {
+            throw new CustomException(BudgetErrorCode.CANNOT_COMPARE_SELF);
+        }
+
+        User me = userRepository.findById(myUserId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+        User target = loadPublicTarget(targetUserId);
+
+        return new PairBudgetDetailResponse(
+                toUserBudgetDetail(me, yearMonth),
+                toUserBudgetDetail(target, yearMonth));
+    }
+
+    public UserBudgetCompareResponse compareWithUser(Long myUserId, Long targetUserId,
+                                                     BudgetCompareType type, String yearMonth, Long categoryId) {
+
+        validateYearMonth(yearMonth);
+        if (myUserId.equals(targetUserId)) {
+            throw new CustomException(BudgetErrorCode.CANNOT_COMPARE_SELF);
+        }
+
+        User me = userRepository.findById(myUserId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+        User target = loadPublicTarget(targetUserId);
+
+        return switch (type) {
+            case AGE -> compareUsersByAge(me, target, yearMonth);
+            case AMOUNT -> compareUsersByAmount(me, target, yearMonth);
+            case CATEGORY -> compareUsersByCategory(me, target, yearMonth, categoryId);
+        };
+    }
+
+    private UserBudgetCompareResponse compareUsersByAge(User me, User target, String yearMonth) {
+        if (me.getBirthDate() == null || target.getBirthDate() == null) {
+            throw new CustomException(BudgetErrorCode.BIRTH_DATE_REQUIRED);
+        }
+        BigDecimal myAmount = nullToZero(budgetRepository.sumTotalBudgetByUserIdAndYearMonth(me.getId(), yearMonth));
+        BigDecimal targetAmount = nullToZero(budgetRepository.sumTotalBudgetByUserIdAndYearMonth(target.getId(), yearMonth));
+        return UserBudgetCompareResponse.of(
+                BudgetCompareType.AGE, yearMonth,
+                me.getId(), decadeLabel(me.getBirthDate()), myAmount,
+                target.getId(), decadeLabel(target.getBirthDate()), targetAmount);
+    }
+
+    private UserBudgetCompareResponse compareUsersByAmount(User me, User target, String yearMonth) {
+        BigDecimal myAmount = nullToZero(budgetRepository.sumTotalBudgetByUserIdAndYearMonth(me.getId(), yearMonth));
+        BigDecimal targetAmount = nullToZero(budgetRepository.sumTotalBudgetByUserIdAndYearMonth(target.getId(), yearMonth));
+        return UserBudgetCompareResponse.of(
+                BudgetCompareType.AMOUNT, yearMonth,
+                me.getId(), "월 총 예산", myAmount,
+                target.getId(), "월 총 예산", targetAmount);
+    }
+
+    private UserBudgetCompareResponse compareUsersByCategory(User me, User target, String yearMonth, Long categoryId) {
+        if (categoryId == null) {
+            throw new CustomException(BudgetErrorCode.CATEGORY_ID_REQUIRED);
+        }
+        BigDecimal myAmount = nullToZero(budgetRepository.findMyCategoryBudget(me.getId(), yearMonth, categoryId));
+        BigDecimal targetAmount = nullToZero(budgetRepository.findMyCategoryBudget(target.getId(), yearMonth, categoryId));
+        String categoryLabel = "카테고리 #" + categoryId;
+        return UserBudgetCompareResponse.of(
+                BudgetCompareType.CATEGORY, yearMonth,
+                me.getId(), categoryLabel, myAmount,
+                target.getId(), categoryLabel, targetAmount);
+    }
+
+    private UserBudgetDetailResponse toUserBudgetDetail(User user, String yearMonth) {
+        List<Budget> budgets = budgetRepository.findByUserIdAndYearMonth(user.getId(), yearMonth);
+        BigDecimal total = budgets.stream()
+                .map(Budget::getTotalBudget)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return new UserBudgetDetailResponse(
+                user.getId(), user.getUsername(), yearMonth, total,
+                budgets.stream().map(CategoryBudgetResponse::from).toList());
+    }
+
+    private User loadPublicTarget(Long targetUserId) {
+        User target = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+        if (target.getUserSetting() == null || !Boolean.TRUE.equals(target.getUserSetting().getIsPortfolioPublic())) {
+            throw new CustomException(BudgetErrorCode.TARGET_NOT_PUBLIC);
+        }
+        return target;
+    }
+
+    private String decadeLabel(LocalDate birthDate) {
+        int age = LocalDate.now().getYear() - birthDate.getYear();
+        return ((age / 10) * 10) + "대";
+    }
+
+    private BigDecimal nullToZero(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
+    }
+
     public BudgetCompareResponse compareWithGroup(Long userId, BudgetCompareRequest request) {
 
         validateYearMonth(request.yearMonth());
@@ -100,7 +201,7 @@ public class BudgetCompareService {
                 yearMonth, birthFrom, birthTo, user.getId());
 
         BigDecimal myAmount = budgetRepository.sumTotalBudgetByUserIdAndYearMonth(user.getId(), yearMonth);
-        return buildCompare(rows, myAmount, yearMonth, com.chaewookim.accountbookformoms.domain.budget.enums.BudgetCompareType.AGE);
+        return buildCompare(rows, myAmount, yearMonth, BudgetCompareType.AGE);
     }
 
     private BudgetCompareResponse compareByAmount(User user, String yearMonth, BigDecimal minAmount, BigDecimal maxAmount) {
@@ -111,7 +212,7 @@ public class BudgetCompareService {
                 yearMonth, minAmount, maxAmount, user.getId());
 
         BigDecimal myAmount = budgetRepository.sumTotalBudgetByUserIdAndYearMonth(user.getId(), yearMonth);
-        return buildCompare(rows, myAmount, yearMonth, com.chaewookim.accountbookformoms.domain.budget.enums.BudgetCompareType.AMOUNT);
+        return buildCompare(rows, myAmount, yearMonth, BudgetCompareType.AMOUNT);
     }
 
     private BudgetCompareResponse compareByCategory(User user, String yearMonth, Long categoryId) {
@@ -137,12 +238,12 @@ public class BudgetCompareService {
         }
 
         return BudgetCompareResponse.of(
-                com.chaewookim.accountbookformoms.domain.budget.enums.BudgetCompareType.CATEGORY,
+                BudgetCompareType.CATEGORY,
                 yearMonth, myAmount, average, sampleSize);
     }
 
     private BudgetCompareResponse buildCompare(List<Object[]> rows, BigDecimal myAmount, String yearMonth,
-                                               com.chaewookim.accountbookformoms.domain.budget.enums.BudgetCompareType type) {
+                                               BudgetCompareType type) {
         long sampleSize = rows.size();
         BigDecimal average = BigDecimal.ZERO;
         if (sampleSize > 0) {

@@ -6,8 +6,11 @@ import com.chaewookim.accountbookformoms.domain.budget.dto.request.BudgetCompare
 import com.chaewookim.accountbookformoms.domain.budget.dto.request.PublicBudgetFilterRequest;
 import com.chaewookim.accountbookformoms.domain.budget.dto.response.BudgetCompareResponse;
 import com.chaewookim.accountbookformoms.domain.budget.dto.response.MyBudgetResponse;
+import com.chaewookim.accountbookformoms.domain.budget.dto.response.PairBudgetDetailResponse;
 import com.chaewookim.accountbookformoms.domain.budget.dto.response.PublicMonthlyBudgetResponse;
+import com.chaewookim.accountbookformoms.domain.budget.dto.response.UserBudgetCompareResponse;
 import com.chaewookim.accountbookformoms.domain.budget.entity.Budget;
+import com.chaewookim.accountbookformoms.domain.user.entity.UserSetting;
 import com.chaewookim.accountbookformoms.domain.budget.enums.BudgetCompareType;
 import com.chaewookim.accountbookformoms.domain.budget.error.BudgetErrorCode;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
@@ -33,6 +36,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
@@ -248,5 +252,185 @@ class BudgetCompareServiceTest {
                 99L, new BudgetCompareRequest(BudgetCompareType.AGE, "2026-06", null, null, null)))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", UserErrorCode.USER_NOT_FOUND);
+    }
+
+    private User publicUser(Long id, String username, LocalDate birthDate) {
+        User user = mock(User.class);
+        lenient().when(user.getId()).thenReturn(id);
+        lenient().when(user.getUsername()).thenReturn(username);
+        lenient().when(user.getBirthDate()).thenReturn(birthDate);
+        UserSetting setting = mock(UserSetting.class);
+        lenient().when(setting.getIsPortfolioPublic()).thenReturn(true);
+        lenient().when(user.getUserSetting()).thenReturn(setting);
+        return user;
+    }
+
+    @Test
+    @DisplayName("두 사용자 예산 세부 조회 - 본인+대상자 월 총/카테고리별 예산 반환")
+    void getPairBudgetDetails_success() {
+
+        // given
+        User me = publicUser(1L, "me", LocalDate.of(1990, 1, 1));
+        User target = publicUser(2L, "target", LocalDate.of(1992, 3, 1));
+
+        given(userRepository.findById(1L)).willReturn(Optional.of(me));
+        given(userRepository.findById(2L)).willReturn(Optional.of(target));
+
+        TransactionCategory food = TransactionCategory.builder().name("식비").build();
+        given(budgetRepository.findByUserIdAndYearMonth(1L, "2026-06"))
+                .willReturn(List.of(budget(new BigDecimal("200000"), new BigDecimal("100000"), food)));
+        given(budgetRepository.findByUserIdAndYearMonth(2L, "2026-06"))
+                .willReturn(List.of(
+                        budget(new BigDecimal("300000"), new BigDecimal("200000"), food),
+                        budget(new BigDecimal("100000"), new BigDecimal("80000"), null)));
+
+        // when
+        PairBudgetDetailResponse response = budgetCompareService.getPairBudgetDetails(1L, 2L, "2026-06");
+
+        // then
+        assertThat(response.me().userId()).isEqualTo(1L);
+        assertThat(response.me().totalBudget()).isEqualByComparingTo("200000");
+        assertThat(response.me().categoryBudgets()).hasSize(1);
+        assertThat(response.target().userId()).isEqualTo(2L);
+        assertThat(response.target().totalBudget()).isEqualByComparingTo("400000");
+        assertThat(response.target().categoryBudgets()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("두 사용자 세부 조회 - 자기 자신 비교 예외")
+    void getPairBudgetDetails_self_compare_forbidden() {
+
+        // when & then
+        assertThatThrownBy(() -> budgetCompareService.getPairBudgetDetails(1L, 1L, "2026-06"))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", BudgetErrorCode.CANNOT_COMPARE_SELF);
+    }
+
+    @Test
+    @DisplayName("두 사용자 세부 조회 - 비공개 사용자는 예외")
+    void getPairBudgetDetails_target_not_public() {
+
+        // given
+        User me = mock(User.class);
+        User target = mock(User.class);
+        UserSetting setting = mock(UserSetting.class);
+        given(setting.getIsPortfolioPublic()).willReturn(false);
+        given(target.getUserSetting()).willReturn(setting);
+        given(userRepository.findById(1L)).willReturn(Optional.of(me));
+        given(userRepository.findById(2L)).willReturn(Optional.of(target));
+
+        // when & then
+        assertThatThrownBy(() -> budgetCompareService.getPairBudgetDetails(1L, 2L, "2026-06"))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", BudgetErrorCode.TARGET_NOT_PUBLIC);
+    }
+
+    @Test
+    @DisplayName("선택 사용자 비교 - AMOUNT 모드: 월 총 예산 직접 비교")
+    void compareWithUser_amount_success() {
+
+        // given
+        User me = publicUser(1L, "me", null);
+        User target = publicUser(2L, "target", null);
+        given(userRepository.findById(1L)).willReturn(Optional.of(me));
+        given(userRepository.findById(2L)).willReturn(Optional.of(target));
+        given(budgetRepository.sumTotalBudgetByUserIdAndYearMonth(1L, "2026-06"))
+                .willReturn(new BigDecimal("500000"));
+        given(budgetRepository.sumTotalBudgetByUserIdAndYearMonth(2L, "2026-06"))
+                .willReturn(new BigDecimal("700000"));
+
+        // when
+        UserBudgetCompareResponse response = budgetCompareService.compareWithUser(
+                1L, 2L, BudgetCompareType.AMOUNT, "2026-06", null);
+
+        // then
+        assertThat(response.type()).isEqualTo(BudgetCompareType.AMOUNT);
+        assertThat(response.myAmount()).isEqualByComparingTo("500000");
+        assertThat(response.targetAmount()).isEqualByComparingTo("700000");
+        assertThat(response.difference()).isEqualByComparingTo("-200000");
+    }
+
+    @Test
+    @DisplayName("선택 사용자 비교 - AGE 모드: 나이대 라벨 동반")
+    void compareWithUser_age_success() {
+
+        // given
+        int year = LocalDate.now().getYear();
+        User me = publicUser(1L, "me", LocalDate.of(year - 35, 1, 1));     // 30대
+        User target = publicUser(2L, "target", LocalDate.of(year - 42, 1, 1)); // 40대
+        given(userRepository.findById(1L)).willReturn(Optional.of(me));
+        given(userRepository.findById(2L)).willReturn(Optional.of(target));
+        given(budgetRepository.sumTotalBudgetByUserIdAndYearMonth(1L, "2026-06"))
+                .willReturn(new BigDecimal("400000"));
+        given(budgetRepository.sumTotalBudgetByUserIdAndYearMonth(2L, "2026-06"))
+                .willReturn(new BigDecimal("600000"));
+
+        // when
+        UserBudgetCompareResponse response = budgetCompareService.compareWithUser(
+                1L, 2L, BudgetCompareType.AGE, "2026-06", null);
+
+        // then
+        assertThat(response.myLabel()).isEqualTo("30대");
+        assertThat(response.targetLabel()).isEqualTo("40대");
+        assertThat(response.difference()).isEqualByComparingTo("-200000");
+    }
+
+    @Test
+    @DisplayName("선택 사용자 비교 - CATEGORY 모드: 카테고리별 예산 비교")
+    void compareWithUser_category_success() {
+
+        // given
+        User me = publicUser(1L, "me", null);
+        User target = publicUser(2L, "target", null);
+        given(userRepository.findById(1L)).willReturn(Optional.of(me));
+        given(userRepository.findById(2L)).willReturn(Optional.of(target));
+        given(budgetRepository.findMyCategoryBudget(1L, "2026-06", 10L))
+                .willReturn(new BigDecimal("200000"));
+        given(budgetRepository.findMyCategoryBudget(2L, "2026-06", 10L))
+                .willReturn(new BigDecimal("150000"));
+
+        // when
+        UserBudgetCompareResponse response = budgetCompareService.compareWithUser(
+                1L, 2L, BudgetCompareType.CATEGORY, "2026-06", 10L);
+
+        // then
+        assertThat(response.type()).isEqualTo(BudgetCompareType.CATEGORY);
+        assertThat(response.myAmount()).isEqualByComparingTo("200000");
+        assertThat(response.targetAmount()).isEqualByComparingTo("150000");
+        assertThat(response.difference()).isEqualByComparingTo("50000");
+    }
+
+    @Test
+    @DisplayName("선택 사용자 비교 - CATEGORY 모드 categoryId 없으면 예외")
+    void compareWithUser_category_id_required() {
+
+        // given
+        User me = publicUser(1L, "me", null);
+        User target = publicUser(2L, "target", null);
+        given(userRepository.findById(1L)).willReturn(Optional.of(me));
+        given(userRepository.findById(2L)).willReturn(Optional.of(target));
+
+        // when & then
+        assertThatThrownBy(() -> budgetCompareService.compareWithUser(
+                1L, 2L, BudgetCompareType.CATEGORY, "2026-06", null))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", BudgetErrorCode.CATEGORY_ID_REQUIRED);
+    }
+
+    @Test
+    @DisplayName("선택 사용자 비교 - AGE 모드: 생년월일 없으면 예외")
+    void compareWithUser_age_birth_required() {
+
+        // given
+        User me = publicUser(1L, "me", null);
+        User target = publicUser(2L, "target", LocalDate.of(1990, 1, 1));
+        given(userRepository.findById(1L)).willReturn(Optional.of(me));
+        given(userRepository.findById(2L)).willReturn(Optional.of(target));
+
+        // when & then
+        assertThatThrownBy(() -> budgetCompareService.compareWithUser(
+                1L, 2L, BudgetCompareType.AGE, "2026-06", null))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", BudgetErrorCode.BIRTH_DATE_REQUIRED);
     }
 }
