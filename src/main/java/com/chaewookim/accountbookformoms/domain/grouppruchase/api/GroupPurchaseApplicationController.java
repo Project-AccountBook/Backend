@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@Tag(name = "공동구매 신청(GroupPurchaseApplication)", description = "공동구매 신청 생성/조회/승인 API")
+@Tag(name = "사용자 공동구매 신청", description = "공동구매 신청 생성/조회/승인 API")
 @RestController
 @RequestMapping("/api/v1/group-purchase-applications")
 @RequiredArgsConstructor
@@ -44,7 +44,7 @@ public class GroupPurchaseApplicationController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    @Operation(summary = "공동구매 신청서 상세 조회", description = "신청서 상세 내용을 조회합니다. 신청자 본인 혹은 관리자만 가능합니다.")
+    @Operation(summary = "공동구매 신청서 상세 조회", description = "신청서 상세 내용을 조회합니다. 본인 혹은 관리자만 가능합니다.")
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<GroupPurchaseApplicationResponse>> getOne(
             @PathVariable Long id,
@@ -54,7 +54,7 @@ public class GroupPurchaseApplicationController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    @Operation(summary = "공동구매 신청 상태 수정 (관리자용)", description = "공동구매 신청을 승인하거나 반려하고 피드백을 남깁니다.")
+    @Operation(summary = "어드민 공동구매 신청 상태 수정", description = "공동구매 신청을 승인하거나 반려하고 피드백을 남깁니다.")
     @PatchMapping("/{id}/status")
     public ResponseEntity<ApiResponse<GroupPurchaseApplicationResponse>> updateStatus(
             @PathVariable Long id,
