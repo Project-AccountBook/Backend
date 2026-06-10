@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -23,4 +24,12 @@ public interface GroupPurchaseRepository extends JpaRepository<GroupPurchase, Lo
             @Param("categoryId") Long categoryId,
             Sort sort
     );
+
+    long countByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+
+    @Query("SELECT COALESCE(SUM(gp.currentParticipants), 0) FROM GroupPurchase gp WHERE gp.status = :status")
+    long sumCurrentParticipantsByStatus(@Param("status") PurchaseStatus status);
+
+    long countByStatus(PurchaseStatus status);
 }
+

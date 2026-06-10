@@ -6,10 +6,15 @@ import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.Purch
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseCreateRequest;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseUpdateRequest;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseResponse;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseDashboardResponse;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import com.chaewookim.accountbookformoms.global.error.ErrorCode;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -149,5 +154,34 @@ public class GroupPurchaseService {
             }
         }
         return null;
+    }
+
+    public GroupPurchaseDashboardResponse getDashboardSummary() {
+        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+        LocalDateTime endOfDay = LocalDate.now().atTime(LocalTime.MAX);
+
+        long todayCreatedCount = groupPurchaseRepository.countByCreatedAtBetween(startOfDay, endOfDay);
+        long activeParticipantsCount = groupPurchaseRepository.sumCurrentParticipantsByStatus(PurchaseStatus.RECRUITING);
+
+        long recruitingCount = groupPurchaseRepository.countByStatus(PurchaseStatus.RECRUITING);
+        long successCount = groupPurchaseRepository.countByStatus(PurchaseStatus.SUCCESS)
+                + groupPurchaseRepository.countByStatus(PurchaseStatus.CLOSED);
+        long failedCount = groupPurchaseRepository.countByStatus(PurchaseStatus.FAILED);
+
+        long total = recruitingCount + successCount + failedCount;
+        double recruitingRatio = total == 0 ? 0.0 : Math.round(((double) recruitingCount / total * 100) * 100) / 100.0;
+        double successRatio = total == 0 ? 0.0 : Math.round(((double) successCount / total * 100) * 100) / 100.0;
+        double failedRatio = total == 0 ? 0.0 : Math.round(((double) failedCount / total * 100) * 100) / 100.0;
+
+        return new GroupPurchaseDashboardResponse(
+                todayCreatedCount,
+                activeParticipantsCount,
+                recruitingCount,
+                successCount,
+                failedCount,
+                recruitingRatio,
+                successRatio,
+                failedRatio
+        );
     }
 }
