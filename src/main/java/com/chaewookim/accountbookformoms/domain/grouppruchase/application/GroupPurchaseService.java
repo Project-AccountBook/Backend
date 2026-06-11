@@ -1,14 +1,16 @@
 package com.chaewookim.accountbookformoms.domain.grouppruchase.application;
 
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseRepository;
-import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.GroupPurchase;
-import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.PurchaseStatus;
-import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseCreateRequest;
-import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseUpdateRequest;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseCategoryRepository;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.ReportRepository;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.WishlistRepository;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.GroupPurchase;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.Category;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.Wishlist;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.PurchaseStatus;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.ReportTargetType;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseCreateRequest;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseUpdateRequest;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseResponse;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseDashboardResponse;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseAdminResponse;
@@ -39,6 +41,7 @@ public class GroupPurchaseService {
     private final UserRepository userRepository;
     private final GroupPurchaseCategoryRepository groupPurchaseCategoryRepository;
     private final ReportRepository reportRepository;
+    private final WishlistRepository wishlistRepository;
 
     @Transactional
     public GroupPurchaseResponse createGroupPurchase(Long creatorId, GroupPurchaseCreateRequest request) {
@@ -209,5 +212,31 @@ public class GroupPurchaseService {
                     );
                     return GroupPurchaseAdminResponse.of(gp, creatorUsername, categoryName, reportCount);
                 });
+    }
+
+    @Transactional
+    public boolean toggleWish(Long userId, Long groupPurchaseId) {
+        if (!groupPurchaseRepository.existsById(groupPurchaseId)) {
+            throw new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND);
+        }
+
+        return wishlistRepository.findByUserIdAndGroupPurchaseId(userId, groupPurchaseId)
+                .map(wish -> {
+                    wishlistRepository.delete(wish);
+                    return false;
+                })
+                .orElseGet(() -> {
+                    Wishlist wish = Wishlist.builder()
+                            .userId(userId)
+                            .groupPurchaseId(groupPurchaseId)
+                            .build();
+                    wishlistRepository.save(wish);
+                    return true;
+                });
+    }
+
+    public Page<GroupPurchaseResponse> getWishedGroupPurchases(Long userId, Pageable pageable) {
+        return groupPurchaseRepository.findWishedGroupPurchases(userId, pageable)
+                .map(GroupPurchaseResponse::from);
     }
 }

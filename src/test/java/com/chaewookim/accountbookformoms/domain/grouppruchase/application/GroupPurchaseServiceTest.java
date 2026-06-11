@@ -7,10 +7,19 @@ import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.GroupPurcha
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.Category;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.PurchaseStatus;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.ReportTargetType;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.WishlistRepository;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.GroupPurchase;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.Category;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.Wishlist;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.PurchaseStatus;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.ReportTargetType;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseResponse;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseDashboardResponse;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseAdminResponse;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
+import com.chaewookim.accountbookformoms.global.error.CustomException;
+import com.chaewookim.accountbookformoms.global.error.ErrorCode;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -29,8 +38,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class GroupPurchaseServiceTest {
@@ -46,6 +57,9 @@ class GroupPurchaseServiceTest {
 
     @Mock
     private ReportRepository reportRepository;
+
+    @Mock
+    private WishlistRepository wishlistRepository;
 
     @InjectMocks
     private GroupPurchaseService groupPurchaseService;
@@ -148,5 +162,72 @@ class GroupPurchaseServiceTest {
         assertThat(dto.creatorUsername()).isEqualTo("작성자");
         assertThat(dto.categoryName()).isEqualTo("식료품");
         assertThat(dto.reportCount()).isEqualTo(4L);
+    }
+
+    @Test
+    @DisplayName("찜 토글 성공 — 찜하기 등록")
+    void toggleWish_create_success() {
+        // given
+        given(groupPurchaseRepository.existsById(101L)).willReturn(true);
+        given(wishlistRepository.findByUserIdAndGroupPurchaseId(2L, 101L)).willReturn(Optional.empty());
+
+        // when
+        boolean result = groupPurchaseService.toggleWish(2L, 101L);
+
+        // then
+        assertThat(result).isTrue();
+        verify(wishlistRepository).save(any(Wishlist.class));
+    }
+
+    @Test
+    @DisplayName("찜 토글 성공 — 찜하기 해제")
+    void toggleWish_delete_success() {
+        // given
+        given(groupPurchaseRepository.existsById(101L)).willReturn(true);
+        Wishlist wish = Wishlist.builder().userId(2L).groupPurchaseId(101L).build();
+        given(wishlistRepository.findByUserIdAndGroupPurchaseId(2L, 101L)).willReturn(Optional.of(wish));
+
+        // when
+        boolean result = groupPurchaseService.toggleWish(2L, 101L);
+
+        // then
+        assertThat(result).isFalse();
+        verify(wishlistRepository).delete(wish);
+    }
+
+    @Test
+    @DisplayName("찜 토글 실패 — 존재하지 않는 공동구매 글")
+    void toggleWish_fail_not_found() {
+        // given
+        given(groupPurchaseRepository.existsById(101L)).willReturn(false);
+
+        // when & then
+        assertThatThrownBy(() -> groupPurchaseService.toggleWish(2L, 101L))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.GROUP_PURCHASE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("찜한 목록 페이징 조회 성공")
+    void getWishedGroupPurchases_success() {
+        // given
+        Pageable pageable = PageRequest.of(0, 10);
+        GroupPurchase gp = GroupPurchase.builder()
+                .id(101L)
+                .creatorId(2L)
+                .categoryId(3L)
+                .title("공구 게시글")
+                .build();
+        ReflectionTestUtils.setField(gp, "createdAt", LocalDateTime.now());
+
+        Page<GroupPurchase> gpPage = new PageImpl<>(List.of(gp), pageable, 1);
+        given(groupPurchaseRepository.findWishedGroupPurchases(2L, pageable)).willReturn(gpPage);
+
+        // when
+        Page<GroupPurchaseResponse> responsePage = groupPurchaseService.getWishedGroupPurchases(2L, pageable);
+
+        // then
+        assertThat(responsePage.getContent()).hasSize(1);
+        assertThat(responsePage.getContent().get(0).id()).isEqualTo(101L);
     }
 }
