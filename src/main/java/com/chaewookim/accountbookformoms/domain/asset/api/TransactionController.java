@@ -9,13 +9,16 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
-import java.util.List;
 
 @Tag(name = "거래 내역(Transaction)", description = "수입/지출/이체 내역 관리 API")
 @RestController
@@ -27,13 +30,14 @@ public class TransactionController {
 
     @Operation(summary = "거래 내역 목록 조회", description = "특정 계좌의 기간별 거래 내역 목록 조회")
     @GetMapping
-    public ResponseEntity<ApiResponse<List<TransactionResponse>>> getTransactions(
+    public ResponseEntity<ApiResponse<Page<TransactionResponse>>> getTransactions(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
             @RequestParam Long accountId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @PageableDefault(size = 20, sort = "transactionDate", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        List<TransactionResponse> responses = transactionService.getTransactions(userPrincipal.getUserId(), accountId, startDate, endDate);
+        Page<TransactionResponse> responses = transactionService.getTransactions(userPrincipal.getUserId(), accountId, startDate, endDate, pageable);
         return ResponseEntity.ok(ApiResponse.success(responses));
     }
 

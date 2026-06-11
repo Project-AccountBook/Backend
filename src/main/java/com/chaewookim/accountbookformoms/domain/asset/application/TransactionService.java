@@ -12,6 +12,8 @@ import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -97,9 +99,9 @@ public class TransactionService {
         return transactionRepository.save(transaction).getId();
     }
 
-    public List<TransactionResponse> getTransactions(Long userId, Long accountId, LocalDate startDate, LocalDate endDate) {
-        return transactionRepository.findAllByUserIdAndAccountIdAndTransactionDateBetween(userId, accountId, startDate, endDate)
-                .stream().map(TransactionResponse::from).toList();
+    public Page<TransactionResponse> getTransactions(Long userId, Long accountId, LocalDate startDate, LocalDate endDate, Pageable pageable) {
+        return transactionRepository.findAllByUserIdAndAccountIdAndTransactionDateBetween(userId, accountId, startDate, endDate, pageable)
+                .map(TransactionResponse::from);
     }
 
     public TransactionResponse getTransaction(Long transactionId) {

@@ -22,6 +22,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -102,14 +106,18 @@ class TransactionServiceTest {
         TransactionCategory category = TransactionCategory.builder().build(); setId(category, 1L);
         Transaction t = Transaction.builder().user(user).account(account).transactionCategory(category).build(); setId(t, 1L);
 
-        given(transactionRepository.findAllByUserIdAndAccountIdAndTransactionDateBetween(any(), any(), any(), any()))
-                .willReturn(List.of(t));
+        Pageable pageable = PageRequest.of(0, 20);
+        Page<Transaction> page = new PageImpl<>(List.of(t), pageable, 1);
+
+        given(transactionRepository.findAllByUserIdAndAccountIdAndTransactionDateBetween(any(), any(), any(), any(), any()))
+                .willReturn(page);
 
         // when
-        List<TransactionResponse> result = transactionService.getTransactions(1L, 1L, LocalDate.now(), LocalDate.now());
+        Page<TransactionResponse> result = transactionService.getTransactions(1L, 1L, LocalDate.now(), LocalDate.now(), pageable);
 
         // then
-        assertThat(result).hasSize(1);
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getTotalElements()).isEqualTo(1);
     }
 
     @Test
