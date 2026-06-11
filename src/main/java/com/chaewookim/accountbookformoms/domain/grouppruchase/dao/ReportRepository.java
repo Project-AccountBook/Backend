@@ -20,4 +20,7 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
             @Param("targetType") ReportTargetType targetType,
             Pageable pageable
     );
+
+    long countByTargetTypeAndTargetId(ReportTargetType targetType, Long targetId);
 }
+

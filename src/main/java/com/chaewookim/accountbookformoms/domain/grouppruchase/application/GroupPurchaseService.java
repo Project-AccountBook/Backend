@@ -5,12 +5,19 @@ import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.GroupPurcha
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.PurchaseStatus;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseCreateRequest;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseUpdateRequest;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseCategoryRepository;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.ReportRepository;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.Category;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.ReportTargetType;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseResponse;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseDashboardResponse;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseAdminResponse;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import com.chaewookim.accountbookformoms.global.error.ErrorCode;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -30,6 +37,8 @@ public class GroupPurchaseService {
 
     private final GroupPurchaseRepository groupPurchaseRepository;
     private final UserRepository userRepository;
+    private final GroupPurchaseCategoryRepository groupPurchaseCategoryRepository;
+    private final ReportRepository reportRepository;
 
     @Transactional
     public GroupPurchaseResponse createGroupPurchase(Long creatorId, GroupPurchaseCreateRequest request) {
@@ -183,5 +192,22 @@ public class GroupPurchaseService {
                 successRatio,
                 failedRatio
         );
+    }
+
+    public Page<GroupPurchaseAdminResponse> getGroupPurchasesForAdmin(String status, Pageable pageable) {
+        return groupPurchaseRepository.findAllForAdmin(status, pageable)
+                .map(gp -> {
+                    String creatorUsername = userRepository.findById(gp.getCreatorId())
+                            .map(User::getUsername)
+                            .orElse("탈퇴한 사용자");
+                    String categoryName = groupPurchaseCategoryRepository.findById(gp.getCategoryId())
+                            .map(Category::getName)
+                            .orElse("미지정");
+                    long reportCount = reportRepository.countByTargetTypeAndTargetId(
+                            ReportTargetType.GROUP_PURCHASE,
+                            gp.getId()
+                    );
+                    return GroupPurchaseAdminResponse.of(gp, creatorUsername, categoryName, reportCount);
+                });
     }
 }
