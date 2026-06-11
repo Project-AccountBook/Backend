@@ -46,32 +46,22 @@ public class AccountService {
     }
 
     public AccountResponse getAccount(Long userId, Long accountId) {
-
-        Account account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
-
-        if (!account.getUser().getId().equals(userId)) {
-            throw new CustomException(UserErrorCode.ACCESS_DENIED);
-        }
-
-        return new AccountResponse(account);
+        return new AccountResponse(validateAndGet(userId, accountId));
     }
 
     @Transactional
-    public void updateAccount(Long userId,Long accountId, AccountRequest request) {
-
-        Account account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
-
-        if (!account.getUser().getId().equals(userId)) {
-            throw new CustomException(UserErrorCode.ACCESS_DENIED);
-        }
-
+    public void updateAccount(Long userId, Long accountId, AccountRequest request) {
+        Account account = validateAndGet(userId, accountId);
         account.updateAccountName(request.accountName());
     }
 
     @Transactional
     public void deleteAccount(Long userId, Long accountId) {
+        accountRepository.delete(validateAndGet(userId, accountId));
+    }
+
+    // 공통 검증 로직
+    private Account validateAndGet(Long userId, Long accountId) {
 
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
@@ -80,6 +70,6 @@ public class AccountService {
             throw new CustomException(UserErrorCode.ACCESS_DENIED);
         }
 
-        accountRepository.delete(account);
+        return account;
     }
 }
