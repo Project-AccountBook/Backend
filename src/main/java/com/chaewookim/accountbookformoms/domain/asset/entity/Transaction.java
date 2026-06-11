@@ -1,5 +1,6 @@
 package com.chaewookim.accountbookformoms.domain.asset.entity;
 
+import com.chaewookim.accountbookformoms.domain.asset.dto.request.TransactionRequest;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.entity.BaseEntity;
@@ -11,8 +12,10 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -28,6 +31,10 @@ import java.time.LocalDate;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @SQLDelete(sql = "UPDATE transaction SET deleted_at = NOW() WHERE id = ?")
 @SQLRestriction("deleted_at IS NULL")
+@Table(name = "transaction", indexes = {
+        @Index(name = "idx_transaction_user_account_date",
+                columnList = "user_id, account_id, transaction_date")
+})
 public class Transaction extends BaseEntity {
 
     @Id
@@ -68,5 +75,19 @@ public class Transaction extends BaseEntity {
         this.amount = amount;
         this.transactionDate = transactionDate;
         this.description = description;
+    }
+
+    public void update(TransactionRequest request, TransactionCategory category) {
+        this.transactionCategory = category;
+        this.type = request.type();
+        this.amount = request.amount();
+        this.transactionDate = request.transactionDate();
+        this.description = request.description();
+    }
+
+    public BigDecimal getBalanceChangeAmount() {
+        return (this.type == TransactionType.EXPENSE || this.type == TransactionType.TRANSFER)
+                ? this.amount.negate()
+                : this.amount;
     }
 }

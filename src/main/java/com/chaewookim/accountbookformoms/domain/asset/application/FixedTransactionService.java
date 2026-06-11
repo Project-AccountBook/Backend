@@ -31,7 +31,6 @@ public class FixedTransactionService {
 
         Account account = accountRepository.findByIdAndUserId(request.accountId(), userId)
                 .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
-
         TransactionCategory category = categoryRepository.findById(request.categoryId())
                 .orElseThrow(() -> new CustomException(AssetErrorCode.CATEGORY_NOT_FOUND));
 
