@@ -15,11 +15,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -30,8 +30,7 @@ public class TransactionService {
     private final AccountRepository accountRepository;
     private final TransactionCategoryRepository categoryRepository;
 
-
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Long createTransaction(Long userId, TransactionRequest request) {
         if (request.type() == TransactionType.TRANSFER) {
             return createTransferTransaction(userId, request);

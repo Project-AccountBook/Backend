@@ -69,6 +69,8 @@ public class FixedTransaction extends BaseEntity {
 
     private LocalDate endDate;
 
+    private LocalDate lastExecutedDate;     // 마지막 실행일
+
     private LocalDate nextExecutionDate;    // 다음 실행 예정일 (배치 최적화용)
 
     private String description;
@@ -125,5 +127,14 @@ public class FixedTransaction extends BaseEntity {
 
     public void toggleActive() {
         this.isActive = !this.isActive;
+    }
+
+    private LocalDate calculateNextExecutionDate(LocalDate executedDate) {
+        return executedDate.plusMonths(1);
+    }
+
+    public void updateExecutionStatus(LocalDate executedDate) {
+        this.lastExecutedDate = executedDate;
+        this.nextExecutionDate = calculateNextExecutionDate(executedDate);
     }
 }

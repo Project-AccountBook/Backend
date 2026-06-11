@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -13,6 +14,7 @@ import java.util.List;
 public interface FixedTransactionRepository extends JpaRepository<FixedTransaction, Long> {
 
     List<FixedTransaction> findAllByUserId(Long userId);
+    List<FixedTransaction> findAllByIsActiveTrueAndNextExecutionDateLessThanEqual(LocalDate today);
 
     /**
      * 사용자의 해당 월에 적용되는 고정(FixedTransaction) 거래 카테고리별 합계.
