@@ -45,5 +45,11 @@ public interface GroupPurchaseRepository extends JpaRepository<GroupPurchase, Lo
             @Param("status") String status,
             Pageable pageable
     );
+
+    @Query("SELECT gp FROM GroupPurchase gp JOIN Wishlist w ON w.groupPurchaseId = gp.id WHERE w.userId = :userId")
+    Page<GroupPurchase> findWishedGroupPurchases(
+            @Param("userId") Long userId,
+            Pageable pageable
+    );
 }
 
