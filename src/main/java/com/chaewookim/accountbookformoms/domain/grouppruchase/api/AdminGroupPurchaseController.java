@@ -2,7 +2,13 @@ package com.chaewookim.accountbookformoms.domain.grouppruchase.api;
 
 import com.chaewookim.accountbookformoms.domain.grouppruchase.application.GroupPurchaseService;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseDashboardResponse;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseAdminResponse;
 import com.chaewookim.accountbookformoms.global.common.ApiResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.web.bind.annotation.RequestParam;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -24,5 +30,15 @@ public class AdminGroupPurchaseController {
     public ResponseEntity<ApiResponse<GroupPurchaseDashboardResponse>> getSummary() {
         GroupPurchaseDashboardResponse summary = groupPurchaseService.getDashboardSummary();
         return ResponseEntity.ok(ApiResponse.success(summary));
+    }
+
+    @Operation(summary = "공동구매 전체 목록 모니터링", description = "모든 공동구매 글을 리스트 형태로 조회하고, 상태별(모집중/성공/무산/신고됨)로 필터링할 수 있습니다.")
+    @GetMapping
+    public ResponseEntity<ApiResponse<Page<GroupPurchaseAdminResponse>>> getGroupPurchases(
+            @RequestParam(required = false) String status,
+            @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        Page<GroupPurchaseAdminResponse> response = groupPurchaseService.getGroupPurchasesForAdmin(status, pageable);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }
