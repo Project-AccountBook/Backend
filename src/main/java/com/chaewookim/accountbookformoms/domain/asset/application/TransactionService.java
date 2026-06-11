@@ -28,32 +28,65 @@ public class TransactionService {
     private final AccountRepository accountRepository;
     private final TransactionCategoryRepository categoryRepository;
 
+
     @Transactional
     public Long createTransaction(Long userId, TransactionRequest request) {
+        if (request.type() == TransactionType.TRANSFER) {
+            return createTransferTransaction(userId, request);
+        }
+        return createNormalTransaction(userId, request);
+    }
 
-        Account account = accountRepository.findById(request.accountId())
+    // 이체 전용 로직
+    private Long createTransferTransaction(Long userId, TransactionRequest request) {
+
+        if (request.accountId().equals(request.targetAccountId())) {
+            throw new CustomException(AssetErrorCode.TRANSFER_TO_SELF_FORBIDDEN);
+        }
+
+        Account first = accountRepository.findByIdWithLock(Math.min(request.accountId(), request.targetAccountId()))
+                .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
+        Account second = accountRepository.findByIdWithLock(Math.max(request.accountId(), request.targetAccountId()))
+                .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
+
+        Account source = (request.accountId().equals(first.getId())) ? first : second;
+        Account target = (request.targetAccountId().equals(first.getId())) ? first : second;
+
+        if (!source.getUser().getId().equals(userId)) {
+            throw new CustomException(AssetErrorCode.TRANSACTION_FORBIDDEN);
+        }
+
+        source.changeBalance(request.amount().negate());
+        target.changeBalance(request.amount());
+
+        return saveTransaction(source, source, request);
+    }
+
+    // 일반 거래 전용 로직
+    private Long createNormalTransaction(Long userId, TransactionRequest request) {
+
+        Account account = accountRepository.findByIdWithLock(request.accountId())
                 .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
 
         if (!account.getUser().getId().equals(userId)) {
             throw new CustomException(AssetErrorCode.TRANSACTION_FORBIDDEN);
         }
 
+        BigDecimal amount = (request.type() == TransactionType.EXPENSE) ? request.amount().negate() : request.amount();
+        account.changeBalance(amount);
+
+        return saveTransaction(account, account, request);
+    }
+
+    // 거래 내역 저장 로직
+    private Long saveTransaction(Account userAccount, Account transactionAccount, TransactionRequest request) {
+
         TransactionCategory category = categoryRepository.findById(request.categoryId())
                 .orElseThrow(() -> new CustomException(AssetErrorCode.CATEGORY_NOT_FOUND));
 
-        BigDecimal amount = (request.type() == TransactionType.EXPENSE || request.type() == TransactionType.TRANSFER)
-                ? request.amount().negate() : request.amount();
-        account.changeBalance(amount);
-
-        if (request.type() == TransactionType.TRANSFER) {
-            Account targetAccount = accountRepository.findById(request.targetAccountId())
-                    .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
-            targetAccount.changeBalance(request.amount());
-        }
-
         Transaction transaction = Transaction.builder()
-                .user(account.getUser())
-                .account(account)
+                .user(userAccount.getUser())
+                .account(transactionAccount)
                 .transactionCategory(category)
                 .type(request.type())
                 .amount(request.amount())
@@ -79,12 +112,16 @@ public class TransactionService {
     public void updateTransaction(Long userId, Long transactionId, TransactionRequest request) {
 
         Transaction transaction = validateAndGet(userId, transactionId);
+
+        Account account = accountRepository.findByIdWithLock(transaction.getAccount().getId())
+                .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
+
         TransactionCategory category = categoryRepository.findById(request.categoryId())
                 .orElseThrow(() -> new CustomException(AssetErrorCode.CATEGORY_NOT_FOUND));
 
-        transaction.getAccount().changeBalance(transaction.getBalanceChangeAmount().negate());
+        account.changeBalance(transaction.getBalanceChangeAmount().negate());
         transaction.update(request, category);
-        transaction.getAccount().changeBalance(transaction.getBalanceChangeAmount());
+        account.changeBalance(transaction.getBalanceChangeAmount());
     }
 
     @Transactional
@@ -92,7 +129,10 @@ public class TransactionService {
 
         Transaction transaction = validateAndGet(userId, transactionId);
 
-        transaction.getAccount().changeBalance(transaction.getBalanceChangeAmount().negate());
+        Account account = accountRepository.findByIdWithLock(transaction.getAccount().getId())
+                .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
+
+        account.changeBalance(transaction.getBalanceChangeAmount().negate());
         transactionRepository.delete(transaction);
     }
 
