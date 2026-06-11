@@ -123,3 +123,44 @@
 - **초기 reindex 배치**: 기존 DB 데이터를 ES로 일괄 색인하는 admin/배치 job
 - **docker-compose 정비**: ES 8.x + nori plugin 포함 컨테이너 정의
 - **통합 테스트**: Testcontainers Elasticsearch로 실제 nori 검색 동작 검증
+
+### 최적화 백로그 (2026-06-11 점검 결과)
+
+CLAUDE.md 의 기술 의사결정 중 일부가 코드에 반영되지 않았고, 비교 API 의 쿼리 효율도 개선 여지가 큼.
+
+#### 인덱스 누락 (단기 효과 큼)
+- **Budget** (`domain/budget/entity/Budget.java`): unique constraint(user_id, year_month, category_id)만 존재. `findByUserIdAndYearMonth`, `sumTotalBudgetByUserIdAndYearMonth` 가 비교 경로 전반에서 호출되므로 `@Index(columnList="user_id, year_month")` 추가 필요.
+- **Board** (`domain/board/entity/Board.java`): 인덱스 0개. `list(Pageable)` 가 `created_at DESC` 정렬, soft delete 로 `deleted_at IS NULL` 항상 필터 → `@Index(columnList="created_at")`, `@Index(columnList="type")`.
+- **FixedTransaction** (`domain/asset/entity/FixedTransaction.java`): 인덱스 전무. 비교 호출마다 user_id+기간 풀스캔 → `@Index(columnList="user_id")` 최소.
+
+> 현재 인덱스가 있는 곳: Transaction(`idx_transaction_user_account_date`), Comment(`idx_comment_reference`) 뿐.
+
+#### 중복 / N+1 쿼리
+- **`BudgetCompareService.compareByCategory`**: `averageCategoryBudget()`(AVG+COUNT) + `findMyCategoryBudget()` 가 같은 (year_month, category_id) 키로 두 번 왕복. 단일 쿼리로 합칠 수 있음.
+- **`Expense/IncomeCompareService.compareByCategory`**: 그룹 평균 후 본인 합계를 `sumByUserAndTypeAndCategory` 로 fixed+variable 별도 재호출(=2쿼리). 그룹 합계 결과에 본인이 포함되도록 쿼리 변경하거나 한 번에 처리.
+- **`PortfolioService.getPublicPortfolios`**: 한 번 호출에 fixed/variable × income/expense/budget = **6쿼리**. 사용자 합집합 메모리 병합 중. user_id GROUP BY 단일 쿼리(또는 UNION ALL 후 집계)로 축소 가능.
+
+#### Redis 캐싱 미적용 (CLAUDE.md 설계 미구현)
+- **댓글 캐시**: `CommentService.list` 에 `@Cacheable`/`@CacheEvict` 전무. 의사결정 #5 와 불일치.
+- **조회수 Redis INCR**: `Board.increaseViews` 가 DB 직접 update. 의사결정 #4 의 "INCR + Spring Scheduler DB 동기화" 미구현.
+- **그룹 평균 비교 캐시**: 매 요청마다 공개 사용자 전수 집계. 나이대별/카테고리별 평균은 TTL 캐시 후보. 의사결정 #6 의 배치 집계도 아직 없음.
+- 코드베이스 전역 `@Cacheable`/`@CacheEvict`/`@EnableCaching` 0건. Redis 는 현재 RefreshToken 외 사용 미확인.
+
+#### 비동기 / 스케줄러
+- `global/config/AsyncConfig.java`: `@EnableAsync` 만 있고 `TaskExecutor` 빈 없음 → `SimpleAsyncTaskExecutor`(매 호출 새 스레드)로 동작. ES 인덱싱·알림 발송이 메인 풀 점유 가능. `ThreadPoolTaskExecutor` 빈 추가 필요.
+- **`@Scheduled` 전무**: 의사결정 #13("고정 지출/수입 자동화 + ShedLock"), 조회수 동기화, 통계 배치 모두 미구현.
+
+#### 설정 / 운영
+- `application.yml`: `ddl-auto: update`, `show-sql: true`, `format_sql: true` 가 단일 profile. `application-local.yml`, `application-prod.yml` 로 분리하고 prod 는 `validate`/Flyway, show-sql off.
+- `spring.jpa.properties.hibernate.jdbc.batch_size` 미설정 → bulk insert 1행 1쿼리. `batch_size=20`, `order_inserts/order_updates=true` 권장.
+- HikariCP, OSIV(`spring.jpa.open-in-view` 기본 true) 설정 누락.
+
+#### Fetch 전략
+- `User`↔`UserSetting` 가 `@OneToOne(cascade)` 인데 fetch 미지정 → 기본 EAGER. 비교 쿼리마다 setting JOIN/즉시 로딩 발생. 명시적 LAZY + 필요 시점 fetch join 권장.
+
+#### 우선순위 (효과/비용)
+1. 인덱스 3개 추가 (Budget · Board · FixedTransaction) — 1~2h, 즉시 효과
+2. `PortfolioService.getPublicPortfolios` 6쿼리 → 단일 GROUP BY — 가장 자주 호출될 엔드포인트
+3. 그룹 평균 compare 응답 Redis 캐시 (`@Cacheable` + TTL, 변경 시 evict) — 의사결정 #6 정합화
+4. profile 분리 + JDBC batch / HikariCP / OSIV 설정 — 한 번에 정리
+5. `AsyncConfig` 에 `ThreadPoolTaskExecutor` 빈 추가
