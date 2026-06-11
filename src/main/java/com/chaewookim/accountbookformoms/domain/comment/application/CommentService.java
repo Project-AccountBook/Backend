@@ -1,5 +1,7 @@
 package com.chaewookim.accountbookformoms.domain.comment.application;
 
+import com.chaewookim.accountbookformoms.domain.board.dao.BoardRepository;
+import com.chaewookim.accountbookformoms.domain.board.error.BoardErrorCode;
 import com.chaewookim.accountbookformoms.domain.comment.dao.CommentRepository;
 import com.chaewookim.accountbookformoms.domain.comment.dto.request.CommentCreateRequest;
 import com.chaewookim.accountbookformoms.domain.comment.dto.request.CommentUpdateRequest;
@@ -7,7 +9,9 @@ import com.chaewookim.accountbookformoms.domain.comment.dto.response.CommentResp
 import com.chaewookim.accountbookformoms.domain.comment.entity.Comment;
 import com.chaewookim.accountbookformoms.domain.comment.enums.ReferenceType;
 import com.chaewookim.accountbookformoms.domain.comment.error.CommentErrorCode;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseRepository;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
+import com.chaewookim.accountbookformoms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,9 +24,12 @@ import java.util.List;
 public class CommentService {
 
     private final CommentRepository commentRepository;
+    private final BoardRepository boardRepository;
+    private final GroupPurchaseRepository groupPurchaseRepository;
 
     @Transactional
     public Long create(Long postId, CommentCreateRequest request, Long userId) {
+        validatePostExists(postId, request.referenceType());
         Comment comment = Comment.builder()
                 .userId(userId)
                 .referenceId(postId)
@@ -35,6 +42,7 @@ public class CommentService {
 
     @Transactional
     public Long reply(Long postId, Long parentCommentId, CommentCreateRequest request, Long userId) {
+        validatePostExists(postId, request.referenceType());
         Comment parent = findCommentOrThrow(parentCommentId);
 
         if (parent.getParentId() != null) {
@@ -86,6 +94,18 @@ public class CommentService {
     private void validateOwner(Comment comment, Long userId) {
         if (!comment.getUserId().equals(userId)) {
             throw new CustomException(CommentErrorCode.COMMENT_ACCESS_DENIED);
+        }
+    }
+
+    private void validatePostExists(Long postId, ReferenceType referenceType) {
+        if (referenceType == ReferenceType.QNA || referenceType == ReferenceType.KNOWHOW) {
+            if (!boardRepository.existsById(postId)) {
+                throw new CustomException(BoardErrorCode.BOARD_NOT_FOUND);
+            }
+        } else if (referenceType == ReferenceType.GROUPPURCHASE) {
+            if (!groupPurchaseRepository.existsById(postId)) {
+                throw new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND);
+            }
         }
     }
 }
