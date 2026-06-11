@@ -5,6 +5,7 @@ import com.chaewookim.accountbookformoms.domain.asset.dto.request.AccountRequest
 import com.chaewookim.accountbookformoms.domain.asset.dto.response.AccountResponse;
 import com.chaewookim.accountbookformoms.global.common.ApiResponse;
 import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ public class AccountController {
 
     private final AccountService accountService;
 
+    @Operation(summary = "계좌 생성", description = "사용자의 새로운 자산 계좌 생성")
     @PostMapping
     public ResponseEntity<ApiResponse<Long>> createAccount(
             @AuthenticationPrincipal UserPrincipal user,
@@ -37,6 +39,7 @@ public class AccountController {
         return ResponseEntity.ok(ApiResponse.success(accountService.createAccount(user.getUserId(), dto)));
     }
 
+    @Operation(summary = "계좌 목록 조회", description = "사용자가 보유한 모든 계좌 목록 조회")
     @GetMapping
     public ResponseEntity<List<AccountResponse>> getAccounts(
             @AuthenticationPrincipal UserPrincipal user
@@ -44,6 +47,7 @@ public class AccountController {
         return ResponseEntity.ok(accountService.getAccounts(user.getUserId()));
     }
 
+    @Operation(summary = "계좌 상세 조회", description = "특정 계좌의 상세 정보 조회")
     @GetMapping("/{accountId}")
     public ResponseEntity<ApiResponse<AccountResponse>> getAccount(
             @AuthenticationPrincipal UserPrincipal user,
@@ -52,6 +56,7 @@ public class AccountController {
         return ResponseEntity.ok(ApiResponse.success(accountService.getAccount(user.getUserId(), accountId)));
     }
 
+    @Operation(summary = "계좌 수정", description = "특정 계좌의 정보 수정")
     @PatchMapping("/{accountId}")
     public ResponseEntity<ApiResponse<Void>> updateAccount(
             @AuthenticationPrincipal UserPrincipal user,
@@ -62,6 +67,7 @@ public class AccountController {
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
+    @Operation(summary = "계좌 삭제", description = "특정 계좌 삭제")
     @DeleteMapping("/{accountId}")
     public ResponseEntity<ApiResponse<Void>> deleteAccount(
             @AuthenticationPrincipal UserPrincipal user,
