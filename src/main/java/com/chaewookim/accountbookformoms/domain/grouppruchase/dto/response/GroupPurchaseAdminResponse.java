@@ -6,6 +6,7 @@ import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.Purch
 import java.time.LocalDateTime;
 
 public record GroupPurchaseAdminResponse(
+
         Long id,
         Long creatorId,
         String creatorUsername,
@@ -23,6 +24,7 @@ public record GroupPurchaseAdminResponse(
 ) {
     public static GroupPurchaseAdminResponse of(GroupPurchase gp, String creatorUsername, String categoryName, long reportCount) {
         return new GroupPurchaseAdminResponse(
+
                 gp.getId(),
                 gp.getCreatorId(),
                 creatorUsername,
@@ -37,6 +39,7 @@ public record GroupPurchaseAdminResponse(
                 gp.getDeadline(),
                 gp.getCreatedAt(),
                 reportCount
+
         );
     }
 }
