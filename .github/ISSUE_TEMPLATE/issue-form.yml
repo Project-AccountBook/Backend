@@ -14,6 +14,7 @@ body:
         - 'refactor: 코드 리팩토링'
         - 'docs: 문서 작업'
         - 'chore: 빌드, 설정 등 기타 작업'
+        - 'perf: 최적화'
     validations:
       required: true
 
