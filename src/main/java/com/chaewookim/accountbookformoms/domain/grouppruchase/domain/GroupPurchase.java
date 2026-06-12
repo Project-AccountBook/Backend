@@ -66,13 +66,17 @@ public class GroupPurchase extends BaseEntity {
     @Column(nullable = true)
     private Double longitude;
 
+    @Column(nullable = true)
+    private String imageUrl;
+
     @Builder
     public GroupPurchase(Long id, Long creatorId
             , Long categoryId, String title
             , String content, int price
             , int minParticipants, int maxParticipants
             , LocalDateTime deadline, String pickupLocation
-            , Double latitude, Double longitude)
+            , Double latitude, Double longitude
+            , String imageUrl)
     {
         this.id = id;
         this.creatorId = creatorId;
@@ -89,9 +93,10 @@ public class GroupPurchase extends BaseEntity {
         this.viewCount = 0;
         this.latitude = latitude;
         this.longitude = longitude;
+        this.imageUrl = imageUrl;
     }
 
-    public void update(Long categoryId, String title, String content, int price, int minParticipants, int maxParticipants, LocalDateTime deadline, String pickupLocation) {
+    public void update(Long categoryId, String title, String content, int price, int minParticipants, int maxParticipants, LocalDateTime deadline, String pickupLocation, String imageUrl) {
         this.categoryId = categoryId;
         this.title = title;
         this.content = content;
@@ -100,5 +105,10 @@ public class GroupPurchase extends BaseEntity {
         this.maxParticipants = maxParticipants;
         this.deadline = deadline;
         this.pickupLocation = pickupLocation;
+        this.imageUrl = imageUrl;
+    }
+
+    public void increaseViewCount() {
+        this.viewCount++;
     }
 }
