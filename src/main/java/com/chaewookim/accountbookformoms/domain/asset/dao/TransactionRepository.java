@@ -10,6 +10,7 @@ import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
@@ -145,5 +146,23 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
                                            @Param("excludeUserId") Long excludeUserId);
            
     Page<Transaction> findAllByUserIdAndAccountIdAndTransactionDateBetween(Long userId, Long accountId, LocalDate startDate, LocalDate endDate, Pageable pageable);
-           
+
+    /**
+     * 지정 userId 집합(공개 사용자만) 의 월 합계(사용자 단위). 위치 기반 비교용.
+     */
+    @Query("""
+            SELECT t.user.id, SUM(t.amount)
+              FROM Transaction t
+              JOIN t.user u
+              JOIN u.userSetting s
+             WHERE s.isPortfolioPublic = true
+               AND u.id IN :userIds
+               AND t.type = :type
+               AND t.transactionDate BETWEEN :startDate AND :endDate
+             GROUP BY t.user.id
+            """)
+    List<Object[]> sumPublicByUserIds(@Param("type") TransactionType type,
+                                      @Param("startDate") LocalDate startDate,
+                                      @Param("endDate") LocalDate endDate,
+                                      @Param("userIds") Collection<Long> userIds);
 }

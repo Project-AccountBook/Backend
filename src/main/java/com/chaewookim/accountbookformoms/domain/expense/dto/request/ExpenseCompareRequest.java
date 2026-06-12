@@ -18,6 +18,7 @@ public record ExpenseCompareRequest(
 
         BigDecimal minAmount,
         BigDecimal maxAmount,
-        Long categoryId
+        Long categoryId,
+        Double radiusKm
 ) {
 }

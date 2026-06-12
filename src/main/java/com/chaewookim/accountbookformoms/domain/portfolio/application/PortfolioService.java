@@ -95,11 +95,11 @@ public class PortfolioService {
         String ym = request.yearMonth();
 
         IncomeCompareRequest incomeReq = new IncomeCompareRequest(
-                toIncomeType(type), ym, request.minIncome(), request.maxIncome(), request.categoryId());
+                toIncomeType(type), ym, request.minIncome(), request.maxIncome(), request.categoryId(), request.radiusKm());
         ExpenseCompareRequest expenseReq = new ExpenseCompareRequest(
-                toExpenseType(type), ym, request.minExpense(), request.maxExpense(), request.categoryId());
+                toExpenseType(type), ym, request.minExpense(), request.maxExpense(), request.categoryId(), request.radiusKm());
         BudgetCompareRequest budgetReq = new BudgetCompareRequest(
-                toBudgetType(type), ym, request.minBudget(), request.maxBudget(), request.categoryId());
+                toBudgetType(type), ym, request.minBudget(), request.maxBudget(), request.categoryId(), request.radiusKm());
 
         return new PortfolioCompareResponse(
                 type, ym,
@@ -144,6 +144,7 @@ public class PortfolioService {
             case AGE -> IncomeCompareType.AGE;
             case AMOUNT -> IncomeCompareType.AMOUNT;
             case CATEGORY -> IncomeCompareType.CATEGORY;
+            case LOCATION -> IncomeCompareType.LOCATION;
         };
     }
 
@@ -152,6 +153,7 @@ public class PortfolioService {
             case AGE -> ExpenseCompareType.AGE;
             case AMOUNT -> ExpenseCompareType.AMOUNT;
             case CATEGORY -> ExpenseCompareType.CATEGORY;
+            case LOCATION -> ExpenseCompareType.LOCATION;
         };
     }
 
@@ -160,6 +162,7 @@ public class PortfolioService {
             case AGE -> BudgetCompareType.AGE;
             case AMOUNT -> BudgetCompareType.AMOUNT;
             case CATEGORY -> BudgetCompareType.CATEGORY;
+            case LOCATION -> BudgetCompareType.LOCATION;
         };
     }
 

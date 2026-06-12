@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -96,6 +97,42 @@ public class UserLocationService {
                 .filter(r -> !me.equals(r.getContent().getName()))
                 .map(this::toNearbyUserResponse)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 반경 내 사용자 ID 집합 (자기 자신 제외).
+     * Redis GEO 만 사용 — `isPortfolioPublic` 등 추가 필터는 호출자(Repository) 에서 처리.
+     * 위치 미등록 사용자가 호출하면 {@link UserErrorCode#LOCATION_NOT_REGISTERED} 발생.
+     */
+    public Set<Long> findNearbyUserIds(Long userId, double radiusKm) {
+
+        if (!userRepository.existsById(userId)) {
+            throw new CustomException(UserErrorCode.USER_NOT_FOUND);
+        }
+
+        GeoOperations<String, String> geoOps = redisTemplate.opsForGeo();
+        List<Point> positions = geoOps.position(USER_GEO_KEY, String.valueOf(userId));
+        if (positions == null || positions.isEmpty() || positions.get(0) == null) {
+            throw new CustomException(UserErrorCode.LOCATION_NOT_REGISTERED);
+        }
+
+        Distance distance = new Distance(radiusKm, Metrics.KILOMETERS);
+        GeoResults<RedisGeoCommands.GeoLocation<String>> results = geoOps.radius(
+                USER_GEO_KEY,
+                String.valueOf(userId),
+                distance,
+                RedisGeoCommands.GeoRadiusCommandArgs.newGeoRadiusArgs());
+
+        if (results == null) {
+            return Collections.emptySet();
+        }
+
+        String me = String.valueOf(userId);
+        return results.getContent().stream()
+                .map(r -> r.getContent().getName())
+                .filter(name -> !me.equals(name))
+                .map(Long::valueOf)
+                .collect(Collectors.toSet());
     }
 
     private NearbyUserResponse toNearbyUserResponse(GeoResult<RedisGeoCommands.GeoLocation<String>> result) {

@@ -14,6 +14,7 @@ import com.chaewookim.accountbookformoms.domain.income.dto.response.UserIncomeCo
 import com.chaewookim.accountbookformoms.domain.income.dto.response.UserIncomeDetailResponse;
 import com.chaewookim.accountbookformoms.domain.income.enums.IncomeCompareType;
 import com.chaewookim.accountbookformoms.domain.income.error.IncomeErrorCode;
+import com.chaewookim.accountbookformoms.domain.user.application.UserLocationService;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
@@ -32,6 +33,7 @@ import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -43,6 +45,7 @@ public class IncomeCompareService {
     private final TransactionRepository transactionRepository;
     private final FixedTransactionRepository fixedTransactionRepository;
     private final UserRepository userRepository;
+    private final UserLocationService userLocationService;
 
     public MyIncomeResponse getMyMonthlyIncome(Long userId, String yearMonth) {
 
@@ -129,12 +132,13 @@ public class IncomeCompareService {
             case AGE -> compareUsersByAge(me, target, ym, yearMonth);
             case AMOUNT -> compareUsersByAmount(me, target, ym, yearMonth);
             case CATEGORY -> compareUsersByCategory(me, target, ym, yearMonth, categoryId);
+            case LOCATION -> throw new CustomException(IncomeErrorCode.LOCATION_PAIR_NOT_SUPPORTED);
         };
     }
 
     @Cacheable(
             cacheNames = RedisConfig.CACHE_COMPARE_INCOME,
-            key = "T(java.util.Objects).hash(#userId, #request.type(), #request.yearMonth(), #request.minAmount(), #request.maxAmount(), #request.categoryId())")
+            key = "T(java.util.Objects).hash(#userId, #request.type(), #request.yearMonth(), #request.minAmount(), #request.maxAmount(), #request.categoryId(), #request.radiusKm())")
     public IncomeCompareResponse compareWithGroup(Long userId, IncomeCompareRequest request) {
 
         YearMonth ym = parseYearMonth(request.yearMonth());
@@ -146,7 +150,29 @@ public class IncomeCompareService {
             case AGE -> compareByAge(user, ym, request.yearMonth());
             case AMOUNT -> compareByAmount(user, ym, request.yearMonth(), request.minAmount(), request.maxAmount());
             case CATEGORY -> compareByCategory(user, ym, request.yearMonth(), request.categoryId());
+            case LOCATION -> compareByLocation(user, ym, request.yearMonth(), request.radiusKm());
         };
+    }
+
+    private IncomeCompareResponse compareByLocation(User user, YearMonth ym, String yearMonth, Double radiusKm) {
+
+        if (radiusKm == null || radiusKm <= 0) {
+            throw new CustomException(IncomeErrorCode.RADIUS_REQUIRED);
+        }
+
+        LocalDate startDate = ym.atDay(1);
+        LocalDate endDate = ym.atEndOfMonth();
+
+        Set<Long> nearbyUserIds = userLocationService.findNearbyUserIds(user.getId(), radiusKm);
+
+        Map<Long, BigDecimal> fixedSums = nearbyUserIds.isEmpty()
+                ? Map.of()
+                : toUserSumMap(fixedTransactionRepository.sumPublicByUserIds(TYPE, startDate, endDate, nearbyUserIds));
+        Map<Long, BigDecimal> variableSums = nearbyUserIds.isEmpty()
+                ? Map.of()
+                : toUserSumMap(transactionRepository.sumPublicByUserIds(TYPE, startDate, endDate, nearbyUserIds));
+
+        return buildGroupCompare(user, ym, yearMonth, fixedSums, variableSums, IncomeCompareType.LOCATION);
     }
 
     private UserIncomeCompareResponse compareUsersByAge(User me, User target, YearMonth ym, String yearMonth) {

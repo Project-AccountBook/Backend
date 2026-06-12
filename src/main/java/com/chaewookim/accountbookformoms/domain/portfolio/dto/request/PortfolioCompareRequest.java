@@ -22,6 +22,7 @@ public record PortfolioCompareRequest(
         BigDecimal maxExpense,
         BigDecimal minBudget,
         BigDecimal maxBudget,
-        Long categoryId
+        Long categoryId,
+        Double radiusKm
 ) {
 }

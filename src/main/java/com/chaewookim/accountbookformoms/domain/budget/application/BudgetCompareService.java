@@ -13,6 +13,7 @@ import com.chaewookim.accountbookformoms.domain.budget.dto.response.UserBudgetDe
 import com.chaewookim.accountbookformoms.domain.budget.entity.Budget;
 import com.chaewookim.accountbookformoms.domain.budget.enums.BudgetCompareType;
 import com.chaewookim.accountbookformoms.domain.budget.error.BudgetErrorCode;
+import com.chaewookim.accountbookformoms.domain.user.application.UserLocationService;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
@@ -29,6 +30,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +39,7 @@ public class BudgetCompareService {
 
     private final BudgetRepository budgetRepository;
     private final UserRepository userRepository;
+    private final UserLocationService userLocationService;
 
     public MyBudgetResponse getMyMonthlyBudget(Long userId, String yearMonth) {
 
@@ -107,6 +110,7 @@ public class BudgetCompareService {
             case AGE -> compareUsersByAge(me, target, yearMonth);
             case AMOUNT -> compareUsersByAmount(me, target, yearMonth);
             case CATEGORY -> compareUsersByCategory(me, target, yearMonth, categoryId);
+            case LOCATION -> throw new CustomException(BudgetErrorCode.LOCATION_PAIR_NOT_SUPPORTED);
         };
     }
 
@@ -174,7 +178,7 @@ public class BudgetCompareService {
 
     @Cacheable(
             cacheNames = RedisConfig.CACHE_COMPARE_BUDGET,
-            key = "T(java.util.Objects).hash(#userId, #request.type(), #request.yearMonth(), #request.minAmount(), #request.maxAmount(), #request.categoryId())")
+            key = "T(java.util.Objects).hash(#userId, #request.type(), #request.yearMonth(), #request.minAmount(), #request.maxAmount(), #request.categoryId(), #request.radiusKm())")
     public BudgetCompareResponse compareWithGroup(Long userId, BudgetCompareRequest request) {
 
         validateYearMonth(request.yearMonth());
@@ -186,7 +190,24 @@ public class BudgetCompareService {
             case AGE -> compareByAge(user, request.yearMonth());
             case AMOUNT -> compareByAmount(user, request.yearMonth(), request.minAmount(), request.maxAmount());
             case CATEGORY -> compareByCategory(user, request.yearMonth(), request.categoryId());
+            case LOCATION -> compareByLocation(user, request.yearMonth(), request.radiusKm());
         };
+    }
+
+    private BudgetCompareResponse compareByLocation(User user, String yearMonth, Double radiusKm) {
+
+        if (radiusKm == null || radiusKm <= 0) {
+            throw new CustomException(BudgetErrorCode.RADIUS_REQUIRED);
+        }
+
+        Set<Long> nearbyUserIds = userLocationService.findNearbyUserIds(user.getId(), radiusKm);
+
+        List<Object[]> rows = nearbyUserIds.isEmpty()
+                ? List.of()
+                : budgetRepository.sumMonthlyTotalsByUserIds(yearMonth, nearbyUserIds);
+
+        BigDecimal myAmount = nullToZero(budgetRepository.sumTotalBudgetByUserIdAndYearMonth(user.getId(), yearMonth));
+        return buildCompare(rows, myAmount, yearMonth, BudgetCompareType.LOCATION);
     }
 
     private BudgetCompareResponse compareByAge(User user, String yearMonth) {

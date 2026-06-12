@@ -13,6 +13,7 @@ import com.chaewookim.accountbookformoms.domain.budget.entity.Budget;
 import com.chaewookim.accountbookformoms.domain.user.entity.UserSetting;
 import com.chaewookim.accountbookformoms.domain.budget.enums.BudgetCompareType;
 import com.chaewookim.accountbookformoms.domain.budget.error.BudgetErrorCode;
+import com.chaewookim.accountbookformoms.domain.user.application.UserLocationService;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
@@ -28,6 +29,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -47,6 +49,9 @@ class BudgetCompareServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private UserLocationService userLocationService;
 
     @InjectMocks
     private BudgetCompareService budgetCompareService;
@@ -150,7 +155,7 @@ class BudgetCompareServiceTest {
 
         // when
         BudgetCompareResponse response = budgetCompareService.compareWithGroup(
-                1L, new BudgetCompareRequest(BudgetCompareType.AGE, "2026-06", null, null, null));
+                1L, new BudgetCompareRequest(BudgetCompareType.AGE, "2026-06", null, null, null, null));
 
         // then
         assertThat(response.type()).isEqualTo(BudgetCompareType.AGE);
@@ -171,7 +176,7 @@ class BudgetCompareServiceTest {
 
         // when & then
         assertThatThrownBy(() -> budgetCompareService.compareWithGroup(
-                1L, new BudgetCompareRequest(BudgetCompareType.AGE, "2026-06", null, null, null)))
+                1L, new BudgetCompareRequest(BudgetCompareType.AGE, "2026-06", null, null, null, null)))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", BudgetErrorCode.BIRTH_DATE_REQUIRED);
     }
@@ -192,7 +197,7 @@ class BudgetCompareServiceTest {
         // when
         BudgetCompareResponse response = budgetCompareService.compareWithGroup(
                 1L, new BudgetCompareRequest(BudgetCompareType.AMOUNT, "2026-06",
-                        new BigDecimal("100000"), new BigDecimal("500000"), null));
+                        new BigDecimal("100000"), new BigDecimal("500000"), null, null));
 
         // then
         assertThat(response.averageAmount()).isEqualByComparingTo("0");
@@ -215,7 +220,7 @@ class BudgetCompareServiceTest {
 
         // when
         BudgetCompareResponse response = budgetCompareService.compareWithGroup(
-                1L, new BudgetCompareRequest(BudgetCompareType.CATEGORY, "2026-06", null, null, 10L));
+                1L, new BudgetCompareRequest(BudgetCompareType.CATEGORY, "2026-06", null, null, 10L, null));
 
         // then
         assertThat(response.type()).isEqualTo(BudgetCompareType.CATEGORY);
@@ -235,7 +240,7 @@ class BudgetCompareServiceTest {
 
         // when & then
         assertThatThrownBy(() -> budgetCompareService.compareWithGroup(
-                1L, new BudgetCompareRequest(BudgetCompareType.CATEGORY, "2026-06", null, null, null)))
+                1L, new BudgetCompareRequest(BudgetCompareType.CATEGORY, "2026-06", null, null, null, null)))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", BudgetErrorCode.CATEGORY_ID_REQUIRED);
     }
@@ -249,7 +254,7 @@ class BudgetCompareServiceTest {
 
         // when & then
         assertThatThrownBy(() -> budgetCompareService.compareWithGroup(
-                99L, new BudgetCompareRequest(BudgetCompareType.AGE, "2026-06", null, null, null)))
+                99L, new BudgetCompareRequest(BudgetCompareType.AGE, "2026-06", null, null, null, null)))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", UserErrorCode.USER_NOT_FOUND);
     }
@@ -432,5 +437,85 @@ class BudgetCompareServiceTest {
                 1L, 2L, BudgetCompareType.AGE, "2026-06", null))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", BudgetErrorCode.BIRTH_DATE_REQUIRED);
+    }
+
+    @Test
+    @DisplayName("그룹 평균 비교 - LOCATION: 반경 내 공개 사용자 그룹 평균 + 본인 차이")
+    void compareWithGroup_location_success() {
+
+        // given
+        User me = publicUser(1L, "me", null);
+        given(userRepository.findById(1L)).willReturn(Optional.of(me));
+        given(userLocationService.findNearbyUserIds(1L, 3.0)).willReturn(Set.of(2L, 3L));
+        given(budgetRepository.sumMonthlyTotalsByUserIds(eq("2026-06"), any()))
+                .willReturn(List.<Object[]>of(
+                        new Object[]{2L, new BigDecimal("400000")},
+                        new Object[]{3L, new BigDecimal("800000")}));
+        given(budgetRepository.sumTotalBudgetByUserIdAndYearMonth(1L, "2026-06"))
+                .willReturn(new BigDecimal("500000"));
+
+        // when
+        BudgetCompareResponse response = budgetCompareService.compareWithGroup(
+                1L, new BudgetCompareRequest(BudgetCompareType.LOCATION, "2026-06", null, null, null, 3.0));
+
+        // then
+        assertThat(response.type()).isEqualTo(BudgetCompareType.LOCATION);
+        assertThat(response.sampleSize()).isEqualTo(2L);
+        assertThat(response.averageAmount()).isEqualByComparingTo("600000");
+        assertThat(response.myAmount()).isEqualByComparingTo("500000");
+        assertThat(response.difference()).isEqualByComparingTo("-100000");
+    }
+
+    @Test
+    @DisplayName("그룹 평균 비교 - LOCATION: 반경 누락 시 예외")
+    void compareWithGroup_location_radius_required() {
+
+        // given
+        User me = publicUser(1L, "me", null);
+        given(userRepository.findById(1L)).willReturn(Optional.of(me));
+
+        // when & then
+        assertThatThrownBy(() -> budgetCompareService.compareWithGroup(
+                1L, new BudgetCompareRequest(BudgetCompareType.LOCATION, "2026-06", null, null, null, null)))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", BudgetErrorCode.RADIUS_REQUIRED);
+    }
+
+    @Test
+    @DisplayName("그룹 평균 비교 - LOCATION: 반경 내 사용자 0명일 때 sampleSize=0, average=0")
+    void compareWithGroup_location_no_neighbors() {
+
+        // given
+        User me = publicUser(1L, "me", null);
+        given(userRepository.findById(1L)).willReturn(Optional.of(me));
+        given(userLocationService.findNearbyUserIds(1L, 1.0)).willReturn(Set.of());
+        given(budgetRepository.sumTotalBudgetByUserIdAndYearMonth(1L, "2026-06"))
+                .willReturn(new BigDecimal("500000"));
+
+        // when
+        BudgetCompareResponse response = budgetCompareService.compareWithGroup(
+                1L, new BudgetCompareRequest(BudgetCompareType.LOCATION, "2026-06", null, null, null, 1.0));
+
+        // then
+        assertThat(response.sampleSize()).isZero();
+        assertThat(response.averageAmount()).isEqualByComparingTo("0");
+        assertThat(response.myAmount()).isEqualByComparingTo("500000");
+    }
+
+    @Test
+    @DisplayName("선택 사용자 비교 - LOCATION 은 1:1 비교 미지원 예외")
+    void compareWithUser_location_not_supported() {
+
+        // given
+        User me = publicUser(1L, "me", null);
+        User target = publicUser(2L, "target", null);
+        given(userRepository.findById(1L)).willReturn(Optional.of(me));
+        given(userRepository.findById(2L)).willReturn(Optional.of(target));
+
+        // when & then
+        assertThatThrownBy(() -> budgetCompareService.compareWithUser(
+                1L, 2L, BudgetCompareType.LOCATION, "2026-06", null))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", BudgetErrorCode.LOCATION_PAIR_NOT_SUPPORTED);
     }
 }
