@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 
 public interface BudgetRepository extends JpaRepository<Budget, Long> {
@@ -120,4 +121,21 @@ public interface BudgetRepository extends JpaRepository<Budget, Long> {
     BigDecimal findMyCategoryBudget(@Param("userId") Long userId,
                                     @Param("yearMonth") String yearMonth,
                                     @Param("categoryId") Long categoryId);
+
+    /**
+     * 지정 userId 집합(공개 사용자만) 의 월 총 예산 합계(사용자 단위). 위치 기반 비교용.
+     * 반환: [userId, totalSum]
+     */
+    @Query("""
+            SELECT b.user.id, SUM(b.totalBudget)
+              FROM Budget b
+              JOIN b.user u
+              JOIN u.userSetting s
+             WHERE s.isPortfolioPublic = true
+               AND u.id IN :userIds
+               AND b.yearMonth = :yearMonth
+             GROUP BY b.user.id
+            """)
+    List<Object[]> sumMonthlyTotalsByUserIds(@Param("yearMonth") String yearMonth,
+                                             @Param("userIds") Collection<Long> userIds);
 }

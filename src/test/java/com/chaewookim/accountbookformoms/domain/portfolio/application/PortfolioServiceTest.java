@@ -240,7 +240,7 @@ class PortfolioServiceTest {
                 new BigDecimal("1000000"), new BigDecimal("6000000"),
                 new BigDecimal("500000"), new BigDecimal("4000000"),
                 new BigDecimal("800000"), new BigDecimal("5000000"),
-                null);
+                null, null);
 
         IncomeCompareResponse incomeResp = IncomeCompareResponse.of(
                 IncomeCompareType.AMOUNT, "2026-06",
@@ -300,7 +300,7 @@ class PortfolioServiceTest {
                 PortfolioCompareType.AMOUNT, "2026-06",
                 null, null,
                 new BigDecimal("3000000"), new BigDecimal("1000000"),
-                null, null, null);
+                null, null, null, null);
 
         // when & then
         assertThatThrownBy(() -> portfolioService.compareWithGroup(1L, request))

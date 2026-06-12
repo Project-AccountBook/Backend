@@ -13,13 +13,12 @@ import com.chaewookim.accountbookformoms.domain.budget.dto.response.UserBudgetDe
 import com.chaewookim.accountbookformoms.domain.budget.entity.Budget;
 import com.chaewookim.accountbookformoms.domain.budget.enums.BudgetCompareType;
 import com.chaewookim.accountbookformoms.domain.budget.error.BudgetErrorCode;
+import com.chaewookim.accountbookformoms.domain.user.application.UserLocationService;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
-import com.chaewookim.accountbookformoms.global.config.RedisConfig;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,15 +27,23 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class BudgetCompareService {
 
+    private static final double MIN_RADIUS_KM = 0.1;
+    private static final double MAX_RADIUS_KM = 50.0;
+
     private final BudgetRepository budgetRepository;
     private final UserRepository userRepository;
+    private final UserLocationService userLocationService;
+    private final BudgetGroupCacheService groupCache;
 
     public MyBudgetResponse getMyMonthlyBudget(Long userId, String yearMonth) {
 
@@ -107,6 +114,7 @@ public class BudgetCompareService {
             case AGE -> compareUsersByAge(me, target, yearMonth);
             case AMOUNT -> compareUsersByAmount(me, target, yearMonth);
             case CATEGORY -> compareUsersByCategory(me, target, yearMonth, categoryId);
+            case LOCATION -> throw new CustomException(BudgetErrorCode.LOCATION_PAIR_NOT_SUPPORTED);
         };
     }
 
@@ -172,9 +180,6 @@ public class BudgetCompareService {
         return value != null ? value : BigDecimal.ZERO;
     }
 
-    @Cacheable(
-            cacheNames = RedisConfig.CACHE_COMPARE_BUDGET,
-            key = "T(java.util.Objects).hash(#userId, #request.type(), #request.yearMonth(), #request.minAmount(), #request.maxAmount(), #request.categoryId())")
     public BudgetCompareResponse compareWithGroup(Long userId, BudgetCompareRequest request) {
 
         validateYearMonth(request.yearMonth());
@@ -186,7 +191,27 @@ public class BudgetCompareService {
             case AGE -> compareByAge(user, request.yearMonth());
             case AMOUNT -> compareByAmount(user, request.yearMonth(), request.minAmount(), request.maxAmount());
             case CATEGORY -> compareByCategory(user, request.yearMonth(), request.categoryId());
+            case LOCATION -> compareByLocation(user, request.yearMonth(), request.radiusKm());
         };
+    }
+
+    private BudgetCompareResponse compareByLocation(User user, String yearMonth, Double radiusKm) {
+
+        if (radiusKm == null) {
+            throw new CustomException(BudgetErrorCode.RADIUS_REQUIRED);
+        }
+        if (radiusKm < MIN_RADIUS_KM || radiusKm > MAX_RADIUS_KM) {
+            throw new CustomException(BudgetErrorCode.INVALID_RADIUS);
+        }
+
+        Set<Long> nearbyUserIds = userLocationService.findNearbyUserIds(user.getId(), radiusKm);
+
+        List<Object[]> rows = nearbyUserIds.isEmpty()
+                ? List.of()
+                : budgetRepository.sumMonthlyTotalsByUserIds(yearMonth, nearbyUserIds);
+
+        BigDecimal myAmount = nullToZero(budgetRepository.sumTotalBudgetByUserIdAndYearMonth(user.getId(), yearMonth));
+        return buildCompare(rows, myAmount, yearMonth, BudgetCompareType.LOCATION);
     }
 
     private BudgetCompareResponse compareByAge(User user, String yearMonth) {
@@ -202,22 +227,18 @@ public class BudgetCompareService {
         LocalDate birthFrom = LocalDate.of(currentYear - (decadeStart + 9), 1, 1);
         LocalDate birthTo = LocalDate.of(currentYear - decadeStart, 12, 31);
 
-        List<Object[]> rows = budgetRepository.sumMonthlyTotalsByAgeRange(
-                yearMonth, birthFrom, birthTo, user.getId());
-
-        BigDecimal myAmount = budgetRepository.sumTotalBudgetByUserIdAndYearMonth(user.getId(), yearMonth);
-        return buildCompare(rows, myAmount, yearMonth, BudgetCompareType.AGE);
+        Map<Long, BigDecimal> groupSums = groupCache.getAgeGroupSums(yearMonth, birthFrom, birthTo);
+        BigDecimal myAmount = nullToZero(budgetRepository.sumTotalBudgetByUserIdAndYearMonth(user.getId(), yearMonth));
+        return buildCompareExcludingSelf(groupSums, user.getId(), myAmount, yearMonth, BudgetCompareType.AGE);
     }
 
     private BudgetCompareResponse compareByAmount(User user, String yearMonth, BigDecimal minAmount, BigDecimal maxAmount) {
 
         validateAmountRange(minAmount, maxAmount);
 
-        List<Object[]> rows = budgetRepository.sumMonthlyTotalsByAmountRange(
-                yearMonth, minAmount, maxAmount, user.getId());
-
-        BigDecimal myAmount = budgetRepository.sumTotalBudgetByUserIdAndYearMonth(user.getId(), yearMonth);
-        return buildCompare(rows, myAmount, yearMonth, BudgetCompareType.AMOUNT);
+        Map<Long, BigDecimal> groupSums = groupCache.getAmountGroupSums(yearMonth, minAmount, maxAmount);
+        BigDecimal myAmount = nullToZero(budgetRepository.sumTotalBudgetByUserIdAndYearMonth(user.getId(), yearMonth));
+        return buildCompareExcludingSelf(groupSums, user.getId(), myAmount, yearMonth, BudgetCompareType.AMOUNT);
     }
 
     private BudgetCompareResponse compareByCategory(User user, String yearMonth, Long categoryId) {
@@ -226,25 +247,39 @@ public class BudgetCompareService {
             throw new CustomException(BudgetErrorCode.CATEGORY_ID_REQUIRED);
         }
 
-        Object[] row = budgetRepository.averageCategoryBudget(yearMonth, categoryId, user.getId());
+        BudgetGroupCacheService.CategoryAggregation agg = groupCache.getCategoryAggregation(yearMonth, categoryId);
+        BigDecimal myContribution = budgetRepository.findMyCategoryBudget(user.getId(), yearMonth, categoryId);
+
+        BigDecimal groupSum = agg.totalSum();
+        long groupCount = agg.count();
+        if (myContribution != null) {
+            groupSum = groupSum.subtract(myContribution);
+            groupCount = Math.max(0L, groupCount - 1);
+        }
 
         BigDecimal average = BigDecimal.ZERO;
-        long sampleSize = 0L;
-        if (row != null && row.length >= 2 && row[1] != null) {
-            sampleSize = ((Number) row[1]).longValue();
-            if (sampleSize > 0 && row[0] != null) {
-                average = toBigDecimal(row[0]).setScale(2, RoundingMode.HALF_UP);
-            }
+        if (groupCount > 0) {
+            average = groupSum.divide(BigDecimal.valueOf(groupCount), 2, RoundingMode.HALF_UP);
         }
 
-        BigDecimal myAmount = budgetRepository.findMyCategoryBudget(user.getId(), yearMonth, categoryId);
-        if (myAmount == null) {
-            myAmount = BigDecimal.ZERO;
-        }
+        BigDecimal myAmount = myContribution != null ? myContribution : BigDecimal.ZERO;
+        return BudgetCompareResponse.of(BudgetCompareType.CATEGORY, yearMonth, myAmount, average, groupCount);
+    }
 
-        return BudgetCompareResponse.of(
-                BudgetCompareType.CATEGORY,
-                yearMonth, myAmount, average, sampleSize);
+    private BudgetCompareResponse buildCompareExcludingSelf(Map<Long, BigDecimal> groupSums, Long myUserId,
+                                                            BigDecimal myAmount, String yearMonth,
+                                                            BudgetCompareType type) {
+        Map<Long, BigDecimal> others = new HashMap<>(groupSums);
+        others.remove(myUserId);
+
+        long sampleSize = others.size();
+        BigDecimal average = BigDecimal.ZERO;
+        if (sampleSize > 0) {
+            BigDecimal sum = others.values().stream()
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            average = sum.divide(BigDecimal.valueOf(sampleSize), 2, RoundingMode.HALF_UP);
+        }
+        return BudgetCompareResponse.of(type, yearMonth, myAmount, average, sampleSize);
     }
 
     private BudgetCompareResponse buildCompare(List<Object[]> rows, BigDecimal myAmount, String yearMonth,

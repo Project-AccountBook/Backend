@@ -14,13 +14,12 @@ import com.chaewookim.accountbookformoms.domain.income.dto.response.UserIncomeCo
 import com.chaewookim.accountbookformoms.domain.income.dto.response.UserIncomeDetailResponse;
 import com.chaewookim.accountbookformoms.domain.income.enums.IncomeCompareType;
 import com.chaewookim.accountbookformoms.domain.income.error.IncomeErrorCode;
+import com.chaewookim.accountbookformoms.domain.user.application.UserLocationService;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
-import com.chaewookim.accountbookformoms.global.config.RedisConfig;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +31,7 @@ import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -39,10 +39,14 @@ import java.util.Map;
 public class IncomeCompareService {
 
     private static final TransactionType TYPE = TransactionType.INCOME;
+    private static final double MIN_RADIUS_KM = 0.1;
+    private static final double MAX_RADIUS_KM = 50.0;
 
     private final TransactionRepository transactionRepository;
     private final FixedTransactionRepository fixedTransactionRepository;
     private final UserRepository userRepository;
+    private final UserLocationService userLocationService;
+    private final IncomeGroupCacheService groupCache;
 
     public MyIncomeResponse getMyMonthlyIncome(Long userId, String yearMonth) {
 
@@ -129,12 +133,10 @@ public class IncomeCompareService {
             case AGE -> compareUsersByAge(me, target, ym, yearMonth);
             case AMOUNT -> compareUsersByAmount(me, target, ym, yearMonth);
             case CATEGORY -> compareUsersByCategory(me, target, ym, yearMonth, categoryId);
+            case LOCATION -> throw new CustomException(IncomeErrorCode.LOCATION_PAIR_NOT_SUPPORTED);
         };
     }
 
-    @Cacheable(
-            cacheNames = RedisConfig.CACHE_COMPARE_INCOME,
-            key = "T(java.util.Objects).hash(#userId, #request.type(), #request.yearMonth(), #request.minAmount(), #request.maxAmount(), #request.categoryId())")
     public IncomeCompareResponse compareWithGroup(Long userId, IncomeCompareRequest request) {
 
         YearMonth ym = parseYearMonth(request.yearMonth());
@@ -146,7 +148,32 @@ public class IncomeCompareService {
             case AGE -> compareByAge(user, ym, request.yearMonth());
             case AMOUNT -> compareByAmount(user, ym, request.yearMonth(), request.minAmount(), request.maxAmount());
             case CATEGORY -> compareByCategory(user, ym, request.yearMonth(), request.categoryId());
+            case LOCATION -> compareByLocation(user, ym, request.yearMonth(), request.radiusKm());
         };
+    }
+
+    private IncomeCompareResponse compareByLocation(User user, YearMonth ym, String yearMonth, Double radiusKm) {
+
+        if (radiusKm == null) {
+            throw new CustomException(IncomeErrorCode.RADIUS_REQUIRED);
+        }
+        if (radiusKm < MIN_RADIUS_KM || radiusKm > MAX_RADIUS_KM) {
+            throw new CustomException(IncomeErrorCode.INVALID_RADIUS);
+        }
+
+        LocalDate startDate = ym.atDay(1);
+        LocalDate endDate = ym.atEndOfMonth();
+
+        Set<Long> nearbyUserIds = userLocationService.findNearbyUserIds(user.getId(), radiusKm);
+
+        Map<Long, BigDecimal> fixedSums = nearbyUserIds.isEmpty()
+                ? Map.of()
+                : toUserSumMap(fixedTransactionRepository.sumPublicByUserIds(TYPE, startDate, endDate, nearbyUserIds));
+        Map<Long, BigDecimal> variableSums = nearbyUserIds.isEmpty()
+                ? Map.of()
+                : toUserSumMap(transactionRepository.sumPublicByUserIds(TYPE, startDate, endDate, nearbyUserIds));
+
+        return buildGroupCompare(user, ym, yearMonth, fixedSums, variableSums, IncomeCompareType.LOCATION);
     }
 
     private UserIncomeCompareResponse compareUsersByAge(User me, User target, YearMonth ym, String yearMonth) {
@@ -215,10 +242,8 @@ public class IncomeCompareService {
         LocalDate birthFrom = LocalDate.of(currentYear - (decadeStart + 9), 1, 1);
         LocalDate birthTo = LocalDate.of(currentYear - decadeStart, 12, 31);
 
-        Map<Long, BigDecimal> fixedSums = toUserSumMap(fixedTransactionRepository.sumPublicByAgeRange(
-                TYPE, startDate, endDate, birthFrom, birthTo, user.getId()));
-        Map<Long, BigDecimal> variableSums = toUserSumMap(transactionRepository.sumPublicByAgeRange(
-                TYPE, startDate, endDate, birthFrom, birthTo, user.getId()));
+        Map<Long, BigDecimal> fixedSums = groupCache.getAgeFixedSums(startDate, endDate, birthFrom, birthTo);
+        Map<Long, BigDecimal> variableSums = groupCache.getAgeVariableSums(startDate, endDate, birthFrom, birthTo);
 
         return buildGroupCompare(user, ym, yearMonth, fixedSums, variableSums, IncomeCompareType.AGE);
     }
@@ -231,10 +256,8 @@ public class IncomeCompareService {
         LocalDate startDate = ym.atDay(1);
         LocalDate endDate = ym.atEndOfMonth();
 
-        Map<Long, BigDecimal> fixedSums = toUserSumMap(fixedTransactionRepository.sumPublicByAmountRange(
-                TYPE, startDate, endDate, minAmount, maxAmount, user.getId()));
-        Map<Long, BigDecimal> variableSums = toUserSumMap(transactionRepository.sumPublicByAmountRange(
-                TYPE, startDate, endDate, minAmount, maxAmount, user.getId()));
+        Map<Long, BigDecimal> fixedSums = groupCache.getAmountFixedSums(startDate, endDate, minAmount, maxAmount);
+        Map<Long, BigDecimal> variableSums = groupCache.getAmountVariableSums(startDate, endDate, minAmount, maxAmount);
 
         return buildGroupCompare(user, ym, yearMonth, fixedSums, variableSums, IncomeCompareType.AMOUNT);
     }
@@ -248,17 +271,15 @@ public class IncomeCompareService {
         LocalDate startDate = ym.atDay(1);
         LocalDate endDate = ym.atEndOfMonth();
 
-        Map<Long, BigDecimal> fixedSums = toUserSumMap(fixedTransactionRepository.sumPublicCategoryByUser(
-                TYPE, categoryId, startDate, endDate, user.getId()));
-        Map<Long, BigDecimal> variableSums = toUserSumMap(transactionRepository.sumPublicCategoryByUser(
-                TYPE, categoryId, startDate, endDate, user.getId()));
+        Map<Long, BigDecimal> fixedSums = groupCache.getCategoryFixedSums(startDate, endDate, categoryId);
+        Map<Long, BigDecimal> variableSums = groupCache.getCategoryVariableSums(startDate, endDate, categoryId);
 
         BigDecimal myFixed = nullToZero(fixedTransactionRepository.sumByUserAndTypeAndCategory(
                 user.getId(), TYPE, categoryId, startDate, endDate));
         BigDecimal myVariable = nullToZero(transactionRepository.sumByUserAndTypeAndCategory(
                 user.getId(), TYPE, categoryId, startDate, endDate));
 
-        return buildAverage(yearMonth, IncomeCompareType.CATEGORY,
+        return buildAverage(user.getId(), yearMonth, IncomeCompareType.CATEGORY,
                 myFixed, myVariable, fixedSums, variableSums);
     }
 
@@ -270,19 +291,24 @@ public class IncomeCompareService {
         LocalDate endDate = ym.atEndOfMonth();
         BigDecimal myFixed = nullToZero(fixedTransactionRepository.sumByUserAndType(user.getId(), TYPE, startDate, endDate));
         BigDecimal myVariable = nullToZero(transactionRepository.sumByUserAndType(user.getId(), TYPE, startDate, endDate));
-        return buildAverage(yearMonth, type, myFixed, myVariable, fixedSums, variableSums);
+        return buildAverage(user.getId(), yearMonth, type, myFixed, myVariable, fixedSums, variableSums);
     }
 
-    private IncomeCompareResponse buildAverage(String yearMonth, IncomeCompareType type,
+    private IncomeCompareResponse buildAverage(Long myUserId, String yearMonth, IncomeCompareType type,
                                                BigDecimal myFixed, BigDecimal myVariable,
                                                Map<Long, BigDecimal> fixedSums,
                                                Map<Long, BigDecimal> variableSums) {
-        Map<Long, BigDecimal> merged = new HashMap<>(fixedSums);
-        variableSums.forEach((k, v) -> merged.merge(k, v, BigDecimal::add));
+        Map<Long, BigDecimal> othersFixed = new HashMap<>(fixedSums);
+        othersFixed.remove(myUserId);
+        Map<Long, BigDecimal> othersVariable = new HashMap<>(variableSums);
+        othersVariable.remove(myUserId);
+
+        Map<Long, BigDecimal> merged = new HashMap<>(othersFixed);
+        othersVariable.forEach((k, v) -> merged.merge(k, v, BigDecimal::add));
         long sampleSize = merged.size();
 
-        BigDecimal averageFixed = average(fixedSums, sampleSize);
-        BigDecimal averageVariable = average(variableSums, sampleSize);
+        BigDecimal averageFixed = average(othersFixed, sampleSize);
+        BigDecimal averageVariable = average(othersVariable, sampleSize);
 
         return IncomeCompareResponse.of(type, yearMonth, myFixed, myVariable, averageFixed, averageVariable, sampleSize);
     }

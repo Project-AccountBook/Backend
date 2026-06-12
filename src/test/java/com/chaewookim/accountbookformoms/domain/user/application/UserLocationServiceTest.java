@@ -25,6 +25,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -200,6 +201,75 @@ class UserLocationServiceTest {
 
         // when & then
         assertThatThrownBy(() -> userLocationService.findNearbyUsers(1L, 3.0))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", UserErrorCode.USER_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("findNearbyUserIds - 반경 내 사용자 ID 집합 반환 (본인 제외)")
+    void findNearbyUserIds_success() {
+
+        // given
+        Long userId = 1L;
+        given(userRepository.existsById(userId)).willReturn(true);
+        given(redisTemplate.opsForGeo()).willReturn(geoOperations);
+        given(geoOperations.position(UserLocationService.USER_GEO_KEY, "1"))
+                .willReturn(List.of(new Point(126.9780, 37.5665)));
+
+        RedisGeoCommands.GeoLocation<String> self = new RedisGeoCommands.GeoLocation<>("1", new Point(126.9780, 37.5665));
+        RedisGeoCommands.GeoLocation<String> other2 = new RedisGeoCommands.GeoLocation<>("2", new Point(126.9790, 37.5670));
+        RedisGeoCommands.GeoLocation<String> other3 = new RedisGeoCommands.GeoLocation<>("3", new Point(126.9800, 37.5680));
+
+        @SuppressWarnings("unchecked")
+        GeoResult<RedisGeoCommands.GeoLocation<String>> r1 = mock(GeoResult.class);
+        @SuppressWarnings("unchecked")
+        GeoResult<RedisGeoCommands.GeoLocation<String>> r2 = mock(GeoResult.class);
+        @SuppressWarnings("unchecked")
+        GeoResult<RedisGeoCommands.GeoLocation<String>> r3 = mock(GeoResult.class);
+        given(r1.getContent()).willReturn(self);
+        given(r1.getDistance()).willReturn(new Distance(0.0, Metrics.KILOMETERS));
+        given(r2.getContent()).willReturn(other2);
+        given(r2.getDistance()).willReturn(new Distance(0.12, Metrics.KILOMETERS));
+        given(r3.getContent()).willReturn(other3);
+        given(r3.getDistance()).willReturn(new Distance(0.25, Metrics.KILOMETERS));
+
+        GeoResults<RedisGeoCommands.GeoLocation<String>> results =
+                new GeoResults<>(List.of(r1, r2, r3));
+        given(geoOperations.radius(eq(UserLocationService.USER_GEO_KEY), eq("1"), any(Distance.class), any(RedisGeoCommands.GeoRadiusCommandArgs.class)))
+                .willReturn(results);
+
+        // when
+        Set<Long> ids = userLocationService.findNearbyUserIds(userId, 3.0);
+
+        // then
+        assertThat(ids).containsExactlyInAnyOrder(2L, 3L);
+    }
+
+    @Test
+    @DisplayName("findNearbyUserIds - 위치 미등록 사용자 예외")
+    void findNearbyUserIds_fail_location_not_registered() {
+
+        // given
+        given(userRepository.existsById(1L)).willReturn(true);
+        given(redisTemplate.opsForGeo()).willReturn(geoOperations);
+        given(geoOperations.position(UserLocationService.USER_GEO_KEY, "1"))
+                .willReturn(Collections.emptyList());
+
+        // when & then
+        assertThatThrownBy(() -> userLocationService.findNearbyUserIds(1L, 3.0))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", UserErrorCode.LOCATION_NOT_REGISTERED);
+    }
+
+    @Test
+    @DisplayName("findNearbyUserIds - 사용자 없음 예외")
+    void findNearbyUserIds_fail_user_not_found() {
+
+        // given
+        given(userRepository.existsById(1L)).willReturn(false);
+
+        // when & then
+        assertThatThrownBy(() -> userLocationService.findNearbyUserIds(1L, 3.0))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", UserErrorCode.USER_NOT_FOUND);
     }

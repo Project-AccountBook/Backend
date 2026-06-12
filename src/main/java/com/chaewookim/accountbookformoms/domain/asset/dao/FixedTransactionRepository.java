@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.LocalDate;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 
 public interface FixedTransactionRepository extends JpaRepository<FixedTransaction, Long> {
@@ -148,4 +149,25 @@ public interface FixedTransactionRepository extends JpaRepository<FixedTransacti
                                            @Param("startDate") LocalDate startDate,
                                            @Param("endDate") LocalDate endDate,
                                            @Param("excludeUserId") Long excludeUserId);
+
+    /**
+     * 지정 userId 집합(공개 사용자만) 의 월 고정 거래 합계(사용자 단위). 위치 기반 비교용.
+     */
+    @Query("""
+            SELECT f.user.id, SUM(f.amount)
+              FROM FixedTransaction f
+              JOIN f.user u
+              JOIN u.userSetting s
+             WHERE s.isPortfolioPublic = true
+               AND u.id IN :userIds
+               AND f.type = :type
+               AND f.isActive = true
+               AND f.startDate <= :endDate
+               AND (f.endDate IS NULL OR f.endDate >= :startDate)
+             GROUP BY f.user.id
+            """)
+    List<Object[]> sumPublicByUserIds(@Param("type") TransactionType type,
+                                      @Param("startDate") LocalDate startDate,
+                                      @Param("endDate") LocalDate endDate,
+                                      @Param("userIds") Collection<Long> userIds);
 }
