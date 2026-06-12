@@ -117,6 +117,67 @@
 
 ## 후속 작업 (TODO)
 
+### 위치 기반 비교 기능 (미착수)
+설계상 "위치 기반 비교는 별도 페이지로 분리" 명시되어 있으나 구현 0%. `UserLocationService`(Redis GEO) 와 4종 Compare 서비스(Budget/Expense/Income/Portfolio) 가 연결되어 있지 않음.
+
+- **Compare enum 확장**: 4개 도메인 `*CompareType` 에 `LOCATION` 값 추가 (현재 `AGE`/`AMOUNT`/`CATEGORY` 만 존재)
+- **요청 DTO 확장**: `radiusKm` 파라미터 추가 (`*CompareRequest`)
+- **그룹 산출 흐름**:
+  1. `UserLocationService.findNearbyUsers(userId, radiusKm)` → 반경 내 userId 집합
+  2. 공개 설정(`UserSetting.isPublic`) 사용자로 한 번 더 필터
+  3. 해당 userId IN (...) 절을 그룹 평균 쿼리에 주입
+- **응답 메타**: 반경, 표본 수, 위치 미등록 시 에러 코드(`LOCATION_NOT_REGISTERED`) 처리
+- **캐시 키 설계**: 위치 기반은 사용자별 반경마다 결과가 달라 캐시 히트율 낮음. Redis 캐시 적용 시 `geohash prefix + radius bucket` 단위로 키 설계 고려
+- **인덱스 의존성**: 우선순위 #1 인덱스(Budget·FixedTransaction 의 user_id 기반) 선행되어야 IN 절 성능 확보
+
+### Compare 캐싱 Phase 2 — 의사결정 #6 완전 정합화
+Phase 1(우선순위 #3)에서 `@Cacheable` 을 user 단위 응답에 적용 → 같은 사용자의 동일 파라미터 재조회만 hit. 의사결정 #6("나이대별/카테고리별 평균 배치 집계 후 Redis 저장")의 본래 의도는 **그룹 평균 자체를 공용 캐시**로 재사용하는 것. 현재 구조는 user 결합 응답 캐시라 cross-user hit 0%.
+
+- **`compareWithGroup` 분해**: 내부에서 (1) 그룹 평균 산출 / (2) 본인 amount 산출 / (3) diff 계산을 분리
+- **그룹 평균 캐시**: 키 = `(type, yearMonth, categoryId, ageBucket, amountBucket)` — userId 제외. 같은 demographic 사용자는 cache hit
+- **본인 amount 는 캐시 X**: mutation 빈도/정합성 부담 vs 비용 trade-off. 직접 쿼리 유지
+- **@Scheduled 배치 추가**: 매일/매시간 그룹 평균을 미리 계산해 캐시에 warm-up (대량 트래픽 대비). ShedLock 으로 다중 서버 중복 방지 (의사결정 #13 인프라 재사용)
+- **eviction 단순화**: 현재 `allEntries=true` 는 본인 mutation 시 모든 캐시 폭파. 그룹 캐시 분리되면 user-mutation 은 그룹 캐시에 영향 없음 → evict 불필요(자체 TTL + 배치 갱신). 단, 캐시 정확성 vs 비용 trade-off 재평가 필요
+
+### 운영 설정 정비 — Option B (Profile 분리 + Batch/HikariCP)
+최적화 백로그 우선순위 #4 의 안전 범위만 우선 진행. **Flyway 도입 및 OSIV 비활성화는 별도 이슈로 분리**.
+
+#### 4-1. Profile 분리
+- `application.yml` 을 공통/local/prod 3분할
+- 공통: `spring.application.name`, `datasource.driver`, `spring.config.import: application-secret.yml`, `spring.profiles.active: ${SPRING_PROFILES_ACTIVE:local}`
+- `application-local.yml`: 현재 동작 그대로 보존 (`ddl-auto: update`, `show-sql: true`, `format_sql: true`)
+- `application-prod.yml`: `ddl-auto: validate`, `show-sql: false`, `format_sql: false`, Hibernate SQL log WARN
+- **Why**: prod에 `ddl-auto: update`/`show-sql: true` 가 그대로 가면 자동 ALTER로 데이터 손실 / 로그 IO 폭증 위험
+
+#### 4-2. Prod DDL 전략 — validate
+- prod ddl-auto = `validate` 채택. 스키마 변경은 PR에 SQL 스냅샷(`docs/db/migration/`) 동봉 후 배포 전 DBA가 수동 실행
+- **Why**: Flyway 도입 전 임시 가드. drift 발견은 부팅 시점에 빠르게. Flyway 도입 시 같은 디렉터리를 `db/migration/V*.sql` 로 자연 이전 가능
+
+#### 4-3. HikariCP 튜닝
+- prod: `maximum-pool-size: 20`, `minimum-idle: 5`, `connection-timeout: 3000`, `idle-timeout: 300000`, `max-lifetime: 1200000`, `leak-detection-threshold: 60000`, `pool-name: jointliving-pool`
+- local: `maximum-pool-size: 5`, `leak-detection-threshold: 60000`
+- **Why**: 기본값(pool=10, connection-timeout=30s)은 트래픽 증가 시 30초 멈춤 발생. leak detection 꺼져 있어 누수 진단 불가. `max-lifetime` 은 MySQL `wait_timeout` 보다 짧게 설정해 broken pipe 방지
+
+#### 4-4. JDBC Batch
+- `hibernate.jdbc.batch_size: 20`, `hibernate.jdbc.batch_versioned_data: true`, `hibernate.order_inserts: true`, `hibernate.order_updates: true`
+- **Why**: `saveAll(N)` 호출 시 N번 라운드트립을 1/20 로. 특히 #69 고정거래 스케줄러처럼 대량 insert 경로에 효과적
+- **⚠️ 제한**: 모든 엔티티 PK가 `GenerationType.IDENTITY` 라 Hibernate가 insert batch를 자동 비활성화. **현 batch 효과는 update/delete 한정.** Insert batch 효과까지 원하면 PK 전략 재검토 별도 이슈 필요
+
+#### 4-5. 검증
+- local profile 부팅 확인
+- prod profile + 로컬 DB 부팅 → validate 통과 확인
+- 일시적으로 show_sql 켜고 batch insert 시나리오 → 묶이는지 확인
+
+#### Option B 종료 후 잔여 빚 (별도 이슈로 분리)
+- **Flyway 도입** — 스키마 변경의 코드/DB 동기 관리
+- **OSIV 비활성화** (`spring.jpa.open-in-view: false`) — Lazy 노출 사냥 필요해 회귀 위험 큼
+- **IDENTITY PK → SEQUENCE/pooled-lo** 전환 검토 — batch insert 효과 회수
+- **prod 비밀 관리** — `application-secret.yml` 을 환경변수/Secrets Manager 로 이전
+
+### Budget CRUD 미구현
+`BudgetService` 가 없어 Budget 엔티티 생성/수정/삭제 경로가 없음. 비교 기능은 동작하지만 사용자가 예산을 직접 등록할 API 미존재. 구현 시:
+- Budget CRUD 추가 시 `compare:budget` 캐시에 `@CacheEvict(allEntries=true)` 추가 필수
+
 ### 게시판 검색 (#26) 마무리
 초기 비동기 ES 인덱싱 구현 완료. 추가로 진행할 항목:
 - **인덱싱 실패 처리 강화**: 현재 ES 호출 실패 시 로그만 남김. Spring Retry 또는 outbox 패턴으로 영구 유실 방지

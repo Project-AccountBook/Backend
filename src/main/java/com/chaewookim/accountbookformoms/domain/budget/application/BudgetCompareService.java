@@ -16,8 +16,10 @@ import com.chaewookim.accountbookformoms.domain.budget.error.BudgetErrorCode;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
+import com.chaewookim.accountbookformoms.global.config.RedisConfig;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -170,6 +172,9 @@ public class BudgetCompareService {
         return value != null ? value : BigDecimal.ZERO;
     }
 
+    @Cacheable(
+            cacheNames = RedisConfig.CACHE_COMPARE_BUDGET,
+            key = "T(java.util.Objects).hash(#userId, #request.type(), #request.yearMonth(), #request.minAmount(), #request.maxAmount(), #request.categoryId())")
     public BudgetCompareResponse compareWithGroup(Long userId, BudgetCompareRequest request) {
 
         validateYearMonth(request.yearMonth());
