@@ -1,6 +1,8 @@
 package com.chaewookim.accountbookformoms.domain.portfolio.dto.request;
 
 import com.chaewookim.accountbookformoms.domain.portfolio.enums.PortfolioCompareType;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -23,6 +25,9 @@ public record PortfolioCompareRequest(
         BigDecimal minBudget,
         BigDecimal maxBudget,
         Long categoryId,
+
+        @DecimalMin(value = "0.1", message = "반경은 0.1km 이상이어야 합니다.")
+        @DecimalMax(value = "50.0", message = "반경은 50km 이하여야 합니다.")
         Double radiusKm
 ) {
 }

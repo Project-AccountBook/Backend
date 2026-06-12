@@ -482,6 +482,36 @@ class BudgetCompareServiceTest {
     }
 
     @Test
+    @DisplayName("그룹 평균 비교 - LOCATION: 반경 0.1km 미만이면 예외")
+    void compareWithGroup_location_radius_too_small() {
+
+        // given
+        User me = publicUser(1L, "me", null);
+        given(userRepository.findById(1L)).willReturn(Optional.of(me));
+
+        // when & then
+        assertThatThrownBy(() -> budgetCompareService.compareWithGroup(
+                1L, new BudgetCompareRequest(BudgetCompareType.LOCATION, "2026-06", null, null, null, 0.05)))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", BudgetErrorCode.INVALID_RADIUS);
+    }
+
+    @Test
+    @DisplayName("그룹 평균 비교 - LOCATION: 반경 50km 초과면 예외")
+    void compareWithGroup_location_radius_too_large() {
+
+        // given
+        User me = publicUser(1L, "me", null);
+        given(userRepository.findById(1L)).willReturn(Optional.of(me));
+
+        // when & then
+        assertThatThrownBy(() -> budgetCompareService.compareWithGroup(
+                1L, new BudgetCompareRequest(BudgetCompareType.LOCATION, "2026-06", null, null, null, 100.0)))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", BudgetErrorCode.INVALID_RADIUS);
+    }
+
+    @Test
     @DisplayName("그룹 평균 비교 - LOCATION: 반경 내 사용자 0명일 때 sampleSize=0, average=0")
     void compareWithGroup_location_no_neighbors() {
 

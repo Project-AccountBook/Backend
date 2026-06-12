@@ -37,6 +37,9 @@ import java.util.Set;
 @Transactional(readOnly = true)
 public class BudgetCompareService {
 
+    private static final double MIN_RADIUS_KM = 0.1;
+    private static final double MAX_RADIUS_KM = 50.0;
+
     private final BudgetRepository budgetRepository;
     private final UserRepository userRepository;
     private final UserLocationService userLocationService;
@@ -196,8 +199,11 @@ public class BudgetCompareService {
 
     private BudgetCompareResponse compareByLocation(User user, String yearMonth, Double radiusKm) {
 
-        if (radiusKm == null || radiusKm <= 0) {
+        if (radiusKm == null) {
             throw new CustomException(BudgetErrorCode.RADIUS_REQUIRED);
+        }
+        if (radiusKm < MIN_RADIUS_KM || radiusKm > MAX_RADIUS_KM) {
+            throw new CustomException(BudgetErrorCode.INVALID_RADIUS);
         }
 
         Set<Long> nearbyUserIds = userLocationService.findNearbyUserIds(user.getId(), radiusKm);

@@ -41,6 +41,8 @@ import java.util.Set;
 public class ExpenseCompareService {
 
     private static final TransactionType TYPE = TransactionType.EXPENSE;
+    private static final double MIN_RADIUS_KM = 0.1;
+    private static final double MAX_RADIUS_KM = 50.0;
 
     private final TransactionRepository transactionRepository;
     private final FixedTransactionRepository fixedTransactionRepository;
@@ -156,8 +158,11 @@ public class ExpenseCompareService {
 
     private ExpenseCompareResponse compareByLocation(User user, YearMonth ym, String yearMonth, Double radiusKm) {
 
-        if (radiusKm == null || radiusKm <= 0) {
+        if (radiusKm == null) {
             throw new CustomException(ExpenseErrorCode.RADIUS_REQUIRED);
+        }
+        if (radiusKm < MIN_RADIUS_KM || radiusKm > MAX_RADIUS_KM) {
+            throw new CustomException(ExpenseErrorCode.INVALID_RADIUS);
         }
 
         LocalDate startDate = ym.atDay(1);
