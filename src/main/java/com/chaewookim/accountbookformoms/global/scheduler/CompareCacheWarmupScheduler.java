@@ -6,6 +6,7 @@ import com.chaewookim.accountbookformoms.domain.expense.application.ExpenseGroup
 import com.chaewookim.accountbookformoms.domain.income.application.IncomeGroupCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -35,6 +36,8 @@ public class CompareCacheWarmupScheduler {
     private final IncomeGroupCacheService incomeGroupCache;
 
     @Scheduled(cron = "0 */30 * * * *")
+    @SchedulerLock(name = "CompareCacheWarmupScheduler_warmupCompareGroupCaches",
+            lockAtMostFor = "PT20M", lockAtLeastFor = "PT1M")
     public void warmupCompareGroupCaches() {
 
         YearMonth ym = YearMonth.now();

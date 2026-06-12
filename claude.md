@@ -117,16 +117,6 @@
 
 ## 후속 작업 (TODO)
 
-### ShedLock 도입 — 의사결정 #13 인프라 정합화
-의사결정 #13 ("Spring @Scheduled + ShedLock") 의 ShedLock 부분이 코드에 미반영. 현재 영향 받는 스케줄러 2개:
-- `FixedTransactionScheduler` (#69) — 다중 서버 환경에서 중복 거래 생성 위험
-- `CompareCacheWarmupScheduler` — 중복 실행 시 correctness 영향은 없으나 redundant DB 쿼리 발생
-
-작업:
-- `shedlock-spring` + `shedlock-provider-jdbc-template` 의존성 추가
-- `shedlock` 테이블 + LockProvider 빈 + `@EnableSchedulerLock` 설정
-- 두 스케줄러 메서드에 `@SchedulerLock(name=..., lockAtMostFor=...)` 부착
-
 ### 운영 설정 정비 — Option B (Profile 분리 + Batch/HikariCP)
 최적화 백로그 우선순위 #4 의 안전 범위만 우선 진행. **Flyway 도입 및 OSIV 비활성화는 별도 이슈로 분리**.
 
@@ -157,7 +147,7 @@
 - 일시적으로 show_sql 켜고 batch insert 시나리오 → 묶이는지 확인
 
 #### Option B 종료 후 잔여 빚 (별도 이슈로 분리)
-- **Flyway 도입** — 스키마 변경의 코드/DB 동기 관리
+- **Flyway 도입** — 스키마 변경의 코드/DB 동기 관리. Flyway 도입 시 `shedlock` 테이블 DDL 도 V*.sql 로 이전 (현재는 `Shedlock` 엔티티 + ddl-auto: update 로 자동 생성, prod validate 환경에서는 수동 적용 필요)
 - **OSIV 비활성화** (`spring.jpa.open-in-view: false`) — Lazy 노출 사냥 필요해 회귀 위험 큼
 - **IDENTITY PK → SEQUENCE/pooled-lo** 전환 검토 — batch insert 효과 회수
 - **prod 비밀 관리** — `application-secret.yml` 을 환경변수/Secrets Manager 로 이전
