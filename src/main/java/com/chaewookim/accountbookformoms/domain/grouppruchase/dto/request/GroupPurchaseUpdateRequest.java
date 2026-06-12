@@ -30,6 +30,8 @@ public record GroupPurchaseUpdateRequest(
         LocalDateTime deadline,
 
         @NotBlank(message = "수령 장소는 필수 입력값입니다.")
-        String pickupLocation
+        String pickupLocation,
+
+        String imageUrl
 ) {
 }

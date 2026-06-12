@@ -30,6 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -55,16 +56,29 @@ public class GroupPurchaseService {
                 .maxParticipants(request.maxParticipants())
                 .deadline(request.deadline())
                 .pickupLocation(request.pickupLocation())
+                .imageUrl(request.imageUrl())
                 .build();
 
         GroupPurchase saved = groupPurchaseRepository.save(groupPurchase);
-        return GroupPurchaseResponse.from(saved);
+        
+        String creatorNickname = userRepository.findById(creatorId)
+                .map(User::getUsername)
+                .orElse("탈퇴한 사용자");
+
+        return GroupPurchaseResponse.of(saved, creatorNickname);
     }
 
+    @Transactional
     public GroupPurchaseResponse getGroupPurchase(Long id) {
         GroupPurchase groupPurchase = groupPurchaseRepository.findById(id)
                 .orElseThrow(() -> new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND));
-        return GroupPurchaseResponse.from(groupPurchase);
+        groupPurchase.increaseViewCount();
+        
+        String creatorNickname = userRepository.findById(groupPurchase.getCreatorId())
+                .map(User::getUsername)
+                .orElse("탈퇴한 사용자");
+
+        return GroupPurchaseResponse.of(groupPurchase, creatorNickname);
     }
 
     public List<GroupPurchaseResponse> getAllGroupPurchases(String region, Long categoryId, Boolean nearMe, Long currentUserId, String sortBy) {
@@ -98,8 +112,15 @@ public class GroupPurchaseService {
             }
         }
 
+        List<Long> creatorIds = list.stream().map(GroupPurchase::getCreatorId).distinct().toList();
+        Map<Long, String> nicknameMap = userRepository.findAllById(creatorIds).stream()
+                .collect(Collectors.toMap(User::getId, User::getUsername));
+
         return list.stream()
-                .map(GroupPurchaseResponse::from)
+                .map(gp -> {
+                    String nickname = nicknameMap.getOrDefault(gp.getCreatorId(), "탈퇴한 사용자");
+                    return GroupPurchaseResponse.of(gp, nickname);
+                })
                 .collect(Collectors.toList());
     }
 
@@ -120,10 +141,15 @@ public class GroupPurchaseService {
                 request.minParticipants(),
                 request.maxParticipants(),
                 request.deadline(),
-                request.pickupLocation()
+                request.pickupLocation(),
+                request.imageUrl()
         );
 
-        return GroupPurchaseResponse.from(groupPurchase);
+        String creatorNickname = userRepository.findById(groupPurchase.getCreatorId())
+                .map(User::getUsername)
+                .orElse("탈퇴한 사용자");
+
+        return GroupPurchaseResponse.of(groupPurchase, creatorNickname);
     }
 
     @Transactional
@@ -236,7 +262,15 @@ public class GroupPurchaseService {
     }
 
     public Page<GroupPurchaseResponse> getWishedGroupPurchases(Long userId, Pageable pageable) {
-        return groupPurchaseRepository.findWishedGroupPurchases(userId, pageable)
-                .map(GroupPurchaseResponse::from);
+        Page<GroupPurchase> page = groupPurchaseRepository.findWishedGroupPurchases(userId, pageable);
+
+        List<Long> creatorIds = page.getContent().stream().map(GroupPurchase::getCreatorId).distinct().toList();
+        Map<Long, String> nicknameMap = userRepository.findAllById(creatorIds).stream()
+                .collect(Collectors.toMap(User::getId, User::getUsername));
+
+        return page.map(gp -> {
+            String nickname = nicknameMap.getOrDefault(gp.getCreatorId(), "탈퇴한 사용자");
+            return GroupPurchaseResponse.of(gp, nickname);
+        });
     }
 }

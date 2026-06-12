@@ -230,4 +230,51 @@ class GroupPurchaseServiceTest {
         assertThat(responsePage.getContent()).hasSize(1);
         assertThat(responsePage.getContent().get(0).id()).isEqualTo(101L);
     }
+
+    @Test
+    @DisplayName("공동구매 상세 단건 조회 성공 — 조회수 증가, 닉네임 및 참여율 계산 확인")
+    void getGroupPurchase_success() {
+        // given
+        GroupPurchase gp = GroupPurchase.builder()
+                .id(101L)
+                .creatorId(2L)
+                .categoryId(3L)
+                .title("공구 상세 정보")
+                .minParticipants(5)
+                .pickupLocation("서울시 마포구")
+                .imageUrl("http://image.com/test.jpg")
+                .build();
+        ReflectionTestUtils.setField(gp, "currentParticipants", 2); // 2/5 = 40.0%
+        ReflectionTestUtils.setField(gp, "viewCount", 0);
+
+        given(groupPurchaseRepository.findById(101L)).willReturn(Optional.of(gp));
+
+        User user = User.forTestBuilder()
+                .id(2L)
+                .username("개설자닉네임")
+                .build();
+        given(userRepository.findById(2L)).willReturn(Optional.of(user));
+
+        // when
+        GroupPurchaseResponse response = groupPurchaseService.getGroupPurchase(101L);
+
+        // then
+        assertThat(response.id()).isEqualTo(101L);
+        assertThat(response.creatorNickname()).isEqualTo("개설자닉네임");
+        assertThat(response.achievementRate()).isEqualTo(40.0);
+        assertThat(response.imageUrl()).isEqualTo("http://image.com/test.jpg");
+        assertThat(gp.getViewCount()).isEqualTo(1); // 엔티티의 조회수가 1 증가했는지 검증
+    }
+
+    @Test
+    @DisplayName("공동구매 상세 단건 조회 실패 — 존재하지 않는 공동구매 ID")
+    void getGroupPurchase_notFound() {
+        // given
+        given(groupPurchaseRepository.findById(999L)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> groupPurchaseService.getGroupPurchase(999L))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.GROUP_PURCHASE_NOT_FOUND);
+    }
 }
