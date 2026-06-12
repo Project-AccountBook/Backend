@@ -1,5 +1,7 @@
 package com.chaewookim.accountbookformoms.domain.comment.application;
 
+import com.chaewookim.accountbookformoms.domain.board.dao.BoardRepository;
+import com.chaewookim.accountbookformoms.domain.board.error.BoardErrorCode;
 import com.chaewookim.accountbookformoms.domain.comment.dao.CommentRepository;
 import com.chaewookim.accountbookformoms.domain.comment.dto.request.CommentCreateRequest;
 import com.chaewookim.accountbookformoms.domain.comment.dto.request.CommentUpdateRequest;
@@ -7,7 +9,9 @@ import com.chaewookim.accountbookformoms.domain.comment.dto.response.CommentResp
 import com.chaewookim.accountbookformoms.domain.comment.entity.Comment;
 import com.chaewookim.accountbookformoms.domain.comment.enums.ReferenceType;
 import com.chaewookim.accountbookformoms.domain.comment.error.CommentErrorCode;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseRepository;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
+import com.chaewookim.accountbookformoms.global.error.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -33,6 +37,12 @@ class CommentServiceTest {
 
     @Mock
     private CommentRepository commentRepository;
+
+    @Mock
+    private BoardRepository boardRepository;
+
+    @Mock
+    private GroupPurchaseRepository groupPurchaseRepository;
 
     @InjectMocks
     private CommentService commentService;
@@ -66,6 +76,7 @@ class CommentServiceTest {
             // given
             CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "새 댓글");
             Comment saved = buildComment(COMMENT_ID, OWNER_ID, POST_ID, ReferenceType.QNA, null);
+            given(boardRepository.existsById(POST_ID)).willReturn(true);
             given(commentRepository.save(any(Comment.class))).willReturn(saved);
 
             // when
@@ -74,6 +85,36 @@ class CommentServiceTest {
             // then
             assertThat(resultId).isEqualTo(COMMENT_ID);
             verify(commentRepository).save(any(Comment.class));
+        }
+
+        @Test
+        @DisplayName("실패 — 대상 QNA 게시글이 존재하지 않으면 BOARD_NOT_FOUND")
+        void create_fail_board_not_found() {
+            // given
+            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "새 댓글");
+            given(boardRepository.existsById(POST_ID)).willReturn(false);
+
+            // when & then
+            assertThatThrownBy(() -> commentService.create(POST_ID, request, OWNER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", BoardErrorCode.BOARD_NOT_FOUND);
+
+            verify(commentRepository, never()).save(any(Comment.class));
+        }
+
+        @Test
+        @DisplayName("실패 — 대상 공동구매 글이 존재하지 않으면 GROUP_PURCHASE_NOT_FOUND")
+        void create_fail_group_purchase_not_found() {
+            // given
+            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.GROUPPURCHASE, "새 댓글");
+            given(groupPurchaseRepository.existsById(POST_ID)).willReturn(false);
+
+            // when & then
+            assertThatThrownBy(() -> commentService.create(POST_ID, request, OWNER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.GROUP_PURCHASE_NOT_FOUND);
+
+            verify(commentRepository, never()).save(any(Comment.class));
         }
     }
 
@@ -88,6 +129,7 @@ class CommentServiceTest {
             CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "대댓글");
             Comment parent = buildComment(PARENT_ID, OWNER_ID, POST_ID, ReferenceType.QNA, null);
             Comment saved = buildComment(REPLY_ID, OWNER_ID, POST_ID, ReferenceType.QNA, PARENT_ID);
+            given(boardRepository.existsById(POST_ID)).willReturn(true);
             given(commentRepository.findById(PARENT_ID)).willReturn(Optional.of(parent));
             given(commentRepository.save(any(Comment.class))).willReturn(saved);
 
@@ -100,10 +142,41 @@ class CommentServiceTest {
         }
 
         @Test
+        @DisplayName("실패 — 대댓글 작성 시 대상 QNA 게시글이 존재하지 않으면 BOARD_NOT_FOUND")
+        void reply_fail_board_not_found() {
+            // given
+            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "대댓글");
+            given(boardRepository.existsById(POST_ID)).willReturn(false);
+
+            // when & then
+            assertThatThrownBy(() -> commentService.reply(POST_ID, PARENT_ID, request, OWNER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", BoardErrorCode.BOARD_NOT_FOUND);
+
+            verify(commentRepository, never()).save(any(Comment.class));
+        }
+
+        @Test
+        @DisplayName("실패 — 대댓글 작성 시 대상 공동구매 글이 존재하지 않으면 GROUP_PURCHASE_NOT_FOUND")
+        void reply_fail_group_purchase_not_found() {
+            // given
+            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.GROUPPURCHASE, "대댓글");
+            given(groupPurchaseRepository.existsById(POST_ID)).willReturn(false);
+
+            // when & then
+            assertThatThrownBy(() -> commentService.reply(POST_ID, PARENT_ID, request, OWNER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.GROUP_PURCHASE_NOT_FOUND);
+
+            verify(commentRepository, never()).save(any(Comment.class));
+        }
+
+        @Test
         @DisplayName("실패 — 부모 댓글이 존재하지 않으면 COMMENT_NOT_FOUND")
         void reply_fail_parent_not_found() {
             // given
             CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "대댓글");
+            given(boardRepository.existsById(POST_ID)).willReturn(true);
             given(commentRepository.findById(PARENT_ID)).willReturn(Optional.empty());
 
             // when & then
@@ -120,6 +193,7 @@ class CommentServiceTest {
             // given
             CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "대대댓글");
             Comment parentReply = buildComment(PARENT_ID, OWNER_ID, POST_ID, ReferenceType.QNA, 998L);
+            given(boardRepository.existsById(POST_ID)).willReturn(true);
             given(commentRepository.findById(PARENT_ID)).willReturn(Optional.of(parentReply));
 
             // when & then
@@ -136,6 +210,7 @@ class CommentServiceTest {
             // given
             CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "대댓글");
             Comment parent = buildComment(PARENT_ID, OWNER_ID, 999L, ReferenceType.QNA, null);
+            given(boardRepository.existsById(POST_ID)).willReturn(true);
             given(commentRepository.findById(PARENT_ID)).willReturn(Optional.of(parent));
 
             // when & then
@@ -152,6 +227,7 @@ class CommentServiceTest {
             // given
             CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "대댓글");
             Comment parent = buildComment(PARENT_ID, OWNER_ID, POST_ID, ReferenceType.GROUPPURCHASE, null);
+            given(boardRepository.existsById(POST_ID)).willReturn(true);
             given(commentRepository.findById(PARENT_ID)).willReturn(Optional.of(parent));
 
             // when & then
