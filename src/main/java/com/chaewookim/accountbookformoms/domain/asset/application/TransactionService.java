@@ -10,8 +10,11 @@ import com.chaewookim.accountbookformoms.domain.asset.entity.Transaction;
 import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
+import com.chaewookim.accountbookformoms.global.config.RedisConfig;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -30,6 +33,10 @@ public class TransactionService {
     private final AccountRepository accountRepository;
     private final TransactionCategoryRepository categoryRepository;
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = RedisConfig.CACHE_COMPARE_EXPENSE, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfig.CACHE_COMPARE_INCOME, allEntries = true)
+    })
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Long createTransaction(Long userId, TransactionRequest request) {
         if (request.type() == TransactionType.TRANSFER) {
@@ -109,6 +116,10 @@ public class TransactionService {
         return TransactionResponse.from(transaction);
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = RedisConfig.CACHE_COMPARE_EXPENSE, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfig.CACHE_COMPARE_INCOME, allEntries = true)
+    })
     @Transactional
     public void updateTransaction(Long userId, Long transactionId, TransactionRequest request) {
 
@@ -125,6 +136,10 @@ public class TransactionService {
         account.changeBalance(transaction.getBalanceChangeAmount());
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = RedisConfig.CACHE_COMPARE_EXPENSE, allEntries = true),
+            @CacheEvict(cacheNames = RedisConfig.CACHE_COMPARE_INCOME, allEntries = true)
+    })
     @Transactional
     public void deleteTransaction(Long userId, Long transactionId) {
 

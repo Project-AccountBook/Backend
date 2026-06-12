@@ -17,8 +17,10 @@ import com.chaewookim.accountbookformoms.domain.income.error.IncomeErrorCode;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
+import com.chaewookim.accountbookformoms.global.config.RedisConfig;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -130,6 +132,9 @@ public class IncomeCompareService {
         };
     }
 
+    @Cacheable(
+            cacheNames = RedisConfig.CACHE_COMPARE_INCOME,
+            key = "T(java.util.Objects).hash(#userId, #request.type(), #request.yearMonth(), #request.minAmount(), #request.maxAmount(), #request.categoryId())")
     public IncomeCompareResponse compareWithGroup(Long userId, IncomeCompareRequest request) {
 
         YearMonth ym = parseYearMonth(request.yearMonth());

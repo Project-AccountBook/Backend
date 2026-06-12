@@ -17,8 +17,10 @@ import com.chaewookim.accountbookformoms.domain.expense.error.ExpenseErrorCode;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
+import com.chaewookim.accountbookformoms.global.config.RedisConfig;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -130,6 +132,9 @@ public class ExpenseCompareService {
         };
     }
 
+    @Cacheable(
+            cacheNames = RedisConfig.CACHE_COMPARE_EXPENSE,
+            key = "T(java.util.Objects).hash(#userId, #request.type(), #request.yearMonth(), #request.minAmount(), #request.maxAmount(), #request.categoryId())")
     public ExpenseCompareResponse compareWithGroup(Long userId, ExpenseCompareRequest request) {
 
         YearMonth ym = parseYearMonth(request.yearMonth());

@@ -9,6 +9,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -19,7 +20,11 @@ import org.hibernate.annotations.SQLRestriction;
 
 @Entity
 @Getter
-@Table(name = "board")
+@Table(name = "board",
+        indexes = {
+                @Index(name = "idx_board_created_at", columnList = "created_at"),
+                @Index(name = "idx_board_type", columnList = "type")
+        })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @SQLDelete(sql = "UPDATE board SET deleted_at = NOW() WHERE id = ?")
 @SQLRestriction("deleted_at IS NULL")

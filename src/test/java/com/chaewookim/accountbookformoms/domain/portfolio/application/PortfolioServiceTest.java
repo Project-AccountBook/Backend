@@ -5,7 +5,6 @@ import com.chaewookim.accountbookformoms.domain.budget.dto.request.BudgetCompare
 import com.chaewookim.accountbookformoms.domain.budget.dto.response.BudgetCompareResponse;
 import com.chaewookim.accountbookformoms.domain.budget.dto.response.MyBudgetResponse;
 import com.chaewookim.accountbookformoms.domain.budget.dto.response.PairBudgetDetailResponse;
-import com.chaewookim.accountbookformoms.domain.budget.dto.response.PublicMonthlyBudgetResponse;
 import com.chaewookim.accountbookformoms.domain.budget.dto.response.UserBudgetCompareResponse;
 import com.chaewookim.accountbookformoms.domain.budget.dto.response.UserBudgetDetailResponse;
 import com.chaewookim.accountbookformoms.domain.budget.enums.BudgetCompareType;
@@ -14,7 +13,6 @@ import com.chaewookim.accountbookformoms.domain.expense.dto.request.ExpenseCompa
 import com.chaewookim.accountbookformoms.domain.expense.dto.response.ExpenseCompareResponse;
 import com.chaewookim.accountbookformoms.domain.expense.dto.response.MyExpenseResponse;
 import com.chaewookim.accountbookformoms.domain.expense.dto.response.PairExpenseDetailResponse;
-import com.chaewookim.accountbookformoms.domain.expense.dto.response.PublicMonthlyExpenseResponse;
 import com.chaewookim.accountbookformoms.domain.expense.dto.response.UserExpenseCompareResponse;
 import com.chaewookim.accountbookformoms.domain.expense.dto.response.UserExpenseDetailResponse;
 import com.chaewookim.accountbookformoms.domain.expense.enums.ExpenseCompareType;
@@ -23,10 +21,11 @@ import com.chaewookim.accountbookformoms.domain.income.dto.request.IncomeCompare
 import com.chaewookim.accountbookformoms.domain.income.dto.response.IncomeCompareResponse;
 import com.chaewookim.accountbookformoms.domain.income.dto.response.MyIncomeResponse;
 import com.chaewookim.accountbookformoms.domain.income.dto.response.PairIncomeDetailResponse;
-import com.chaewookim.accountbookformoms.domain.income.dto.response.PublicMonthlyIncomeResponse;
 import com.chaewookim.accountbookformoms.domain.income.dto.response.UserIncomeCompareResponse;
 import com.chaewookim.accountbookformoms.domain.income.dto.response.UserIncomeDetailResponse;
 import com.chaewookim.accountbookformoms.domain.income.enums.IncomeCompareType;
+import com.chaewookim.accountbookformoms.domain.portfolio.dao.PortfolioAggregationRepository;
+import com.chaewookim.accountbookformoms.domain.portfolio.dao.PortfolioAggregationRepository.PublicPortfolioRow;
 import com.chaewookim.accountbookformoms.domain.portfolio.dto.request.PortfolioCompareRequest;
 import com.chaewookim.accountbookformoms.domain.portfolio.dto.request.PortfolioFilterRequest;
 import com.chaewookim.accountbookformoms.domain.portfolio.dto.response.MyPortfolioResponse;
@@ -46,6 +45,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -66,6 +66,9 @@ class PortfolioServiceTest {
 
     @Mock
     private BudgetCompareService budgetCompareService;
+
+    @Mock
+    private PortfolioAggregationRepository portfolioAggregationRepository;
 
     @InjectMocks
     private PortfolioService portfolioService;
@@ -118,83 +121,83 @@ class PortfolioServiceTest {
     }
 
     @Test
-    @DisplayName("공개 사용자 포트폴리오 목록 - 세 도메인 결과를 userId 단위로 병합하고 누락은 0으로 채움")
+    @DisplayName("공개 사용자 포트폴리오 목록 - 통합 집계 결과를 응답으로 매핑하고 잔액(=수입-지출)을 계산")
     void getPublicPortfolios_merge_users() {
 
         // given
         PortfolioFilterRequest filter = new PortfolioFilterRequest(
                 2026, 6, null, null, null, null, null, null);
 
-        given(incomeCompareService.getPublicMonthlyIncomes(any())).willReturn(List.of(
-                new PublicMonthlyIncomeResponse(10L, "alice", "2026-06",
-                        new BigDecimal("5000000"), BigDecimal.ZERO, new BigDecimal("5000000")),
-                new PublicMonthlyIncomeResponse(20L, "bob", "2026-06",
-                        new BigDecimal("4000000"), BigDecimal.ZERO, new BigDecimal("4000000"))));
-        given(expenseCompareService.getPublicMonthlyExpenses(any())).willReturn(List.of(
-                new PublicMonthlyExpenseResponse(10L, "alice", "2026-06",
-                        new BigDecimal("2000000"), BigDecimal.ZERO, new BigDecimal("2000000")),
-                new PublicMonthlyExpenseResponse(30L, "carol", "2026-06",
-                        new BigDecimal("1500000"), BigDecimal.ZERO, new BigDecimal("1500000"))));
-        given(budgetCompareService.getPublicMonthlyBudgets(any())).willReturn(List.of(
-                new PublicMonthlyBudgetResponse(10L, "alice", "2026-06", new BigDecimal("3000000")),
-                new PublicMonthlyBudgetResponse(20L, "bob", "2026-06", new BigDecimal("2500000"))));
+        given(portfolioAggregationRepository.findPublicPortfolios(
+                eq(LocalDate.of(2026, 6, 1)),
+                eq(LocalDate.of(2026, 6, 30)),
+                eq("2026-06"),
+                eq(null), eq(null), eq(null), eq(null), eq(null), eq(null)))
+                .willReturn(List.of(
+                        new PublicPortfolioRow(10L, "alice",
+                                new BigDecimal("5000000"), new BigDecimal("2000000"), new BigDecimal("3000000")),
+                        new PublicPortfolioRow(20L, "bob",
+                                new BigDecimal("4000000"), BigDecimal.ZERO, new BigDecimal("2500000")),
+                        new PublicPortfolioRow(30L, "carol",
+                                BigDecimal.ZERO, new BigDecimal("1500000"), BigDecimal.ZERO)));
 
         // when
         List<PublicMonthlyPortfolioResponse> result = portfolioService.getPublicPortfolios(filter);
 
-        // then - 세 사용자 모두 포함되어야 함
+        // then
         assertThat(result).extracting(PublicMonthlyPortfolioResponse::userId)
-                .containsExactlyInAnyOrder(10L, 20L, 30L);
+                .containsExactly(10L, 20L, 30L);
 
-        PublicMonthlyPortfolioResponse alice = result.stream()
-                .filter(r -> r.userId().equals(10L)).findFirst().orElseThrow();
+        PublicMonthlyPortfolioResponse alice = result.get(0);
         assertThat(alice.totalIncome()).isEqualByComparingTo("5000000");
         assertThat(alice.totalExpense()).isEqualByComparingTo("2000000");
         assertThat(alice.totalBudget()).isEqualByComparingTo("3000000");
         assertThat(alice.balance()).isEqualByComparingTo("3000000");
 
-        // bob: 지출 데이터 없음 → 0으로 채워짐
-        PublicMonthlyPortfolioResponse bob = result.stream()
-                .filter(r -> r.userId().equals(20L)).findFirst().orElseThrow();
+        PublicMonthlyPortfolioResponse bob = result.get(1);
         assertThat(bob.totalExpense()).isEqualByComparingTo("0");
         assertThat(bob.balance()).isEqualByComparingTo("4000000");
 
-        // carol: 수입/예산 데이터 없음 → 0으로 채워짐
-        PublicMonthlyPortfolioResponse carol = result.stream()
-                .filter(r -> r.userId().equals(30L)).findFirst().orElseThrow();
+        PublicMonthlyPortfolioResponse carol = result.get(2);
         assertThat(carol.totalIncome()).isEqualByComparingTo("0");
         assertThat(carol.totalBudget()).isEqualByComparingTo("0");
         assertThat(carol.balance()).isEqualByComparingTo("-1500000");
     }
 
     @Test
-    @DisplayName("공개 사용자 포트폴리오 목록 - 수입/지출/예산 금액 구간으로 필터링")
+    @DisplayName("공개 사용자 포트폴리오 목록 - 금액 구간 필터를 그대로 Repository 에 전달")
     void getPublicPortfolios_filter_by_amount_ranges() {
 
-        // given - 수입 4_500_000 이상, 지출 2_500_000 이하만 통과
+        // given
         PortfolioFilterRequest filter = new PortfolioFilterRequest(
                 2026, 6,
                 new BigDecimal("4500000"), null,
                 null, new BigDecimal("2500000"),
                 null, null);
 
-        given(incomeCompareService.getPublicMonthlyIncomes(any())).willReturn(List.of(
-                new PublicMonthlyIncomeResponse(10L, "alice", "2026-06",
-                        new BigDecimal("5000000"), BigDecimal.ZERO, new BigDecimal("5000000")),
-                new PublicMonthlyIncomeResponse(20L, "bob", "2026-06",
-                        new BigDecimal("4000000"), BigDecimal.ZERO, new BigDecimal("4000000"))));
-        given(expenseCompareService.getPublicMonthlyExpenses(any())).willReturn(List.of(
-                new PublicMonthlyExpenseResponse(10L, "alice", "2026-06",
-                        new BigDecimal("2000000"), BigDecimal.ZERO, new BigDecimal("2000000")),
-                new PublicMonthlyExpenseResponse(20L, "bob", "2026-06",
-                        new BigDecimal("3000000"), BigDecimal.ZERO, new BigDecimal("3000000"))));
-        given(budgetCompareService.getPublicMonthlyBudgets(any())).willReturn(List.of());
+        given(portfolioAggregationRepository.findPublicPortfolios(
+                eq(LocalDate.of(2026, 6, 1)),
+                eq(LocalDate.of(2026, 6, 30)),
+                eq("2026-06"),
+                eq(new BigDecimal("4500000")), eq(null),
+                eq(null), eq(new BigDecimal("2500000")),
+                eq(null), eq(null)))
+                .willReturn(List.of(
+                        new PublicPortfolioRow(10L, "alice",
+                                new BigDecimal("5000000"), new BigDecimal("2000000"), BigDecimal.ZERO)));
 
         // when
         List<PublicMonthlyPortfolioResponse> result = portfolioService.getPublicPortfolios(filter);
 
-        // then - alice만 통과 (bob은 수입 미달이자 지출 초과)
+        // then
         assertThat(result).extracting(PublicMonthlyPortfolioResponse::userId).containsExactly(10L);
+        verify(portfolioAggregationRepository).findPublicPortfolios(
+                eq(LocalDate.of(2026, 6, 1)),
+                eq(LocalDate.of(2026, 6, 30)),
+                eq("2026-06"),
+                eq(new BigDecimal("4500000")), eq(null),
+                eq(null), eq(new BigDecimal("2500000")),
+                eq(null), eq(null));
     }
 
     @Test
