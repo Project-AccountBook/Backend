@@ -11,4 +11,7 @@ public interface TransactionCategoryRepository extends JpaRepository<Transaction
 
     @Query("SELECT c FROM TransactionCategory c WHERE c.user.id = :userId OR c.user IS NULL")
     List<TransactionCategory> findAllByUserOrSystem(@Param("userId") Long userId);
+
+    @Query("SELECT c.id FROM TransactionCategory c WHERE c.user IS NULL")
+    List<Long> findSystemCategoryIds();
 }

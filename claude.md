@@ -117,10 +117,15 @@
 
 ## 후속 작업 (TODO)
 
-### Compare 캐싱 Phase 2 — `@Scheduled` warm-up (follow-up)
-Phase 2 본체(그룹 평균 캐시 분리, user-mutation evict 제거)는 구현 완료. 후속 작업:
-- **`@Scheduled` 배치 추가**: 매일/매시간 그룹 평균을 미리 계산해 캐시 warm-up (대량 트래픽 대비). ShedLock 으로 다중 서버 중복 방지 (의사결정 #13 인프라 재사용)
-- **warm-up 키 정의 전략**: 모든 카테고리 / 활성 사용자 나이대 / 표준 금액 버킷에 대해 batch 호출. cache miss 응답 지연 감소
+### ShedLock 도입 — 의사결정 #13 인프라 정합화
+의사결정 #13 ("Spring @Scheduled + ShedLock") 의 ShedLock 부분이 코드에 미반영. 현재 영향 받는 스케줄러 2개:
+- `FixedTransactionScheduler` (#69) — 다중 서버 환경에서 중복 거래 생성 위험
+- `CompareCacheWarmupScheduler` — 중복 실행 시 correctness 영향은 없으나 redundant DB 쿼리 발생
+
+작업:
+- `shedlock-spring` + `shedlock-provider-jdbc-template` 의존성 추가
+- `shedlock` 테이블 + LockProvider 빈 + `@EnableSchedulerLock` 설정
+- 두 스케줄러 메서드에 `@SchedulerLock(name=..., lockAtMostFor=...)` 부착
 
 ### 운영 설정 정비 — Option B (Profile 분리 + Batch/HikariCP)
 최적화 백로그 우선순위 #4 의 안전 범위만 우선 진행. **Flyway 도입 및 OSIV 비활성화는 별도 이슈로 분리**.
@@ -180,7 +185,7 @@ Phase 2 본체(그룹 평균 캐시 분리, user-mutation evict 제거)는 구�
 
 #### 비동기 / 스케줄러
 - `global/config/AsyncConfig.java`: `@EnableAsync` 만 있고 `TaskExecutor` 빈 없음 → `SimpleAsyncTaskExecutor`(매 호출 새 스레드)로 동작. ES 인덱싱·알림 발송이 메인 풀 점유 가능. `ThreadPoolTaskExecutor` 빈 추가 필요.
-- **추가 `@Scheduled` 후보**: 조회수 동기화(의사결정 #4), 통계 배치(의사결정 #6) 미구현. 고정거래 자동 생성(#69)은 이미 도입됨.
+- **추가 `@Scheduled` 후보**: 조회수 동기화(의사결정 #4) 미구현. 고정거래 자동 생성(#69), Compare 캐시 warm-up(의사결정 #6) 은 이미 도입됨.
 
 #### Fetch 전략
 - `User`↔`UserSetting` 가 `@OneToOne(cascade)` 인데 fetch 미지정 → 기본 EAGER. 비교 쿼리마다 setting JOIN/즉시 로딩 발생. 명시적 LAZY + 필요 시점 fetch join 권장.
