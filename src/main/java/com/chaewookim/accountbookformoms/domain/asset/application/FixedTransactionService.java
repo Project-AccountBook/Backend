@@ -10,11 +10,8 @@ import com.chaewookim.accountbookformoms.domain.asset.entity.FixedTransaction;
 import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory;
 import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
-import com.chaewookim.accountbookformoms.global.config.RedisConfig;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,10 +26,6 @@ public class FixedTransactionService {
     private final AccountRepository accountRepository;
     private final TransactionCategoryRepository categoryRepository;
 
-    @Caching(evict = {
-            @CacheEvict(cacheNames = RedisConfig.CACHE_COMPARE_EXPENSE, allEntries = true),
-            @CacheEvict(cacheNames = RedisConfig.CACHE_COMPARE_INCOME, allEntries = true)
-    })
     @Transactional
     public Long createFixedTransaction(Long userId, User user, FixedTransactionRequest request) {
 
@@ -63,10 +56,6 @@ public class FixedTransactionService {
                 .toList();
     }
 
-    @Caching(evict = {
-            @CacheEvict(cacheNames = RedisConfig.CACHE_COMPARE_EXPENSE, allEntries = true),
-            @CacheEvict(cacheNames = RedisConfig.CACHE_COMPARE_INCOME, allEntries = true)
-    })
     @Transactional
     public void updateFixedTransaction(Long userId, Long id, FixedTransactionRequest request) {
 
@@ -80,20 +69,12 @@ public class FixedTransactionService {
         fixedTransaction.update(account, category, request);
     }
 
-    @Caching(evict = {
-            @CacheEvict(cacheNames = RedisConfig.CACHE_COMPARE_EXPENSE, allEntries = true),
-            @CacheEvict(cacheNames = RedisConfig.CACHE_COMPARE_INCOME, allEntries = true)
-    })
     @Transactional
     public void toggleActiveStatus(Long userId, Long id) {
         FixedTransaction fixedTransaction = validateAndGet(userId, id);
         fixedTransaction.toggleActive();
     }
 
-    @Caching(evict = {
-            @CacheEvict(cacheNames = RedisConfig.CACHE_COMPARE_EXPENSE, allEntries = true),
-            @CacheEvict(cacheNames = RedisConfig.CACHE_COMPARE_INCOME, allEntries = true)
-    })
     @Transactional
     public void deleteFixedTransaction(Long userId, Long id) {
         FixedTransaction fixedTransaction = validateAndGet(userId, id);

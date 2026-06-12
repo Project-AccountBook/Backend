@@ -24,9 +24,24 @@ import java.time.Duration;
 @EnableCaching
 public class RedisConfig {
 
-    public static final String CACHE_COMPARE_BUDGET = "compare:budget";
-    public static final String CACHE_COMPARE_EXPENSE = "compare:expense";
-    public static final String CACHE_COMPARE_INCOME = "compare:income";
+    // Phase 2: 그룹 평균 캐시 (userId 미포함 키 → cross-user hit)
+    public static final String CACHE_GROUP_BUDGET_AGE = "group:budget:age";
+    public static final String CACHE_GROUP_BUDGET_AMOUNT = "group:budget:amount";
+    public static final String CACHE_GROUP_BUDGET_CATEGORY = "group:budget:category";
+
+    public static final String CACHE_GROUP_EXPENSE_AGE_FIXED = "group:expense:age:fixed";
+    public static final String CACHE_GROUP_EXPENSE_AGE_VARIABLE = "group:expense:age:variable";
+    public static final String CACHE_GROUP_EXPENSE_AMOUNT_FIXED = "group:expense:amount:fixed";
+    public static final String CACHE_GROUP_EXPENSE_AMOUNT_VARIABLE = "group:expense:amount:variable";
+    public static final String CACHE_GROUP_EXPENSE_CATEGORY_FIXED = "group:expense:category:fixed";
+    public static final String CACHE_GROUP_EXPENSE_CATEGORY_VARIABLE = "group:expense:category:variable";
+
+    public static final String CACHE_GROUP_INCOME_AGE_FIXED = "group:income:age:fixed";
+    public static final String CACHE_GROUP_INCOME_AGE_VARIABLE = "group:income:age:variable";
+    public static final String CACHE_GROUP_INCOME_AMOUNT_FIXED = "group:income:amount:fixed";
+    public static final String CACHE_GROUP_INCOME_AMOUNT_VARIABLE = "group:income:amount:variable";
+    public static final String CACHE_GROUP_INCOME_CATEGORY_FIXED = "group:income:category:fixed";
+    public static final String CACHE_GROUP_INCOME_CATEGORY_VARIABLE = "group:income:category:variable";
 
     @Bean
     public RedisTemplate<String, String> redisTemplate(RedisConnectionFactory connectionFactory) {

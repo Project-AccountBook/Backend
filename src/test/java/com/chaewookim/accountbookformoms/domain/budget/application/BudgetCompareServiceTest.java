@@ -13,6 +13,7 @@ import com.chaewookim.accountbookformoms.domain.budget.entity.Budget;
 import com.chaewookim.accountbookformoms.domain.user.entity.UserSetting;
 import com.chaewookim.accountbookformoms.domain.budget.enums.BudgetCompareType;
 import com.chaewookim.accountbookformoms.domain.budget.error.BudgetErrorCode;
+import com.chaewookim.accountbookformoms.domain.budget.application.BudgetGroupCacheService.CategoryAggregation;
 import com.chaewookim.accountbookformoms.domain.user.application.UserLocationService;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
@@ -28,6 +29,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -52,6 +54,9 @@ class BudgetCompareServiceTest {
 
     @Mock
     private UserLocationService userLocationService;
+
+    @Mock
+    private BudgetGroupCacheService groupCache;
 
     @InjectMocks
     private BudgetCompareService budgetCompareService;
@@ -145,10 +150,12 @@ class BudgetCompareServiceTest {
         given(user.getId()).willReturn(1L);
         given(user.getBirthDate()).willReturn(LocalDate.of(LocalDate.now().getYear() - 35, 5, 1));
         given(userRepository.findById(1L)).willReturn(Optional.of(user));
-        given(budgetRepository.sumMonthlyTotalsByAgeRange(anyString(), any(LocalDate.class), any(LocalDate.class), anyLong()))
-                .willReturn(List.of(
-                        new Object[]{2L, new BigDecimal("400000")},
-                        new Object[]{3L, new BigDecimal("600000")}
+        // 그룹 캐시는 본인 포함 모든 공개 사용자 반환 → service 가 본인 제거
+        given(groupCache.getAgeGroupSums(anyString(), any(LocalDate.class), any(LocalDate.class)))
+                .willReturn(Map.of(
+                        1L, new BigDecimal("700000"),
+                        2L, new BigDecimal("400000"),
+                        3L, new BigDecimal("600000")
                 ));
         given(budgetRepository.sumTotalBudgetByUserIdAndYearMonth(1L, "2026-06"))
                 .willReturn(new BigDecimal("700000"));
@@ -189,8 +196,8 @@ class BudgetCompareServiceTest {
         User user = mock(User.class);
         given(user.getId()).willReturn(1L);
         given(userRepository.findById(1L)).willReturn(Optional.of(user));
-        given(budgetRepository.sumMonthlyTotalsByAmountRange(anyString(), any(), any(), anyLong()))
-                .willReturn(List.of());
+        given(groupCache.getAmountGroupSums(anyString(), any(), any()))
+                .willReturn(Map.of());
         given(budgetRepository.sumTotalBudgetByUserIdAndYearMonth(1L, "2026-06"))
                 .willReturn(new BigDecimal("250000"));
 
@@ -213,8 +220,10 @@ class BudgetCompareServiceTest {
         User user = mock(User.class);
         given(user.getId()).willReturn(1L);
         given(userRepository.findById(1L)).willReturn(Optional.of(user));
-        given(budgetRepository.averageCategoryBudget(anyString(), anyLong(), anyLong()))
-                .willReturn(new Object[]{new BigDecimal("250000"), 4L});
+        // 캐시는 본인 포함. 다른 4명 평균=250000 + 본인 300000 → sumAll = 1300000, count=5
+        // 서비스가 본인을 제외 → groupSum=1000000 / count=4 → avg 250000
+        given(groupCache.getCategoryAggregation(anyString(), anyLong()))
+                .willReturn(new CategoryAggregation(new BigDecimal("1300000"), 5L));
         given(budgetRepository.findMyCategoryBudget(anyLong(), anyString(), anyLong()))
                 .willReturn(new BigDecimal("300000"));
 
