@@ -9,8 +9,11 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface BudgetRepository extends JpaRepository<Budget, Long> {
+
+    Optional<Budget> findByUserIdAndYearMonthAndTransactionCategoryId(Long userId, String yearMonth, Long categoryId);
 
     @Query("""
             SELECT b
