@@ -1,9 +1,14 @@
 package com.chaewookim.accountbookformoms.domain.user.api;
 
 import com.chaewookim.accountbookformoms.domain.user.application.AuthService;
+import com.chaewookim.accountbookformoms.domain.user.application.EmailVerificationService;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.EmailRequest;
 import com.chaewookim.accountbookformoms.domain.user.dto.request.LoginRequest;
 import com.chaewookim.accountbookformoms.domain.user.dto.request.ReissueRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.ResetPasswordRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.VerifyRequest;
 import com.chaewookim.accountbookformoms.domain.user.dto.response.TokenResponse;
+import com.chaewookim.accountbookformoms.domain.user.enums.VerificationType;
 import com.chaewookim.accountbookformoms.global.common.ApiResponse;
 import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final EmailVerificationService emailVerificationService;
 
     @Operation(summary = "로그인", description = "이메일과 비밀번호로 로그인하고 토큰 발급")
     @PostMapping("/login")
@@ -39,6 +45,42 @@ public class AuthController {
             @RequestBody @Valid ReissueRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success(authService.reissue(request)));
+    }
+
+    @Operation(summary = "회원가입용 인증번호 발송", description = "회원가입을 위한 이메일 인증")
+    @PostMapping("/email/send/signup")
+    public ResponseEntity<ApiResponse<Void>> sendSignupCode(
+            @RequestBody @Valid EmailRequest request
+    ) {
+        emailVerificationService.sendVerificationCode(request.email(), VerificationType.SIGNUP);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @Operation(summary = "비밀번호 재설정용 인증번호 발송", description = "비밀번호 찾기를 위한 이메일 인증")
+    @PostMapping("/email/send/password")
+    public ResponseEntity<ApiResponse<Void>> sendPasswordCode(
+            @RequestBody @Valid EmailRequest request
+    ) {
+        authService.requestPasswordReset(request.email());
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @Operation(summary = "인증번호 검증", description = "회원가입/비밀번호 재설정 인증번호 확인")
+    @PostMapping("/email/verify")
+    public ResponseEntity<ApiResponse<Boolean>> verifyCode(
+            @RequestBody VerifyRequest request
+    ) {
+        boolean isSuccess = emailVerificationService.verifyCode(request.email(), request.code(), request.type());
+        return ResponseEntity.ok(ApiResponse.success(isSuccess));
+    }
+
+    @Operation(summary = "비밀번호 재설정", description = "인증번호 검증 후 비밀번호 변경")
+    @PostMapping("/password/reset")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(
+            @RequestBody @Valid ResetPasswordRequest request
+    ) {
+        authService.resetPassword(request.email(), request.code(), request.newPassword());
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @Operation(summary = "로그아웃", description = "토큰 삭제 후 로그아웃")
