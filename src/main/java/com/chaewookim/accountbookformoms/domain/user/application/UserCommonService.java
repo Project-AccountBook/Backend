@@ -22,7 +22,7 @@ public class UserCommonService {
     private final ApplicationEventPublisher eventPublisher;
 
     // 회원 저장
-    public User saveUser(String email, String password, String username, SocialProvider provider, LocalDate birthDate, String address) {
+    private User createBaseUser(String email, String password, String username, SocialProvider provider, LocalDate birthDate, String address) {
         User user = User.builder()
                 .email(email)
                 .password(password)
@@ -35,14 +35,19 @@ public class UserCommonService {
         user.setSettings(UserSetting.builder().user(user).build(),
                 UserNotificationSetting.builder().user(user).build());
 
-        User savedUser = userRepository.save(user);
+        return userRepository.save(user);
+    }
+
+    // 일반 회원가입
+    public User saveLocalUser(String email, String password, String username, SocialProvider provider, LocalDate birthDate, String address) {
+        User savedUser = createBaseUser(email, password, username, provider, birthDate, address);
         eventPublisher.publishEvent(new UserSignedUpEvent(savedUser.getId()));
         return savedUser;
     }
 
     // 소셜 로그인
     public User saveSocialUser(String email, String username, SocialProvider provider) {
-        return saveUser(email, null, username, provider, null, null);
+        return createBaseUser(email, null, username, provider, null, null);
     }
 
     // 탈퇴 후 재가입
