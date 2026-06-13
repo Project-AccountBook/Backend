@@ -72,6 +72,7 @@ public class UserService {
                 request.isInterestCategoryEnabled(),
                 request.isSystemAlertEnabled()
         );
+        user.updateLastBudgetAlertMonth(null);
     }
 
     @Transactional

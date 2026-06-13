@@ -68,4 +68,9 @@ public class Budget extends BaseEntity {
         this.totalBudget = totalBudget;
         this.expectedExpense = expectedExpense;
     }
+
+    public void update(BigDecimal totalBudget, BigDecimal expectedExpense) {
+        this.totalBudget = totalBudget;
+        this.expectedExpense = expectedExpense;
+    }
 }

@@ -64,6 +64,9 @@ public class User extends BaseEntity {
     @Column(nullable = true)
     private Double longitude;
 
+    @Column
+    private String lastBudgetAlertMonth;
+
     @Builder
     public User(String email, String password, String username, LocalDate birthDate, String address, UserRole role, SocialProvider provider, Double latitude, Double longitude) {
         this.email = email;
@@ -122,5 +125,9 @@ public class User extends BaseEntity {
         this.provider = (provider != null) ? provider : SocialProvider.LOCAL;
         this.latitude = latitude;
         this.longitude = longitude;
+    }
+
+    public void updateLastBudgetAlertMonth(String month) {
+        this.lastBudgetAlertMonth = month;
     }
 }

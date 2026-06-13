@@ -15,6 +15,29 @@ import java.util.List;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
 
+    @Query("""
+            SELECT COALESCE(SUM(t.amount), 0)
+              FROM Transaction t
+             WHERE t.user.id = :userId
+               AND t.type = TransactionType.EXPENSE
+               AND t.transactionCategory.id = :categoryId
+               AND t.transactionDate BETWEEN :startDate AND :endDate
+            """)
+    BigDecimal sumAmountByUserIdAndCategoryId(@Param("userId") Long userId,
+                                              @Param("categoryId") Long categoryId,
+                                              @Param("startDate") LocalDate startDate,
+                                              @Param("endDate") LocalDate endDate);
+
+    @Query("""
+    SELECT t.transactionCategory.id, SUM(ABS(t.amount))
+    FROM Transaction t
+    WHERE t.user.id = :userId
+      AND FUNCTION('DATE_FORMAT', t.transactionDate, '%Y-%m') = :yearMonth
+    GROUP BY t.transactionCategory.id
+    """)
+    List<Object[]> sumAmountByUserIdGroupByCategoryId(@Param("userId") Long userId,
+                                                      @Param("yearMonth") String yearMonth);
+
     /**
      * 사용자의 월별 변동(Transaction) 거래 카테고리별 합계.
      * 반환 컬럼: [categoryId, categoryName, sumAmount]

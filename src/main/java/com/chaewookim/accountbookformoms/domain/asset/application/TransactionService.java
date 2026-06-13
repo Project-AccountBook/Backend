@@ -10,8 +10,10 @@ import com.chaewookim.accountbookformoms.domain.asset.entity.Transaction;
 import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
+import com.chaewookim.accountbookformoms.domain.budget.event.BudgetExceededCheckEvent;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -20,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +32,7 @@ public class TransactionService {
     private final TransactionRepository transactionRepository;
     private final AccountRepository accountRepository;
     private final TransactionCategoryRepository categoryRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Long createTransaction(Long userId, TransactionRequest request) {
@@ -94,6 +98,11 @@ public class TransactionService {
                 .transactionDate(request.transactionDate())
                 .description(request.description())
                 .build();
+
+        if (request.type() == TransactionType.EXPENSE) {
+            String yearMonth = request.transactionDate().format(DateTimeFormatter.ofPattern("yyyy-MM"));
+            eventPublisher.publishEvent(new BudgetExceededCheckEvent(userAccount.getUser().getId(), yearMonth, request.categoryId()));
+        }
 
         return transactionRepository.save(transaction).getId();
     }
