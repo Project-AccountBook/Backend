@@ -241,10 +241,11 @@ class GroupPurchaseServiceTest {
                 .categoryId(3L)
                 .title("공구 상세 정보")
                 .minParticipants(5)
+                .maxParticipants(10)
                 .pickupLocation("서울시 마포구")
                 .imageUrl("http://image.com/test.jpg")
                 .build();
-        ReflectionTestUtils.setField(gp, "currentParticipants", 2); // 2/5 = 40.0%
+        ReflectionTestUtils.setField(gp, "currentParticipants", 2); // 2/10 = 20.0%
         ReflectionTestUtils.setField(gp, "viewCount", 0);
 
         given(groupPurchaseRepository.findById(101L)).willReturn(Optional.of(gp));
@@ -261,7 +262,7 @@ class GroupPurchaseServiceTest {
         // then
         assertThat(response.id()).isEqualTo(101L);
         assertThat(response.creatorNickname()).isEqualTo("개설자닉네임");
-        assertThat(response.achievementRate()).isEqualTo(40.0);
+        assertThat(response.achievementRate()).isEqualTo(20.0);
         assertThat(response.imageUrl()).isEqualTo("http://image.com/test.jpg");
         assertThat(gp.getViewCount()).isEqualTo(1); // 엔티티의 조회수가 1 증가했는지 검증
     }

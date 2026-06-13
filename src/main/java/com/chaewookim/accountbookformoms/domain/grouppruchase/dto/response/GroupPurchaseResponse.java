@@ -29,8 +29,8 @@ public record GroupPurchaseResponse(
     }
 
     public static GroupPurchaseResponse of(GroupPurchase groupPurchase, String creatorNickname) {
-        double rate = groupPurchase.getMinParticipants() == 0 ? 0.0 :
-                ((double) groupPurchase.getCurrentParticipants() / groupPurchase.getMinParticipants()) * 100.0;
+        double rate = groupPurchase.getMaxParticipants() == 0 ? 0.0 :
+                ((double) groupPurchase.getCurrentParticipants() / groupPurchase.getMaxParticipants()) * 100.0;
         rate = Math.round(rate * 100.0) / 100.0;
 
         return new GroupPurchaseResponse(
