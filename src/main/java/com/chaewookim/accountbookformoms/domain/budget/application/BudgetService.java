@@ -10,6 +10,7 @@ import com.chaewookim.accountbookformoms.domain.budget.dto.response.BudgetSummar
 import com.chaewookim.accountbookformoms.domain.budget.entity.Budget;
 import com.chaewookim.accountbookformoms.domain.budget.error.BudgetErrorCode;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
+import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -92,8 +93,9 @@ public class BudgetService {
 
         LocalDate startDate = LocalDate.parse(yearMonth + "-01");
         LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
-        BigDecimal totalActualExpenseSum = transactionRepository.sumByUserAndType(
-                userId, TransactionType.EXPENSE, startDate, endDate);
+
+        BigDecimal totalActualExpenseSum = transactionRepository.sumByUserAndType(userId, TransactionType.EXPENSE, startDate, endDate);
+        if (totalActualExpenseSum == null) totalActualExpenseSum = BigDecimal.ZERO;
 
         BigDecimal totalRemainingBudget = totalPlannedBudgetSum.subtract(totalActualExpenseSum);
 
@@ -104,15 +106,23 @@ public class BudgetService {
     public void updateBudget(Long userId, Long budgetId, BudgetRequest request) {
         Budget budget = validateAndGet(userId, budgetId);
         budget.update(request.totalBudget(), request.expectedExpense());
+
+        User user = userRepository.findById(userId).orElseThrow();
+        user.updateLastBudgetAlertMonth(null);
+        userRepository.save(user);
     }
 
     @Transactional
     public void deleteBudget(Long userId, Long budgetId) {
         Budget budget = validateAndGet(userId, budgetId);
         budgetRepository.delete(budget);
+
+        User user = userRepository.findById(userId).orElseThrow();
+        user.updateLastBudgetAlertMonth(null);
+        userRepository.save(user);
     }
 
-    // 공통 로직 분리
+    // 공통 검증 로직 분리
     private Budget validateAndGet(Long userId, Long budgetId) {
 
         Budget budget = budgetRepository.findById(budgetId)
@@ -128,5 +138,23 @@ public class BudgetService {
     private BigDecimal calculateProgress(BigDecimal total, BigDecimal actual) {
         if (total.compareTo(BigDecimal.ZERO) == 0) return BigDecimal.ZERO;
         return actual.divide(total, 2, RoundingMode.HALF_UP).multiply(new BigDecimal("100"));
+    }
+
+    // 카테고리별 예산 알림 생성 시 필요
+    public BigDecimal getCategoryProgress(Long userId, String yearMonth, Long categoryId) {
+
+        LocalDate startDate = LocalDate.parse(yearMonth + "-01");
+        LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
+
+        return budgetRepository.findByUserIdAndYearMonthAndTransactionCategoryId(userId, yearMonth, categoryId)
+                .map(budget -> {
+                    BigDecimal actualExpense = transactionRepository.sumAmountByUserIdAndCategoryId(userId, categoryId, startDate, endDate);
+
+                    if (actualExpense == null) actualExpense = BigDecimal.ZERO;
+
+                    BigDecimal totalPlanned = budget.getTotalBudget().add(budget.getExpectedExpense());
+                    return calculateProgress(totalPlanned, actualExpense);
+                })
+                .orElse(BigDecimal.ZERO);
     }
 }
