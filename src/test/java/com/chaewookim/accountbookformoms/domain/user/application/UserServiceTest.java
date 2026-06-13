@@ -9,6 +9,7 @@ import com.chaewookim.accountbookformoms.domain.user.dto.response.UserProfileRes
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.entity.UserNotificationSetting;
 import com.chaewookim.accountbookformoms.domain.user.entity.UserSetting;
+import com.chaewookim.accountbookformoms.domain.user.enums.VerificationType;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDate;
@@ -29,10 +32,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class UserServiceTest {
 
     @Mock
     private UserCommonService userCommonService;
+
+    @Mock
+    private EmailVerificationService emailVerificationService;
 
     @Mock
     private UserRepository userRepository;
@@ -51,16 +58,17 @@ class UserServiceTest {
         SignupRequest request = new SignupRequest("test@email.com", "pw", "user", LocalDate.now(), "address");
         User savedUser = User.builder().email("test@email.com").username("user").build();
 
+        given(emailVerificationService.isVerified(request.email(), VerificationType.SIGNUP)).willReturn(true);
         given(userRepository.findByEmailIncludingDeleted(request.email())).willReturn(Optional.empty());
         given(passwordEncoder.encode(request.password())).willReturn("encoded");
-        given(userCommonService.saveUser(any(), any(), any(), any(), any(), any())).willReturn(savedUser);
+        given(userCommonService.saveLocalUser(any(), any(), any(), any(), any(), any())).willReturn(savedUser);
 
         // when
         SignupResponse response = userService.signUp(request);
 
         // then
         assertThat(response.email()).isEqualTo(request.email());
-        verify(userCommonService).saveUser(any(), any(), any(), any(), any(), any());
+        verify(userCommonService).saveLocalUser(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -72,6 +80,7 @@ class UserServiceTest {
         User deletedUser = User.builder().email("test@email.com").build();
         deletedUser.delete();
 
+        given(emailVerificationService.isVerified(any(), any())).willReturn(true);
         given(userRepository.findByEmailIncludingDeleted(request.email())).willReturn(Optional.of(deletedUser));
         given(userCommonService.restoreUser(any(), any(), any(), any(), any())).willReturn(deletedUser);
 

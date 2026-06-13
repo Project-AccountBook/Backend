@@ -8,6 +8,7 @@ import com.chaewookim.accountbookformoms.domain.user.dto.response.TokenResponse;
 import com.chaewookim.accountbookformoms.domain.user.entity.RefreshToken;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.enums.UserRole;
+import com.chaewookim.accountbookformoms.domain.user.enums.VerificationType;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import com.chaewookim.accountbookformoms.global.security.jwt.JwtTokenProvider;
 import org.junit.jupiter.api.DisplayName;
@@ -28,6 +29,9 @@ import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
+
+    @Mock
+    private EmailVerificationService emailVerificationService;
 
     @Mock
     private RefreshTokenRepository refreshTokenRepository;
@@ -103,6 +107,59 @@ class AuthServiceTest {
 
         // when & then
         assertThatThrownBy(() -> authService.reissue(request)).isInstanceOf(CustomException.class);
+    }
+
+    @Test
+    @DisplayName("비밀번호 재설정 요청 - 성공")
+    void requestPasswordReset_success() {
+
+        // given
+        String email = "test@email.com";
+        User user = User.builder().email(email).build();
+        given(userRepository.findByEmail(email)).willReturn(Optional.of(user));
+
+        // when
+        authService.requestPasswordReset(email);
+
+        // then
+        verify(emailVerificationService).sendVerificationCode(email, VerificationType.RESET);
+    }
+
+    @Test
+    @DisplayName("비밀번호 재설정 - 성공")
+    void resetPassword_success() {
+
+        // given
+        String email = "test@email.com";
+        String code = "123456";
+        String newPassword = "newPassword123";
+        String encodedPassword = "encodedPassword";
+        User user = User.builder().email(email).password("old").build();
+
+        given(emailVerificationService.verifyCode(email, code, VerificationType.RESET)).willReturn(true);
+        given(userRepository.findByEmail(email)).willReturn(Optional.of(user));
+        given(encoder.encode(newPassword)).willReturn(encodedPassword);
+
+        // when
+        authService.resetPassword(email, code, newPassword);
+
+        // then
+        assertThat(user.getPassword()).isEqualTo(encodedPassword);
+        verify(emailVerificationService).deleteVerification(email, VerificationType.RESET);
+    }
+
+    @Test
+    @DisplayName("비밀번호 재설정 - 인증번호 불일치 예외")
+    void resetPassword_fail_invalid_code() {
+
+        // given
+        String email = "test@email.com";
+        String code = "wrong-code";
+        given(emailVerificationService.verifyCode(email, code, VerificationType.RESET)).willReturn(false);
+
+        // when & then
+        assertThatThrownBy(() -> authService.resetPassword(email, code, "newPassword"))
+                .isInstanceOf(CustomException.class);
     }
 
     @Test

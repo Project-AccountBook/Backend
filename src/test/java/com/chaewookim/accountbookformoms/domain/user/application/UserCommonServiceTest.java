@@ -40,7 +40,7 @@ class UserCommonServiceTest {
         given(userRepository.save(any(User.class))).willReturn(user);
 
         // when
-        User result = userCommonService.saveUser("test@email.com", "pw", "user", SocialProvider.LOCAL, LocalDate.now(), "address");
+        User result = userCommonService.saveLocalUser("test@email.com", "pw", "user", SocialProvider.LOCAL, LocalDate.now(), "address");
 
         // then
         assertThat(result).isNotNull();
