@@ -101,4 +101,24 @@ public class GroupPurchaseController {
         Page<GroupPurchaseResponse> response = groupPurchaseService.getWishedGroupPurchases(userPrincipal.getUserId(), pageable);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
+
+    @Operation(summary = "공동구매 참여", description = "공동구매 글에 참여 신청합니다.")
+    @PostMapping("/{id}/join")
+    public ResponseEntity<ApiResponse<GroupPurchaseResponse>> join(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        GroupPurchaseResponse response = groupPurchaseService.joinGroupPurchase(userPrincipal.getUserId(), id);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(summary = "공동구매 참여 취소", description = "공동구매 참여 신청을 취소합니다.")
+    @PostMapping("/{id}/leave")
+    public ResponseEntity<ApiResponse<GroupPurchaseResponse>> leave(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        GroupPurchaseResponse response = groupPurchaseService.leaveGroupPurchase(userPrincipal.getUserId(), id);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
 }

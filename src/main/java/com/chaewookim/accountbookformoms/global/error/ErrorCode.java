@@ -55,7 +55,13 @@ public enum ErrorCode implements BaseErrorCode {
     // 신고 관련 에러
     REPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 신고 내역을 찾을 수 없습니다."),
     REPORT_ALREADY_PROCESSED(HttpStatus.BAD_REQUEST, "이미 처리된 신고 내역입니다."),
-    INVALID_REPORT_TARGET(HttpStatus.BAD_REQUEST, "신고 대상이 올바르지 않거나 존재하지 않습니다.");
+    INVALID_REPORT_TARGET(HttpStatus.BAD_REQUEST, "신고 대상이 올바르지 않거나 존재하지 않습니다."),
+
+    // 공동구매 참여 관련 에러
+    GROUP_PURCHASE_ALREADY_JOINED(HttpStatus.BAD_REQUEST, "이미 참여 중인 공동구매입니다."),
+    GROUP_PURCHASE_NOT_JOINED(HttpStatus.BAD_REQUEST, "참여하지 않은 공동구매입니다."),
+    GROUP_PURCHASE_FULL(HttpStatus.BAD_REQUEST, "모집 인원이 마감되었습니다."),
+    GROUP_PURCHASE_NOT_RECRUITING(HttpStatus.BAD_REQUEST, "현재 모집 중인 공동구매가 아닙니다.");
 
 
     private final HttpStatus status;

@@ -2,14 +2,14 @@ package com.chaewookim.accountbookformoms.domain.grouppruchase.application;
 
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseRepository;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseCategoryRepository;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseParticipantRepository;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.ReportRepository;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.GroupPurchase;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.GroupPurchaseParticipant;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.Category;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.PurchaseStatus;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.ReportTargetType;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.WishlistRepository;
-import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.GroupPurchase;
-import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.Category;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.Wishlist;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.PurchaseStatus;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.ReportTargetType;
@@ -60,6 +60,9 @@ class GroupPurchaseServiceTest {
 
     @Mock
     private WishlistRepository wishlistRepository;
+
+    @Mock
+    private GroupPurchaseParticipantRepository groupPurchaseParticipantRepository;
 
     @InjectMocks
     private GroupPurchaseService groupPurchaseService;
@@ -277,5 +280,131 @@ class GroupPurchaseServiceTest {
         assertThatThrownBy(() -> groupPurchaseService.getGroupPurchase(999L))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.GROUP_PURCHASE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("공동구매 참여 성공 — 정상 참여 및 참여자 수 증가, 100% 미만 시 RECRUITING 유지")
+    void joinGroupPurchase_success() {
+        // given
+        GroupPurchase gp = GroupPurchase.builder()
+                .id(101L)
+                .creatorId(2L)
+                .maxParticipants(10)
+                .build();
+        ReflectionTestUtils.setField(gp, "currentParticipants", 1);
+        ReflectionTestUtils.setField(gp, "status", PurchaseStatus.RECRUITING);
+
+        given(groupPurchaseRepository.findById(101L)).willReturn(Optional.of(gp));
+        given(groupPurchaseParticipantRepository.existsByGroupPurchaseIdAndUserId(101L, 3L)).willReturn(false);
+
+        User creator = User.forTestBuilder().id(2L).username("개설자").build();
+        given(userRepository.findById(2L)).willReturn(Optional.of(creator));
+
+        // when
+        GroupPurchaseResponse response = groupPurchaseService.joinGroupPurchase(3L, 101L);
+
+        // then
+        assertThat(response.currentParticipants()).isEqualTo(2);
+        assertThat(response.status()).isEqualTo(PurchaseStatus.RECRUITING);
+        verify(groupPurchaseParticipantRepository).save(any(GroupPurchaseParticipant.class));
+    }
+
+    @Test
+    @DisplayName("공동구매 참여 성공 — 참여로 정원 도달 시 SUCCESS 상태 변경")
+    void joinGroupPurchase_reach_max_success() {
+        // given
+        GroupPurchase gp = GroupPurchase.builder()
+                .id(101L)
+                .creatorId(2L)
+                .maxParticipants(5)
+                .build();
+        ReflectionTestUtils.setField(gp, "currentParticipants", 4);
+        ReflectionTestUtils.setField(gp, "status", PurchaseStatus.RECRUITING);
+
+        given(groupPurchaseRepository.findById(101L)).willReturn(Optional.of(gp));
+        given(groupPurchaseParticipantRepository.existsByGroupPurchaseIdAndUserId(101L, 3L)).willReturn(false);
+
+        User creator = User.forTestBuilder().id(2L).username("개설자").build();
+        given(userRepository.findById(2L)).willReturn(Optional.of(creator));
+
+        // when
+        GroupPurchaseResponse response = groupPurchaseService.joinGroupPurchase(3L, 101L);
+
+        // then
+        assertThat(response.currentParticipants()).isEqualTo(5);
+        assertThat(response.status()).isEqualTo(PurchaseStatus.SUCCESS);
+    }
+
+    @Test
+    @DisplayName("공동구매 참여 실패 — 정원 가득 참")
+    void joinGroupPurchase_full_fail() {
+        // given
+        GroupPurchase gp = GroupPurchase.builder()
+                .id(101L)
+                .creatorId(2L)
+                .maxParticipants(5)
+                .build();
+        ReflectionTestUtils.setField(gp, "currentParticipants", 5);
+        ReflectionTestUtils.setField(gp, "status", PurchaseStatus.RECRUITING);
+
+        given(groupPurchaseRepository.findById(101L)).willReturn(Optional.of(gp));
+
+        // when & then
+        assertThatThrownBy(() -> groupPurchaseService.joinGroupPurchase(3L, 101L))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.GROUP_PURCHASE_FULL);
+    }
+
+    @Test
+    @DisplayName("공동구매 참여 실패 — 이미 참여한 회원")
+    void joinGroupPurchase_alreadyJoined_fail() {
+        // given
+        GroupPurchase gp = GroupPurchase.builder()
+                .id(101L)
+                .creatorId(2L)
+                .maxParticipants(10)
+                .build();
+        ReflectionTestUtils.setField(gp, "status", PurchaseStatus.RECRUITING);
+
+        given(groupPurchaseRepository.findById(101L)).willReturn(Optional.of(gp));
+        given(groupPurchaseParticipantRepository.existsByGroupPurchaseIdAndUserId(101L, 3L)).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> groupPurchaseService.joinGroupPurchase(3L, 101L))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.GROUP_PURCHASE_ALREADY_JOINED);
+    }
+
+    @Test
+    @DisplayName("공동구매 참여 취소 성공 — 취소 시 RECRUITING 상태 복구 검증")
+    void leaveGroupPurchase_success() {
+        // given
+        GroupPurchase gp = GroupPurchase.builder()
+                .id(101L)
+                .creatorId(2L)
+                .maxParticipants(5)
+                .deadline(LocalDateTime.now().plusDays(2))
+                .build();
+        ReflectionTestUtils.setField(gp, "currentParticipants", 5);
+        ReflectionTestUtils.setField(gp, "status", PurchaseStatus.SUCCESS);
+
+        given(groupPurchaseRepository.findById(101L)).willReturn(Optional.of(gp));
+
+        GroupPurchaseParticipant participant = GroupPurchaseParticipant.builder()
+                .groupPurchaseId(101L)
+                .userId(3L)
+                .build();
+        given(groupPurchaseParticipantRepository.findByGroupPurchaseIdAndUserId(101L, 3L)).willReturn(Optional.of(participant));
+
+        User creator = User.forTestBuilder().id(2L).username("개설자").build();
+        given(userRepository.findById(2L)).willReturn(Optional.of(creator));
+
+        // when
+        GroupPurchaseResponse response = groupPurchaseService.leaveGroupPurchase(3L, 101L);
+
+        // then
+        assertThat(response.currentParticipants()).isEqualTo(4);
+        assertThat(response.status()).isEqualTo(PurchaseStatus.RECRUITING);
+        verify(groupPurchaseParticipantRepository).delete(participant);
     }
 }

@@ -111,4 +111,20 @@ public class GroupPurchase extends BaseEntity {
     public void increaseViewCount() {
         this.viewCount++;
     }
+
+    public void join() {
+        this.currentParticipants++;
+        if (this.currentParticipants >= this.maxParticipants) {
+            this.status = PurchaseStatus.SUCCESS;
+        }
+    }
+
+    public void leave() {
+        if (this.currentParticipants > 0) {
+            this.currentParticipants--;
+        }
+        if (this.status == PurchaseStatus.SUCCESS && this.currentParticipants < this.maxParticipants) {
+            this.status = PurchaseStatus.RECRUITING;
+        }
+    }
 }
