@@ -2,9 +2,11 @@ package com.chaewookim.accountbookformoms.domain.grouppruchase.application;
 
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseRepository;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseCategoryRepository;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseParticipantRepository;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.ReportRepository;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.WishlistRepository;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.GroupPurchase;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.GroupPurchaseParticipant;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.Category;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.Wishlist;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.PurchaseStatus;
@@ -43,6 +45,7 @@ public class GroupPurchaseService {
     private final GroupPurchaseCategoryRepository groupPurchaseCategoryRepository;
     private final ReportRepository reportRepository;
     private final WishlistRepository wishlistRepository;
+    private final GroupPurchaseParticipantRepository groupPurchaseParticipantRepository;
 
     @Transactional
     public GroupPurchaseResponse createGroupPurchase(Long creatorId, GroupPurchaseCreateRequest request) {
@@ -272,5 +275,64 @@ public class GroupPurchaseService {
             String nickname = nicknameMap.getOrDefault(gp.getCreatorId(), "탈퇴한 사용자");
             return GroupPurchaseResponse.of(gp, nickname);
         });
+    }
+
+    @Transactional
+    public GroupPurchaseResponse joinGroupPurchase(Long userId, Long groupPurchaseId) {
+        GroupPurchase groupPurchase = groupPurchaseRepository.findById(groupPurchaseId)
+                .orElseThrow(() -> new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND));
+
+        if (groupPurchase.getStatus() != PurchaseStatus.RECRUITING) {
+            throw new CustomException(ErrorCode.GROUP_PURCHASE_NOT_RECRUITING);
+        }
+
+        if (groupPurchaseParticipantRepository.existsByGroupPurchaseIdAndUserId(groupPurchaseId, userId)) {
+            throw new CustomException(ErrorCode.GROUP_PURCHASE_ALREADY_JOINED);
+        }
+
+        if (groupPurchase.getCurrentParticipants() >= groupPurchase.getMaxParticipants()) {
+            throw new CustomException(ErrorCode.GROUP_PURCHASE_FULL);
+        }
+
+        GroupPurchaseParticipant participant = GroupPurchaseParticipant.builder()
+                .groupPurchaseId(groupPurchaseId)
+                .userId(userId)
+                .build();
+        groupPurchaseParticipantRepository.save(participant);
+
+        groupPurchase.join();
+
+        String creatorNickname = userRepository.findById(groupPurchase.getCreatorId())
+                .map(User::getUsername)
+                .orElse("탈퇴한 사용자");
+
+        return GroupPurchaseResponse.of(groupPurchase, creatorNickname);
+    }
+
+    @Transactional
+    public GroupPurchaseResponse leaveGroupPurchase(Long userId, Long groupPurchaseId) {
+        GroupPurchase groupPurchase = groupPurchaseRepository.findById(groupPurchaseId)
+                .orElseThrow(() -> new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND));
+
+        if (groupPurchase.getStatus() != PurchaseStatus.RECRUITING && groupPurchase.getStatus() != PurchaseStatus.SUCCESS) {
+            throw new CustomException(ErrorCode.GROUP_PURCHASE_NOT_RECRUITING);
+        }
+
+        if (groupPurchase.getDeadline().isBefore(LocalDateTime.now())) {
+            throw new CustomException(ErrorCode.GROUP_PURCHASE_NOT_RECRUITING);
+        }
+
+        GroupPurchaseParticipant participant = groupPurchaseParticipantRepository.findByGroupPurchaseIdAndUserId(groupPurchaseId, userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.GROUP_PURCHASE_NOT_JOINED));
+
+        groupPurchaseParticipantRepository.delete(participant);
+
+        groupPurchase.leave();
+
+        String creatorNickname = userRepository.findById(groupPurchase.getCreatorId())
+                .map(User::getUsername)
+                .orElse("탈퇴한 사용자");
+
+        return GroupPurchaseResponse.of(groupPurchase, creatorNickname);
     }
 }
