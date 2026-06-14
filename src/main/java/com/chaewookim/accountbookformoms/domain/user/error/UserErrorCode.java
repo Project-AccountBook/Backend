@@ -19,7 +19,8 @@ public enum UserErrorCode implements BaseErrorCode {
     LOCATION_NOT_REGISTERED(HttpStatus.NOT_FOUND, "등록된 위치 정보가 없습니다."),
     EMAIL_NOT_VERIFIED(HttpStatus.UNAUTHORIZED, "이메일 인증이 완료되지 않았습니다."),
     INVALID_VERIFICATION_CODE(HttpStatus.BAD_REQUEST, "인증 번호가 올바르지 않거나 만료되었습니다."),
-    TOO_MANY_REQUESTS(HttpStatus.TOO_MANY_REQUESTS, "너무 많은 요청입니다. 잠시 후 다시 시도해주세요.");;
+    TOO_MANY_REQUESTS(HttpStatus.TOO_MANY_REQUESTS, "너무 많은 요청입니다. 잠시 후 다시 시도해주세요."),
+    ALREADY_EXIST_CATEGORY(HttpStatus.CONFLICT, "이미 등록된 관심 카테고리입니다.");
 
     private final HttpStatus status;
     private final String message;
