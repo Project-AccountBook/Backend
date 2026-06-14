@@ -16,6 +16,28 @@ import java.util.List;
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
 
     @Query("""
+            SELECT t.transactionCategory.name, SUM(ABS(t.amount))
+              FROM Transaction t
+             WHERE t.user.id = :userId
+               AND t.type = 'EXPENSE'
+               AND FUNCTION('DATE_FORMAT', t.transactionDate, '%Y-%m') = :yearMonth
+             GROUP BY t.transactionCategory.name
+            """)
+    List<Object[]> sumCategoryExpense(@Param("userId") Long userId, @Param("yearMonth") String yearMonth);
+
+    @Query("""
+            SELECT FUNCTION('DATE_FORMAT', t.transactionDate, '%Y-%m') as ym,
+                   SUM(CASE WHEN t.type = 'INCOME' THEN t.amount ELSE 0 END) as totalIncome,
+                   SUM(CASE WHEN t.type = 'EXPENSE' THEN ABS(t.amount) ELSE 0 END) as totalExpense
+              FROM Transaction t
+             WHERE t.user.id = :userId
+               AND t.transactionDate >= :sixMonthsAgo
+             GROUP BY FUNCTION('DATE_FORMAT', t.transactionDate, '%Y-%m')
+             ORDER BY ym ASC
+            """)
+    List<Object[]> sumMonthlyTrends(@Param("userId") Long userId, @Param("sixMonthsAgo") LocalDate sixMonthsAgo);
+
+    @Query("""
             SELECT COALESCE(SUM(t.amount), 0)
               FROM Transaction t
              WHERE t.user.id = :userId
