@@ -13,6 +13,7 @@ import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
 import com.chaewookim.accountbookformoms.domain.budget.event.BudgetExceededCheckEvent;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -35,6 +36,7 @@ public class TransactionService {
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @CacheEvict(value = "dashboard", key = "#userId + ':' + #request.transactionDate.format(T(java.time.format.DateTimeFormatter).ofPattern('yyyy-MM'))")
     public Long createTransaction(Long userId, TransactionRequest request) {
         if (request.type() == TransactionType.TRANSFER) {
             return createTransferTransaction(userId, request);
@@ -119,6 +121,7 @@ public class TransactionService {
     }
 
     @Transactional
+    @CacheEvict(value = "dashboard", key = "#userId + ':' + #transaction.transactionDate.format(T(java.time.format.DateTimeFormatter).ofPattern('yyyy-MM'))")
     public void updateTransaction(Long userId, Long transactionId, TransactionRequest request) {
 
         Transaction transaction = validateAndGet(userId, transactionId);
@@ -135,6 +138,7 @@ public class TransactionService {
     }
 
     @Transactional
+    @CacheEvict(value = "dashboard", key = "#userId + ':' + #transaction.transactionDate.format(T(java.time.format.DateTimeFormatter).ofPattern('yyyy-MM'))")
     public void deleteTransaction(Long userId, Long transactionId) {
 
         Transaction transaction = validateAndGet(userId, transactionId);

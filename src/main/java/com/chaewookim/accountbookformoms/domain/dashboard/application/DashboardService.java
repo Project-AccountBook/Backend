@@ -7,6 +7,7 @@ import com.chaewookim.accountbookformoms.domain.dashboard.dto.response.Dashboard
 import com.chaewookim.accountbookformoms.domain.dashboard.dto.response.MonthlyTrendResponse;
 import com.chaewookim.accountbookformoms.domain.dashboard.dto.response.SummaryResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +25,7 @@ public class DashboardService {
     private final BudgetService budgetService;
     private final TransactionRepository transactionRepository;
 
+    @Cacheable(value = "dashboard", key = "#userId + ':' + #yearMonth")
     public DashboardResponse getDashboard(Long userId, String yearMonth) {
 
         // 카테고리별 지출 통계
