@@ -1,5 +1,6 @@
 package com.chaewookim.accountbookformoms.domain.user.entity;
 
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.Category;
 import com.chaewookim.accountbookformoms.global.entity.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -31,16 +32,17 @@ public class InterestCategory extends BaseEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(nullable = false)
-    private String coopCategoryName;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id", nullable = false)
+    private Category category;
 
     @Column(nullable = false)
     private boolean isAlarmEnabled;
 
     @Builder
-    public InterestCategory(User user, String coopCategoryName, boolean isAlarmEnabled) {
+    public InterestCategory(User user, Category category, boolean isAlarmEnabled) {
         this.user = user;
-        this.coopCategoryName = coopCategoryName;
+        this.category = category;
         this.isAlarmEnabled = isAlarmEnabled;
     }
 
