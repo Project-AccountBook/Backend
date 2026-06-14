@@ -1,5 +1,8 @@
 package com.chaewookim.accountbookformoms.domain.grouppruchase.application;
 
+import com.chaewookim.accountbookformoms.domain.budget.dao.BudgetRepository;
+import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionRepository;
+import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseRepository;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseCategoryRepository;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseParticipantRepository;
@@ -14,8 +17,11 @@ import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.Repor
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseCreateRequest;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseUpdateRequest;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseResponse;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseJoinResponse;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseDashboardResponse;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseAdminResponse;
+import java.math.BigDecimal;
+import java.time.YearMonth;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
@@ -46,6 +52,8 @@ public class GroupPurchaseService {
     private final ReportRepository reportRepository;
     private final WishlistRepository wishlistRepository;
     private final GroupPurchaseParticipantRepository groupPurchaseParticipantRepository;
+    private final BudgetRepository budgetRepository;
+    private final TransactionRepository transactionRepository;
 
     @Transactional
     public GroupPurchaseResponse createGroupPurchase(Long creatorId, GroupPurchaseCreateRequest request) {
@@ -278,7 +286,7 @@ public class GroupPurchaseService {
     }
 
     @Transactional
-    public GroupPurchaseResponse joinGroupPurchase(Long userId, Long groupPurchaseId) {
+    public GroupPurchaseJoinResponse joinGroupPurchase(Long userId, Long groupPurchaseId) {
         GroupPurchase groupPurchase = groupPurchaseRepository.findById(groupPurchaseId)
                 .orElseThrow(() -> new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND));
 
@@ -306,7 +314,36 @@ public class GroupPurchaseService {
                 .map(User::getUsername)
                 .orElse("탈퇴한 사용자");
 
-        return GroupPurchaseResponse.of(groupPurchase, creatorNickname);
+        GroupPurchaseResponse groupPurchaseResponse = GroupPurchaseResponse.of(groupPurchase, creatorNickname);
+
+        boolean budgetWarning = false;
+        BigDecimal remainingBudget = BigDecimal.ZERO;
+
+        String currentYearMonth = YearMonth.now().toString();
+        List<com.chaewookim.accountbookformoms.domain.budget.entity.Budget> budgets =
+                budgetRepository.findByUserIdAndYearMonth(userId, currentYearMonth);
+
+        if (!budgets.isEmpty()) {
+            BigDecimal totalPlannedBudgetSum = budgets.stream()
+                    .map(budget -> budget.getTotalBudget().add(budget.getExpectedExpense()))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            LocalDate startDate = LocalDate.parse(currentYearMonth + "-01");
+            LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
+            BigDecimal totalActualExpenseSum = transactionRepository.sumByUserAndType(userId, TransactionType.EXPENSE, startDate, endDate);
+            if (totalActualExpenseSum == null) {
+                totalActualExpenseSum = BigDecimal.ZERO;
+            }
+
+            remainingBudget = totalPlannedBudgetSum.subtract(totalActualExpenseSum);
+
+            BigDecimal purchasePrice = BigDecimal.valueOf(groupPurchase.getPrice());
+            if (remainingBudget.compareTo(purchasePrice) < 0) {
+                budgetWarning = true;
+            }
+        }
+
+        return new GroupPurchaseJoinResponse(groupPurchaseResponse, budgetWarning, remainingBudget);
     }
 
     @Transactional
