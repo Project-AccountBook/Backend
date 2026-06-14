@@ -1,6 +1,10 @@
 package com.chaewookim.accountbookformoms.domain.grouppruchase.application;
 
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseRepository;
+import com.chaewookim.accountbookformoms.domain.budget.dao.BudgetRepository;
+import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionRepository;
+import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseJoinResponse;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseCategoryRepository;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseParticipantRepository;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.ReportRepository;
@@ -11,6 +15,9 @@ import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.Purch
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.ReportTargetType;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.WishlistRepository;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.Wishlist;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.YearMonth;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.PurchaseStatus;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.ReportTargetType;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseResponse;
@@ -40,6 +47,7 @@ import java.time.LocalDateTime;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
@@ -63,6 +71,12 @@ class GroupPurchaseServiceTest {
 
     @Mock
     private GroupPurchaseParticipantRepository groupPurchaseParticipantRepository;
+
+    @Mock
+    private BudgetRepository budgetRepository;
+
+    @Mock
+    private TransactionRepository transactionRepository;
 
     @InjectMocks
     private GroupPurchaseService groupPurchaseService;
@@ -296,16 +310,17 @@ class GroupPurchaseServiceTest {
 
         given(groupPurchaseRepository.findById(101L)).willReturn(Optional.of(gp));
         given(groupPurchaseParticipantRepository.existsByGroupPurchaseIdAndUserId(101L, 3L)).willReturn(false);
+        given(budgetRepository.findByUserIdAndYearMonth(any(), any())).willReturn(List.of());
 
         User creator = User.forTestBuilder().id(2L).username("개설자").build();
         given(userRepository.findById(2L)).willReturn(Optional.of(creator));
 
         // when
-        GroupPurchaseResponse response = groupPurchaseService.joinGroupPurchase(3L, 101L);
+        GroupPurchaseJoinResponse response = groupPurchaseService.joinGroupPurchase(3L, 101L);
 
         // then
-        assertThat(response.currentParticipants()).isEqualTo(2);
-        assertThat(response.status()).isEqualTo(PurchaseStatus.RECRUITING);
+        assertThat(response.groupPurchase().currentParticipants()).isEqualTo(2);
+        assertThat(response.groupPurchase().status()).isEqualTo(PurchaseStatus.RECRUITING);
         verify(groupPurchaseParticipantRepository).save(any(GroupPurchaseParticipant.class));
     }
 
@@ -323,16 +338,17 @@ class GroupPurchaseServiceTest {
 
         given(groupPurchaseRepository.findById(101L)).willReturn(Optional.of(gp));
         given(groupPurchaseParticipantRepository.existsByGroupPurchaseIdAndUserId(101L, 3L)).willReturn(false);
+        given(budgetRepository.findByUserIdAndYearMonth(any(), any())).willReturn(List.of());
 
         User creator = User.forTestBuilder().id(2L).username("개설자").build();
         given(userRepository.findById(2L)).willReturn(Optional.of(creator));
 
         // when
-        GroupPurchaseResponse response = groupPurchaseService.joinGroupPurchase(3L, 101L);
+        GroupPurchaseJoinResponse response = groupPurchaseService.joinGroupPurchase(3L, 101L);
 
         // then
-        assertThat(response.currentParticipants()).isEqualTo(5);
-        assertThat(response.status()).isEqualTo(PurchaseStatus.SUCCESS);
+        assertThat(response.groupPurchase().currentParticipants()).isEqualTo(5);
+        assertThat(response.groupPurchase().status()).isEqualTo(PurchaseStatus.SUCCESS);
     }
 
     @Test
@@ -406,5 +422,85 @@ class GroupPurchaseServiceTest {
         assertThat(response.currentParticipants()).isEqualTo(4);
         assertThat(response.status()).isEqualTo(PurchaseStatus.RECRUITING);
         verify(groupPurchaseParticipantRepository).delete(participant);
+    }
+
+    @Test
+    @DisplayName("공동구매 참여 성공 — 가계부 예산 설정되어 있으나 잔액 부족 시 budgetWarning = true 확인")
+    void joinGroupPurchase_budgetWarning_true() {
+        // given
+        GroupPurchase gp = GroupPurchase.builder()
+                .id(101L)
+                .creatorId(2L)
+                .price(50000)
+                .maxParticipants(10)
+                .build();
+        ReflectionTestUtils.setField(gp, "currentParticipants", 1);
+        ReflectionTestUtils.setField(gp, "status", PurchaseStatus.RECRUITING);
+
+        given(groupPurchaseRepository.findById(101L)).willReturn(Optional.of(gp));
+        given(groupPurchaseParticipantRepository.existsByGroupPurchaseIdAndUserId(101L, 3L)).willReturn(false);
+
+        User creator = User.forTestBuilder().id(2L).username("개설자").build();
+        given(userRepository.findById(2L)).willReturn(Optional.of(creator));
+
+        com.chaewookim.accountbookformoms.domain.budget.entity.Budget budget =
+                com.chaewookim.accountbookformoms.domain.budget.entity.Budget.builder()
+                        .totalBudget(BigDecimal.valueOf(80000))
+                        .expectedExpense(BigDecimal.valueOf(20000))
+                        .build();
+
+        String currentYearMonth = YearMonth.now().toString();
+        given(budgetRepository.findByUserIdAndYearMonth(3L, currentYearMonth)).willReturn(List.of(budget));
+
+        given(transactionRepository.sumByUserAndType(eq(3L), eq(TransactionType.EXPENSE), any(LocalDate.class), any(LocalDate.class)))
+                .willReturn(BigDecimal.valueOf(90000));
+
+        // when
+        GroupPurchaseJoinResponse response = groupPurchaseService.joinGroupPurchase(3L, 101L);
+
+        // then
+        assertThat(response.budgetWarning()).isTrue();
+        assertThat(response.remainingBudget()).isEqualByComparingTo(BigDecimal.valueOf(10000));
+        assertThat(response.groupPurchase().currentParticipants()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("공동구매 참여 성공 — 가계부 예산이 충분하여 budgetWarning = false 확인")
+    void joinGroupPurchase_budgetWarning_false() {
+        // given
+        GroupPurchase gp = GroupPurchase.builder()
+                .id(101L)
+                .creatorId(2L)
+                .price(10000)
+                .maxParticipants(10)
+                .build();
+        ReflectionTestUtils.setField(gp, "currentParticipants", 1);
+        ReflectionTestUtils.setField(gp, "status", PurchaseStatus.RECRUITING);
+
+        given(groupPurchaseRepository.findById(101L)).willReturn(Optional.of(gp));
+        given(groupPurchaseParticipantRepository.existsByGroupPurchaseIdAndUserId(101L, 3L)).willReturn(false);
+
+        User creator = User.forTestBuilder().id(2L).username("개설자").build();
+        given(userRepository.findById(2L)).willReturn(Optional.of(creator));
+
+        com.chaewookim.accountbookformoms.domain.budget.entity.Budget budget =
+                com.chaewookim.accountbookformoms.domain.budget.entity.Budget.builder()
+                        .totalBudget(BigDecimal.valueOf(80000))
+                        .expectedExpense(BigDecimal.valueOf(20000))
+                        .build();
+
+        String currentYearMonth = YearMonth.now().toString();
+        given(budgetRepository.findByUserIdAndYearMonth(3L, currentYearMonth)).willReturn(List.of(budget));
+
+        given(transactionRepository.sumByUserAndType(eq(3L), eq(TransactionType.EXPENSE), any(LocalDate.class), any(LocalDate.class)))
+                .willReturn(BigDecimal.valueOf(50000));
+
+        // when
+        GroupPurchaseJoinResponse response = groupPurchaseService.joinGroupPurchase(3L, 101L);
+
+        // then
+        assertThat(response.budgetWarning()).isFalse();
+        assertThat(response.remainingBudget()).isEqualByComparingTo(BigDecimal.valueOf(50000));
+        assertThat(response.groupPurchase().currentParticipants()).isEqualTo(2);
     }
 }

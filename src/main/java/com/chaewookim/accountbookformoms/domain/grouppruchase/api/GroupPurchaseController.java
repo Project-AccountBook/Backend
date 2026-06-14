@@ -4,6 +4,7 @@ import com.chaewookim.accountbookformoms.domain.grouppruchase.application.GroupP
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseCreateRequest;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseUpdateRequest;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseResponse;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseJoinResponse;
 import com.chaewookim.accountbookformoms.global.common.ApiResponse;
 import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -104,11 +105,11 @@ public class GroupPurchaseController {
 
     @Operation(summary = "공동구매 참여", description = "공동구매 글에 참여 신청합니다.")
     @PostMapping("/{id}/join")
-    public ResponseEntity<ApiResponse<GroupPurchaseResponse>> join(
+    public ResponseEntity<ApiResponse<GroupPurchaseJoinResponse>> join(
             @PathVariable Long id,
             @AuthenticationPrincipal UserPrincipal userPrincipal
     ) {
-        GroupPurchaseResponse response = groupPurchaseService.joinGroupPurchase(userPrincipal.getUserId(), id);
+        GroupPurchaseJoinResponse response = groupPurchaseService.joinGroupPurchase(userPrincipal.getUserId(), id);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
