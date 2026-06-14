@@ -15,6 +15,13 @@ import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.Purch
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.ReportTargetType;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.WishlistRepository;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.Wishlist;
+import com.chaewookim.accountbookformoms.domain.asset.application.TransactionService;
+import com.chaewookim.accountbookformoms.domain.asset.dao.AccountRepository;
+import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionCategoryRepository;
+import com.chaewookim.accountbookformoms.domain.asset.entity.Account;
+import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory;
+import com.chaewookim.accountbookformoms.domain.asset.dto.request.TransactionRequest;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -50,6 +57,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class GroupPurchaseServiceTest {
@@ -77,6 +85,15 @@ class GroupPurchaseServiceTest {
 
     @Mock
     private TransactionRepository transactionRepository;
+
+    @Mock
+    private TransactionService transactionService;
+
+    @Mock
+    private AccountRepository accountRepository;
+
+    @Mock
+    private TransactionCategoryRepository transactionCategoryRepository;
 
     @InjectMocks
     private GroupPurchaseService groupPurchaseService;
@@ -343,6 +360,9 @@ class GroupPurchaseServiceTest {
         User creator = User.forTestBuilder().id(2L).username("개설자").build();
         given(userRepository.findById(2L)).willReturn(Optional.of(creator));
 
+        // 자동 지출 기입용 Mock 설정 (조용히 스킵되도록 자산 계좌를 빈 목록으로 설정)
+        given(accountRepository.findByUserId(any())).willReturn(List.of());
+
         // when
         GroupPurchaseJoinResponse response = groupPurchaseService.joinGroupPurchase(3L, 101L);
 
@@ -502,5 +522,68 @@ class GroupPurchaseServiceTest {
         assertThat(response.budgetWarning()).isFalse();
         assertThat(response.remainingBudget()).isEqualByComparingTo(BigDecimal.valueOf(50000));
         assertThat(response.groupPurchase().currentParticipants()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("공동구매 참여 성공 — 정원 도달로 SUCCESS 시 참여자 전원 가계부 자동 지출 내역 기입 검증")
+    void joinGroupPurchase_reach_max_success_and_create_transactions() {
+        // given
+        GroupPurchase gp = GroupPurchase.builder()
+                .id(101L)
+                .creatorId(2L) // 개설자 ID
+                .categoryId(3L)
+                .price(15000)
+                .maxParticipants(3)
+                .title("맛있는 밀키트 공구")
+                .build();
+        ReflectionTestUtils.setField(gp, "currentParticipants", 2);
+        ReflectionTestUtils.setField(gp, "status", PurchaseStatus.RECRUITING);
+
+        given(groupPurchaseRepository.findById(101L)).willReturn(Optional.of(gp));
+        given(groupPurchaseParticipantRepository.existsByGroupPurchaseIdAndUserId(101L, 3L)).willReturn(false);
+        given(budgetRepository.findByUserIdAndYearMonth(any(), any())).willReturn(List.of());
+
+        User creator = User.forTestBuilder().id(2L).username("개설자").build();
+        given(userRepository.findById(2L)).willReturn(Optional.of(creator));
+
+        // 1. 카테고리 정보 모킹
+        Category category = Category.builder().id(3L).name("밀키트").build();
+        given(groupPurchaseCategoryRepository.findById(3L)).willReturn(Optional.of(category));
+
+        // 2. 참여자 리스트 모킹 (참가자 1명)
+        GroupPurchaseParticipant participant = GroupPurchaseParticipant.builder()
+                .groupPurchaseId(101L)
+                .userId(3L) // 참가자 ID
+                .build();
+        given(groupPurchaseParticipantRepository.findByGroupPurchaseId(101L)).willReturn(List.of(participant));
+
+        // 3. 계좌 모킹
+        Account creatorAccount = Account.builder().initialBalance(BigDecimal.valueOf(50000)).build();
+        ReflectionTestUtils.setField(creatorAccount, "id", 201L);
+        Account participantAccount = Account.builder().initialBalance(BigDecimal.valueOf(30000)).build();
+        ReflectionTestUtils.setField(participantAccount, "id", 301L);
+
+        given(accountRepository.findByUserId(2L)).willReturn(List.of(creatorAccount));
+        given(accountRepository.findByUserId(3L)).willReturn(List.of(participantAccount));
+
+        // 4. 가계부 카테고리 모킹
+        TransactionCategory tCategory = TransactionCategory.builder()
+                .name("밀키트")
+                .type(TransactionType.EXPENSE)
+                .build();
+        ReflectionTestUtils.setField(tCategory, "id", 401L);
+        given(transactionCategoryRepository.findAllByUserOrSystem(2L)).willReturn(List.of(tCategory));
+        given(transactionCategoryRepository.findAllByUserOrSystem(3L)).willReturn(List.of(tCategory));
+
+        // when
+        GroupPurchaseJoinResponse response = groupPurchaseService.joinGroupPurchase(3L, 101L);
+
+        // then
+        assertThat(response.groupPurchase().currentParticipants()).isEqualTo(3);
+        assertThat(response.groupPurchase().status()).isEqualTo(PurchaseStatus.SUCCESS);
+
+        // 5. 개설자(2L)와 참가자(3L) 각각에 대해 지출 생성 서비스 메서드가 정확히 1번씩 호출되었는지 검증
+        verify(transactionService, times(1)).createTransaction(eq(2L), any(TransactionRequest.class));
+        verify(transactionService, times(1)).createTransaction(eq(3L), any(TransactionRequest.class));
     }
 }
