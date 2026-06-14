@@ -72,6 +72,7 @@
                     .orElse("기타");
 
             eventPublisher.publishEvent(new GroupPurchaseCreatedEvent(
+                    request.categoryId(),
                     categoryName,
                     "[" + categoryName + "] 새로운 공동구매가 시작되었습니다!",
                     saved.getId()
