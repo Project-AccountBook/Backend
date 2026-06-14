@@ -16,6 +16,18 @@ import java.util.List;
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
 
     @Query("""
+            SELECT t FROM Transaction t 
+            JOIN FETCH t.transactionCategory 
+            WHERE t.user.id = :userId 
+              AND t.transactionDate BETWEEN :startDate AND :endDate 
+            ORDER BY t.transactionDate DESC
+            """)
+    List<Transaction> findByUserIdAndDateBetween(@Param("userId") Long userId,
+                                                 @Param("startDate") LocalDate startDate,
+                                                 @Param("endDate") LocalDate endDate);
+
+
+    @Query("""
             SELECT t.transactionCategory.name, SUM(ABS(t.amount))
               FROM Transaction t
              WHERE t.user.id = :userId

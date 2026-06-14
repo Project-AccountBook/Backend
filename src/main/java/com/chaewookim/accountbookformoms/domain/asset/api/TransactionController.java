@@ -1,5 +1,6 @@
 package com.chaewookim.accountbookformoms.domain.asset.api;
 
+import com.chaewookim.accountbookformoms.domain.asset.application.TransactionExportService;
 import com.chaewookim.accountbookformoms.domain.asset.application.TransactionService;
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.TransactionRequest;
 import com.chaewookim.accountbookformoms.domain.asset.dto.response.TransactionResponse;
@@ -9,11 +10,14 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -27,6 +31,7 @@ import java.time.LocalDate;
 public class TransactionController {
 
     private final TransactionService transactionService;
+    private final TransactionExportService transactionExportService;
 
     @Operation(summary = "거래 내역 목록 조회", description = "특정 계좌의 기간별 거래 내역 목록 조회")
     @GetMapping
@@ -78,5 +83,21 @@ public class TransactionController {
     ) {
         transactionService.deleteTransaction(userPrincipal.getUserId(), id);
         return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @Operation(summary = "거래 내역 내보내기", description = "특정 기간 거래 내역 CSV 다운로드")
+    @GetMapping("/export")
+    public ResponseEntity<Resource> exportTransactions(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
+    ) {
+        Resource resource = transactionExportService.exportToCsv(userPrincipal.getUserId(), startDate, endDate);
+        String fileName = String.format("account_book_%s_to_%s.xlsx", startDate, endDate);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(resource);
     }
 }
