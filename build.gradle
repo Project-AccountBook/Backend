@@ -62,6 +62,10 @@ dependencies {
 
     // 11. 이메일 전송
     implementation 'org.springframework.boot:spring-boot-starter-mail'
+
+    // 12. Excel 파일 생성
+    implementation 'org.apache.poi:poi:5.2.3'
+    implementation 'org.apache.poi:poi-ooxml:5.2.3'
 }
 
 tasks.named('test') {

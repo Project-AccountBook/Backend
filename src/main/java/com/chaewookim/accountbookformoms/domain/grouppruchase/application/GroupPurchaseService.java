@@ -20,23 +20,24 @@ import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.Group
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseJoinResponse;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseDashboardResponse;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseAdminResponse;
-import java.math.BigDecimal;
-import java.time.YearMonth;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.event.GroupPurchaseCreatedEvent;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import com.chaewookim.accountbookformoms.global.error.ErrorCode;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.RequiredArgsConstructor;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -54,6 +55,7 @@ public class GroupPurchaseService {
     private final GroupPurchaseParticipantRepository groupPurchaseParticipantRepository;
     private final BudgetRepository budgetRepository;
     private final TransactionRepository transactionRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public GroupPurchaseResponse createGroupPurchase(Long creatorId, GroupPurchaseCreateRequest request) {
@@ -71,7 +73,18 @@ public class GroupPurchaseService {
                 .build();
 
         GroupPurchase saved = groupPurchaseRepository.save(groupPurchase);
-        
+
+        String categoryName = groupPurchaseCategoryRepository.findById(request.categoryId())
+                .map(Category::getName)
+                .orElse("기타");
+
+        eventPublisher.publishEvent(new GroupPurchaseCreatedEvent(
+                request.categoryId(),
+                categoryName,
+                "[" + categoryName + "] 새로운 공동구매가 시작되었습니다!",
+                saved.getId()
+        ));
+
         String creatorNickname = userRepository.findById(creatorId)
                 .map(User::getUsername)
                 .orElse("탈퇴한 사용자");
@@ -84,7 +97,7 @@ public class GroupPurchaseService {
         GroupPurchase groupPurchase = groupPurchaseRepository.findById(id)
                 .orElseThrow(() -> new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND));
         groupPurchase.increaseViewCount();
-        
+
         String creatorNickname = userRepository.findById(groupPurchase.getCreatorId())
                 .map(User::getUsername)
                 .orElse("탈퇴한 사용자");
@@ -106,13 +119,11 @@ public class GroupPurchaseService {
             User user = userRepository.findById(currentUserId).orElse(null);
             if (user != null) {
                 if (user.getLatitude() != null && user.getLongitude() != null) {
-                    // 1. 위경도 기반 거리 필터링 (3km 이내)
                     list = list.stream()
                             .filter(gp -> gp.getLatitude() != null && gp.getLongitude() != null)
                             .filter(gp -> calculateDistance(user.getLatitude(), user.getLongitude(), gp.getLatitude(), gp.getLongitude()) <= 3.0)
                             .collect(Collectors.toList());
                 } else if (user.getAddress() != null) {
-                    // 2. 동네/구 텍스트 매칭 필터링
                     String neighborhood = extractNeighborhood(user.getAddress());
                     if (neighborhood != null) {
                         list = list.stream()
@@ -246,7 +257,7 @@ public class GroupPurchaseService {
                     long reportCount = reportRepository.countByTargetTypeAndTargetId(
                             ReportTargetType.GROUP_PURCHASE,
                             gp.getId()
-                    );
+                        );
                     return GroupPurchaseAdminResponse.of(gp, creatorUsername, categoryName, reportCount);
                 });
     }
