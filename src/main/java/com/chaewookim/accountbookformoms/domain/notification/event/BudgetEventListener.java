@@ -1,10 +1,10 @@
-package com.chaewookim.accountbookformoms.domain.budget.event;
+package com.chaewookim.accountbookformoms.domain.notification.event;
 
 import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionCategoryRepository;
 import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory;
 import com.chaewookim.accountbookformoms.domain.budget.application.BudgetService;
+import com.chaewookim.accountbookformoms.domain.budget.event.BudgetExceededCheckEvent;
 import com.chaewookim.accountbookformoms.domain.notification.enums.NotificationType;
-import com.chaewookim.accountbookformoms.domain.notification.event.NotificationEvent;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
