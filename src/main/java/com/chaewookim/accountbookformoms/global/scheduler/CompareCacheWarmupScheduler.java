@@ -20,7 +20,7 @@ import java.util.List;
  * <p>현재 월 기준으로 (1) 시스템 카테고리 모든 id × Budget/Expense(fixed+variable)/Income(fixed+variable),
  * (2) 6개 나이대 (20-70대) × 3 도메인 의 그룹 평균을 미리 캐시에 적재.</p>
  * <p>AMOUNT axis 는 표준 버킷 정의가 없어 미포함, LOCATION 은 사용자별 반경 결과라 cross-user hit 0% 라 미포함.</p>
- * <p>현재 다중 인스턴스 환경에서 중복 실행 가능 — correctness 영향은 없으나 redundant 쓰기 발생. ShedLock 도입은 별도 follow-up.</p>
+ * <p>다중 인스턴스 환경 중복 실행은 ShedLock 으로 차단.</p>
  */
 @Slf4j
 @Component

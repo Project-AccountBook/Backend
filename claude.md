@@ -171,11 +171,10 @@
 
 #### Redis 미적용 (의사결정 미반영)
 - **댓글 캐시**: `CommentService.list` 에 `@Cacheable`/`@CacheEvict` 전무. 의사결정 #5 와 불일치.
-- **조회수 Redis INCR**: `Board.increaseViews` 가 DB 직접 update. 의사결정 #4 의 "INCR + Spring Scheduler DB 동기화" 미구현.
 
 #### 비동기 / 스케줄러
 - `global/config/AsyncConfig.java`: `@EnableAsync` 만 있고 `TaskExecutor` 빈 없음 → `SimpleAsyncTaskExecutor`(매 호출 새 스레드)로 동작. ES 인덱싱·알림 발송이 메인 풀 점유 가능. `ThreadPoolTaskExecutor` 빈 추가 필요.
-- **추가 `@Scheduled` 후보**: 조회수 동기화(의사결정 #4) 미구현. 고정거래 자동 생성(#69), Compare 캐시 warm-up(의사결정 #6) 은 이미 도입됨.
+- **도입된 `@Scheduled`**: 고정거래 자동 생성(#69), Compare 캐시 warm-up(의사결정 #6), 조회수 Redis→DB 동기화 5분 주기(의사결정 #4) — 모두 ShedLock 적용.
 
 #### Fetch 전략
 - `User`↔`UserSetting` 가 `@OneToOne(cascade)` 인데 fetch 미지정 → 기본 EAGER. 비교 쿼리마다 setting JOIN/즉시 로딩 발생. 명시적 LAZY + 필요 시점 fetch join 권장.

@@ -20,6 +20,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+import java.util.Map;
+
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -27,10 +30,14 @@ public class BoardService {
 
     private final BoardRepository boardRepository;
     private final BoardSearchQueryRepository boardSearchQueryRepository;
+    private final BoardViewCountService viewCountService;
     private final ApplicationEventPublisher eventPublisher;
 
     public Page<BoardResponse> list(Pageable pageable) {
-        return boardRepository.findAll(pageable).map(BoardResponse::from);
+        Page<Board> page = boardRepository.findAll(pageable);
+        List<Long> ids = page.getContent().stream().map(Board::getId).toList();
+        Map<Long, Long> pending = viewCountService.getPendingDeltas(ids);
+        return page.map(b -> BoardResponse.from(b, pending.getOrDefault(b.getId(), 0L)));
     }
 
     @Transactional
@@ -50,7 +57,8 @@ public class BoardService {
 
     public BoardResponse get(Long postId) {
         Board board = findBoardOrThrow(postId);
-        return BoardResponse.from(board);
+        long pending = viewCountService.increment(postId);
+        return BoardResponse.from(board, pending);
     }
 
     @Transactional
