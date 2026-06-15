@@ -65,9 +65,8 @@ public class SecurityConfig {
                         // 로그인, 회원가입, 토큰 재발급 API 허용
                         .requestMatchers(
                                 HttpMethod.POST,
-                                "/api/v1/auth/login",
-                                "/api/v1/users/signup",
-                                "/api/v1/auth/reissue"
+                                "/api/v1/auth/**",
+                                "/api/v1/users/signup"
                         ).permitAll()
 
                         // 관리자 전용 API

@@ -32,7 +32,7 @@ public class UserNotificationSetting {
     private Boolean isInterestCategoryEnabled;  // 관심 카테고리 알림
 
     @Column(nullable = false)
-    private Boolean isSystemAlertEnabled;     // 시스템 알림
+    private Boolean isSystemAlertEnabled;       // 시스템 알림
 
     @Builder
     public UserNotificationSetting(User user, Boolean isBudgetAlertEnabled, Boolean isInterestCategoryEnabled, Boolean isSystemAlertEnabled) {

@@ -7,6 +7,7 @@ import com.chaewookim.accountbookformoms.domain.user.dto.response.TokenResponse;
 import com.chaewookim.accountbookformoms.domain.user.entity.RefreshToken;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.dto.request.LoginRequest;
+import com.chaewookim.accountbookformoms.domain.user.enums.VerificationType;
 import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import com.chaewookim.accountbookformoms.global.security.jwt.JwtTokenProvider;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class AuthService {
 
+    private final EmailVerificationService emailVerificationService;
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder encoder;
@@ -71,6 +73,26 @@ public class AuthService {
         refreshTokenRepository.save(newRefreshToken);
 
         return new TokenResponse(newAccessToken, newRefreshTokenValue);
+    }
+
+    @Transactional
+    public void requestPasswordReset(String email) {
+        userRepository.findByEmail(email).orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+        emailVerificationService.sendVerificationCode(email, VerificationType.RESET);
+    }
+
+    @Transactional
+    public void resetPassword(String email, String code, String newPassword) {
+
+        if (!emailVerificationService.verifyCode(email, code, VerificationType.RESET)) {
+            throw new CustomException(UserErrorCode.INVALID_VERIFICATION_CODE);
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+        user.updatePassword(encoder.encode(newPassword));
+
+        emailVerificationService.deleteVerification(email, VerificationType.RESET);
     }
 
     @Transactional

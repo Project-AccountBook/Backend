@@ -15,6 +15,63 @@ import java.util.List;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
 
+    @Query("""
+            SELECT t FROM Transaction t
+            JOIN FETCH t.transactionCategory
+            WHERE t.user.id = :userId
+              AND t.transactionDate BETWEEN :startDate AND :endDate
+            ORDER BY t.transactionDate DESC
+            """)
+    List<Transaction> findByUserIdAndDateBetween(@Param("userId") Long userId,
+                                                 @Param("startDate") LocalDate startDate,
+                                                 @Param("endDate") LocalDate endDate);
+
+
+    @Query("""
+            SELECT t.transactionCategory.name, SUM(ABS(t.amount))
+              FROM Transaction t
+             WHERE t.user.id = :userId
+               AND t.type = 'EXPENSE'
+               AND FUNCTION('DATE_FORMAT', t.transactionDate, '%Y-%m') = :yearMonth
+             GROUP BY t.transactionCategory.name
+            """)
+    List<Object[]> sumCategoryExpense(@Param("userId") Long userId, @Param("yearMonth") String yearMonth);
+
+    @Query("""
+            SELECT FUNCTION('DATE_FORMAT', t.transactionDate, '%Y-%m') as ym,
+                   SUM(CASE WHEN t.type = 'INCOME' THEN t.amount ELSE 0 END) as totalIncome,
+                   SUM(CASE WHEN t.type = 'EXPENSE' THEN ABS(t.amount) ELSE 0 END) as totalExpense
+              FROM Transaction t
+             WHERE t.user.id = :userId
+               AND t.transactionDate >= :sixMonthsAgo
+             GROUP BY FUNCTION('DATE_FORMAT', t.transactionDate, '%Y-%m')
+             ORDER BY ym ASC
+            """)
+    List<Object[]> sumMonthlyTrends(@Param("userId") Long userId, @Param("sixMonthsAgo") LocalDate sixMonthsAgo);
+
+    @Query("""
+            SELECT COALESCE(SUM(t.amount), 0)
+              FROM Transaction t
+             WHERE t.user.id = :userId
+               AND t.type = TransactionType.EXPENSE
+               AND t.transactionCategory.id = :categoryId
+               AND t.transactionDate BETWEEN :startDate AND :endDate
+            """)
+    BigDecimal sumAmountByUserIdAndCategoryId(@Param("userId") Long userId,
+                                              @Param("categoryId") Long categoryId,
+                                              @Param("startDate") LocalDate startDate,
+                                              @Param("endDate") LocalDate endDate);
+
+    @Query("""
+    SELECT t.transactionCategory.id, SUM(ABS(t.amount))
+    FROM Transaction t
+    WHERE t.user.id = :userId
+      AND FUNCTION('DATE_FORMAT', t.transactionDate, '%Y-%m') = :yearMonth
+    GROUP BY t.transactionCategory.id
+    """)
+    List<Object[]> sumAmountByUserIdGroupByCategoryId(@Param("userId") Long userId,
+                                                      @Param("yearMonth") String yearMonth);
+
     /**
      * 사용자의 월별 변동(Transaction) 거래 카테고리별 합계.
      * 반환 컬럼: [categoryId, categoryName, sumAmount]

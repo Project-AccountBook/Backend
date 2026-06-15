@@ -4,6 +4,7 @@ import com.chaewookim.accountbookformoms.domain.grouppruchase.application.GroupP
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseCreateRequest;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseUpdateRequest;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseResponse;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseJoinResponse;
 import com.chaewookim.accountbookformoms.global.common.ApiResponse;
 import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -99,6 +100,26 @@ public class GroupPurchaseController {
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         Page<GroupPurchaseResponse> response = groupPurchaseService.getWishedGroupPurchases(userPrincipal.getUserId(), pageable);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(summary = "공동구매 참여", description = "공동구매 글에 참여 신청합니다.")
+    @PostMapping("/{id}/join")
+    public ResponseEntity<ApiResponse<GroupPurchaseJoinResponse>> join(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        GroupPurchaseJoinResponse response = groupPurchaseService.joinGroupPurchase(userPrincipal.getUserId(), id);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(summary = "공동구매 참여 취소", description = "공동구매 참여 신청을 취소합니다.")
+    @PostMapping("/{id}/leave")
+    public ResponseEntity<ApiResponse<GroupPurchaseResponse>> leave(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        GroupPurchaseResponse response = groupPurchaseService.leaveGroupPurchase(userPrincipal.getUserId(), id);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

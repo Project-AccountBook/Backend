@@ -10,6 +10,7 @@ import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.entity.UserNotificationSetting;
 import com.chaewookim.accountbookformoms.domain.user.entity.UserSetting;
 import com.chaewookim.accountbookformoms.domain.user.enums.SocialProvider;
+import com.chaewookim.accountbookformoms.domain.user.enums.VerificationType;
 import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import lombok.RequiredArgsConstructor;
@@ -23,15 +24,20 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
 
     private final UserCommonService userCommonService;
+    private final EmailVerificationService emailVerificationService;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Transactional
     public SignupResponse signUp(SignupRequest request) {
 
+        if (!emailVerificationService.isVerified(request.email(), VerificationType.SIGNUP)) {
+            throw new CustomException(UserErrorCode.EMAIL_NOT_VERIFIED);
+        }
+
         String encoded = passwordEncoder.encode(request.password());
 
-        return userRepository.findByEmailIncludingDeleted(request.email())
+        SignupResponse response = userRepository.findByEmailIncludingDeleted(request.email())
                 .map(user -> {
                     if (user.getDeletedAt() == null) {
                         throw new CustomException(UserErrorCode.DUPLICATE_EMAIL);
@@ -40,9 +46,12 @@ public class UserService {
                     return new SignupResponse(user.getId(), user.getEmail(), user.getUsername());
                 })
                 .orElseGet(() -> {
-                    User savedUser = userCommonService.saveUser(request.email(), encoded, request.username(), SocialProvider.LOCAL, request.birthDate(), request.address());
+                    User savedUser = userCommonService.saveLocalUser(request.email(), encoded, request.username(), SocialProvider.LOCAL, request.birthDate(), request.address());
                     return new SignupResponse(savedUser.getId(), savedUser.getEmail(), savedUser.getUsername());
                 });
+
+        emailVerificationService.deleteVerification(request.email(), VerificationType.SIGNUP);
+        return response;
     }
 
     public UserProfileResponse getMyProfile(Long userId) {
@@ -72,6 +81,7 @@ public class UserService {
                 request.isInterestCategoryEnabled(),
                 request.isSystemAlertEnabled()
         );
+        user.updateLastBudgetAlertMonth(null);
     }
 
     @Transactional
