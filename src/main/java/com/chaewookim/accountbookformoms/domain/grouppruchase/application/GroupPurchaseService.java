@@ -1,7 +1,13 @@
 package com.chaewookim.accountbookformoms.domain.grouppruchase.application;
 
 import com.chaewookim.accountbookformoms.domain.budget.dao.BudgetRepository;
+import com.chaewookim.accountbookformoms.domain.asset.application.TransactionService;
+import com.chaewookim.accountbookformoms.domain.asset.dao.AccountRepository;
+import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionCategoryRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionRepository;
+import com.chaewookim.accountbookformoms.domain.asset.dto.request.TransactionRequest;
+import com.chaewookim.accountbookformoms.domain.asset.entity.Account;
+import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseRepository;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseCategoryRepository;
@@ -32,16 +38,20 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -56,6 +66,9 @@ public class GroupPurchaseService {
     private final BudgetRepository budgetRepository;
     private final TransactionRepository transactionRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final TransactionService transactionService;
+    private final AccountRepository accountRepository;
+    private final TransactionCategoryRepository transactionCategoryRepository;
 
     @Transactional
     public GroupPurchaseResponse createGroupPurchase(Long creatorId, GroupPurchaseCreateRequest request) {
@@ -321,6 +334,10 @@ public class GroupPurchaseService {
 
         groupPurchase.join();
 
+        if (groupPurchase.getStatus() == PurchaseStatus.SUCCESS) {
+            createAutoTransactionsForGroupPurchase(groupPurchase);
+        }
+
         String creatorNickname = userRepository.findById(groupPurchase.getCreatorId())
                 .map(User::getUsername)
                 .orElse("탈퇴한 사용자");
@@ -382,5 +399,67 @@ public class GroupPurchaseService {
                 .orElse("탈퇴한 사용자");
 
         return GroupPurchaseResponse.of(groupPurchase, creatorNickname);
+    }
+
+    private void createAutoTransactionsForGroupPurchase(GroupPurchase groupPurchase) {
+        Set<Long> memberIds = new HashSet<>();
+        memberIds.add(groupPurchase.getCreatorId());
+
+        List<GroupPurchaseParticipant> participants =
+                groupPurchaseParticipantRepository.findByGroupPurchaseId(groupPurchase.getId());
+        for (GroupPurchaseParticipant participant : participants) {
+            memberIds.add(participant.getUserId());
+        }
+
+        String categoryName = groupPurchaseCategoryRepository.findById(groupPurchase.getCategoryId())
+                .map(Category::getName)
+                .orElse("기타");
+
+        BigDecimal amount = BigDecimal.valueOf(groupPurchase.getPrice());
+        String description = "공동구매 지출: " + groupPurchase.getTitle();
+
+        for (Long memberId : memberIds) {
+            try {
+                List<Account> accounts = accountRepository.findByUserId(memberId);
+                if (accounts.isEmpty()) {
+                    log.warn("가계부 자동 기입 실패: 사용자(ID={})의 자산 계좌가 존재하지 않습니다.", memberId);
+                    continue;
+                }
+                Account account = accounts.get(0);
+
+                List<TransactionCategory> userCategories = transactionCategoryRepository.findAllByUserOrSystem(memberId);
+
+                TransactionCategory targetCategory = userCategories.stream()
+                        .filter(c -> c.getType() == TransactionType.EXPENSE && c.getName().equals(categoryName))
+                        .findFirst()
+                        .orElseGet(() -> userCategories.stream()
+                                .filter(c -> c.getType() == TransactionType.EXPENSE &&
+                                        (c.getName().contains("기타") || c.getName().contains("공동구매")))
+                                .findFirst()
+                                .orElseGet(() -> userCategories.stream()
+                                        .filter(c -> c.getType() == TransactionType.EXPENSE)
+                                        .findFirst()
+                                        .orElse(null)));
+
+                if (targetCategory == null) {
+                    log.warn("가계부 자동 기입 실패: 사용자(ID={})의 지출 카테고리가 존재하지 않습니다.", memberId);
+                    continue;
+                }
+
+                TransactionRequest req = new TransactionRequest(
+                        account.getId(),
+                        null,
+                        targetCategory.getId(),
+                        TransactionType.EXPENSE,
+                        amount,
+                        LocalDate.now(),
+                        description
+                );
+
+                transactionService.createTransaction(memberId, req);
+            } catch (Exception e) {
+                log.warn("가계부 자동 기입 실패: 사용자(ID={})의 지출 생성 중 예외가 발생했습니다. 메시지: {}", memberId, e.getMessage());
+            }
+        }
     }
 }
