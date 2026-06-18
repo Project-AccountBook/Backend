@@ -6,6 +6,7 @@ import com.chaewookim.accountbookformoms.domain.asset.dto.request.TransactionReq
 import com.chaewookim.accountbookformoms.domain.asset.entity.FixedTransaction;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +23,8 @@ public class FixedTransactionScheduler {
     private final TransactionService transactionService;
 
     @Scheduled(cron = "0 0 0 * * *")
+    @SchedulerLock(name = "FixedTransactionScheduler_processFixedTransactions",
+            lockAtMostFor = "PT1H", lockAtLeastFor = "PT1M")
     @Transactional
     public void processFixedTransactions() {
 

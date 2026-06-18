@@ -30,11 +30,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -47,6 +50,9 @@ class BoardServiceTest {
 
     @Mock
     private BoardSearchQueryRepository boardSearchQueryRepository;
+
+    @Mock
+    private BoardViewCountService viewCountService;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -82,12 +88,29 @@ class BoardServiceTest {
             Board board = buildBoard(POST_ID, OWNER_ID);
             given(boardRepository.findAll(pageable))
                     .willReturn(new PageImpl<>(List.of(board), pageable, 1));
+            given(viewCountService.getPendingDeltas(anyCollection())).willReturn(Map.of());
 
             Page<BoardResponse> result = boardService.list(pageable);
 
             assertThat(result.getTotalElements()).isEqualTo(1);
             assertThat(result.getContent().get(0).id()).isEqualTo(POST_ID);
             assertThat(result.getContent().get(0).userId()).isEqualTo(OWNER_ID);
+        }
+
+        @Test
+        @DisplayName("성공 — 응답 views 는 DB views + Redis pending delta")
+        void list_addsPendingViews() {
+            Pageable pageable = PageRequest.of(0, 10);
+            Board board = buildBoard(POST_ID, OWNER_ID);
+            ReflectionTestUtils.setField(board, "views", 10);
+            given(boardRepository.findAll(pageable))
+                    .willReturn(new PageImpl<>(List.of(board), pageable, 1));
+            given(viewCountService.getPendingDeltas(anyCollection()))
+                    .willReturn(Map.of(POST_ID, 7L));
+
+            Page<BoardResponse> result = boardService.list(pageable);
+
+            assertThat(result.getContent().get(0).views()).isEqualTo(17);
         }
     }
 
@@ -121,16 +144,20 @@ class BoardServiceTest {
     class Get_ {
 
         @Test
-        @DisplayName("성공 — id로 게시물 조회")
+        @DisplayName("성공 — id로 게시물 조회 시 Redis INCR + 응답에 합산")
         void get_success() {
             Board board = buildBoard(POST_ID, OWNER_ID);
+            ReflectionTestUtils.setField(board, "views", 5);
             given(boardRepository.findById(POST_ID)).willReturn(Optional.of(board));
+            given(viewCountService.increment(POST_ID)).willReturn(3L);
 
             BoardResponse response = boardService.get(POST_ID);
 
             assertThat(response.id()).isEqualTo(POST_ID);
             assertThat(response.title()).isEqualTo(board.getTitle());
             assertThat(response.type()).isEqualTo(BOARD_TYPE.QNA);
+            assertThat(response.views()).isEqualTo(8);
+            verify(viewCountService).increment(eq(POST_ID));
         }
 
         @Test

@@ -117,11 +117,6 @@
 
 ## 후속 작업 (TODO)
 
-### Compare 캐싱 Phase 2 — `@Scheduled` warm-up (follow-up)
-Phase 2 본체(그룹 평균 캐시 분리, user-mutation evict 제거)는 구현 완료. 후속 작업:
-- **`@Scheduled` 배치 추가**: 매일/매시간 그룹 평균을 미리 계산해 캐시 warm-up (대량 트래픽 대비). ShedLock 으로 다중 서버 중복 방지 (의사결정 #13 인프라 재사용)
-- **warm-up 키 정의 전략**: 모든 카테고리 / 활성 사용자 나이대 / 표준 금액 버킷에 대해 batch 호출. cache miss 응답 지연 감소
-
 ### 운영 설정 정비 — Option B (Profile 분리 + Batch/HikariCP)
 최적화 백로그 우선순위 #4 의 안전 범위만 우선 진행. **Flyway 도입 및 OSIV 비활성화는 별도 이슈로 분리**.
 
@@ -152,7 +147,7 @@ Phase 2 본체(그룹 평균 캐시 분리, user-mutation evict 제거)는 구�
 - 일시적으로 show_sql 켜고 batch insert 시나리오 → 묶이는지 확인
 
 #### Option B 종료 후 잔여 빚 (별도 이슈로 분리)
-- **Flyway 도입** — 스키마 변경의 코드/DB 동기 관리
+- **Flyway 도입** — 스키마 변경의 코드/DB 동기 관리. Flyway 도입 시 `shedlock` 테이블 DDL 도 V*.sql 로 이전 (현재는 `Shedlock` 엔티티 + ddl-auto: update 로 자동 생성, prod validate 환경에서는 수동 적용 필요)
 - **OSIV 비활성화** (`spring.jpa.open-in-view: false`) — Lazy 노출 사냥 필요해 회귀 위험 큼
 - **IDENTITY PK → SEQUENCE/pooled-lo** 전환 검토 — batch insert 효과 회수
 - **prod 비밀 관리** — `application-secret.yml` 을 환경변수/Secrets Manager 로 이전
@@ -176,11 +171,10 @@ Phase 2 본체(그룹 평균 캐시 분리, user-mutation evict 제거)는 구�
 
 #### Redis 미적용 (의사결정 미반영)
 - **댓글 캐시**: `CommentService.list` 에 `@Cacheable`/`@CacheEvict` 전무. 의사결정 #5 와 불일치.
-- **조회수 Redis INCR**: `Board.increaseViews` 가 DB 직접 update. 의사결정 #4 의 "INCR + Spring Scheduler DB 동기화" 미구현.
 
 #### 비동기 / 스케줄러
 - `global/config/AsyncConfig.java`: `@EnableAsync` 만 있고 `TaskExecutor` 빈 없음 → `SimpleAsyncTaskExecutor`(매 호출 새 스레드)로 동작. ES 인덱싱·알림 발송이 메인 풀 점유 가능. `ThreadPoolTaskExecutor` 빈 추가 필요.
-- **추가 `@Scheduled` 후보**: 조회수 동기화(의사결정 #4), 통계 배치(의사결정 #6) 미구현. 고정거래 자동 생성(#69)은 이미 도입됨.
+- **도입된 `@Scheduled`**: 고정거래 자동 생성(#69), Compare 캐시 warm-up(의사결정 #6), 조회수 Redis→DB 동기화 5분 주기(의사결정 #4) — 모두 ShedLock 적용.
 
 #### Fetch 전략
 - `User`↔`UserSetting` 가 `@OneToOne(cascade)` 인데 fetch 미지정 → 기본 EAGER. 비교 쿼리마다 setting JOIN/즉시 로딩 발생. 명시적 LAZY + 필요 시점 fetch join 권장.

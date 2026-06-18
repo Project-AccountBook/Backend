@@ -19,6 +19,8 @@ import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 import java.time.Duration;
+import java.util.List;
+import java.util.Map;
 
 @Configuration
 @EnableCaching
@@ -75,8 +77,24 @@ public class RedisConfig {
                 .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(jsonSerializer));
 
+        // 그룹 평균 캐시: warm-up 스케줄(30분 주기)과 정합되도록 TTL 30분
+        RedisCacheConfiguration groupConfig = defaultConfig.entryTtl(Duration.ofMinutes(30));
+
+        List<String> groupCacheNames = List.of(
+                CACHE_GROUP_BUDGET_AGE, CACHE_GROUP_BUDGET_AMOUNT, CACHE_GROUP_BUDGET_CATEGORY,
+                CACHE_GROUP_EXPENSE_AGE_FIXED, CACHE_GROUP_EXPENSE_AGE_VARIABLE,
+                CACHE_GROUP_EXPENSE_AMOUNT_FIXED, CACHE_GROUP_EXPENSE_AMOUNT_VARIABLE,
+                CACHE_GROUP_EXPENSE_CATEGORY_FIXED, CACHE_GROUP_EXPENSE_CATEGORY_VARIABLE,
+                CACHE_GROUP_INCOME_AGE_FIXED, CACHE_GROUP_INCOME_AGE_VARIABLE,
+                CACHE_GROUP_INCOME_AMOUNT_FIXED, CACHE_GROUP_INCOME_AMOUNT_VARIABLE,
+                CACHE_GROUP_INCOME_CATEGORY_FIXED, CACHE_GROUP_INCOME_CATEGORY_VARIABLE);
+
+        Map<String, RedisCacheConfiguration> perCacheConfig = new java.util.HashMap<>();
+        groupCacheNames.forEach(name -> perCacheConfig.put(name, groupConfig));
+
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)
+                .withInitialCacheConfigurations(perCacheConfig)
                 .build();
     }
 }
