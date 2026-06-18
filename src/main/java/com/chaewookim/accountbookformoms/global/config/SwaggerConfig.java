@@ -112,6 +112,22 @@ public class SwaggerConfig {
     }
 
     @Bean
+    public GroupedOpenApi groupPurchaseGroup() {
+        return GroupedOpenApi.builder()
+                .group("Group Purchase API")
+                .pathsToMatch(
+                        "/api/v1/group-purchases/**",
+                        "/api/v1/group-purchase-applications/**",
+                        "/api/v1/products/**",
+                        "/api/v1/group-purchase-categories/**",
+                        "/api/v1/reports/**",
+                        "/api/v1/admin/group-purchases/**",
+                        "/api/v1/admin/reports/**"
+                )
+                .build();
+    }
+
+    @Bean
     public GroupedOpenApi allGroup() {
         return GroupedOpenApi.builder()
                 .group("전체 API")
