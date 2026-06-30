@@ -8,6 +8,7 @@ public record UserProfileResponse(
         String username,
         LocalDate birthDate,
         String address,
+        Boolean hasPassword,
         Integer budgetAlertThreshold,
         Boolean isPortfolioPublic,
         Boolean isBudgetAlertEnabled,

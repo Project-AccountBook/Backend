@@ -63,6 +63,7 @@ public class UserService {
 
         return new UserProfileResponse(
                 user.getEmail(), user.getUsername(), user.getBirthDate(), user.getAddress(),
+                user.getPassword() != null,
                 settings.getBudgetAlertThreshold(), settings.getIsPortfolioPublic(),
                 notificationSetting.getIsBudgetAlertEnabled(), notificationSetting.getIsInterestCategoryEnabled(), notificationSetting.getIsSystemAlertEnabled()
         );
@@ -90,7 +91,7 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
-        if (user.getProvider() == SocialProvider.LOCAL) {
+        if (user.getPassword() != null) {
             if (request.currentPassword() == null ||
                     !passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
                 throw new CustomException(UserErrorCode.PASSWORD_NOT_MATCH);
