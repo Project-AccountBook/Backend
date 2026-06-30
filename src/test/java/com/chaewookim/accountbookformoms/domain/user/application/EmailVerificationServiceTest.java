@@ -1,6 +1,7 @@
 package com.chaewookim.accountbookformoms.domain.user.application;
 
 import com.chaewookim.accountbookformoms.domain.user.enums.VerificationType;
+import com.chaewookim.accountbookformoms.global.mail.AsyncVerificationEmailSender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,12 +13,10 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
-import jakarta.mail.internet.MimeMessage;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 
@@ -32,7 +31,7 @@ class EmailVerificationServiceTest {
     private ValueOperations<String, String> valueOperations;
 
     @Mock
-    private JavaMailSender mailSender;
+    private AsyncVerificationEmailSender asyncVerificationEmailSender;
 
     @InjectMocks
     private EmailVerificationService emailVerificationService;
@@ -40,7 +39,6 @@ class EmailVerificationServiceTest {
     @BeforeEach
     void setUp() {
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        ReflectionTestUtils.setField(emailVerificationService, "mailFrom", "test@example.com");
     }
 
     @Test
@@ -56,7 +54,7 @@ class EmailVerificationServiceTest {
 
         // then
         verify(valueOperations, times(2)).set(anyString(), anyString(), any());
-        verify(mailSender).send(any(MimeMessage.class));
+        verify(asyncVerificationEmailSender).send(eq("test@email.com"), anyString(), eq(VerificationType.SIGNUP));
     }
 
     @Test
