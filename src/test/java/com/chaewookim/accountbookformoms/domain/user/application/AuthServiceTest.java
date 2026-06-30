@@ -25,6 +25,7 @@ import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -126,6 +127,30 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("비밀번호 재설정 - 이미 인증된 경우 성공")
+    void resetPassword_success_when_already_verified() {
+
+        // given
+        String email = "test@email.com";
+        String code = "123456";
+        String newPassword = "newPassword123!";
+        String encodedPassword = "encodedPassword";
+        User user = User.builder().email(email).password("old").build();
+
+        given(emailVerificationService.isVerified(email, VerificationType.RESET)).willReturn(true);
+        given(userRepository.findByEmail(email)).willReturn(Optional.of(user));
+        given(encoder.encode(newPassword)).willReturn(encodedPassword);
+
+        // when
+        authService.resetPassword(email, code, newPassword);
+
+        // then
+        assertThat(user.getPassword()).isEqualTo(encodedPassword);
+        verify(emailVerificationService, never()).verifyCode(email, code, VerificationType.RESET);
+        verify(emailVerificationService).deleteVerification(email, VerificationType.RESET);
+    }
+
+    @Test
     @DisplayName("비밀번호 재설정 - 성공")
     void resetPassword_success() {
 
@@ -136,6 +161,7 @@ class AuthServiceTest {
         String encodedPassword = "encodedPassword";
         User user = User.builder().email(email).password("old").build();
 
+        given(emailVerificationService.isVerified(email, VerificationType.RESET)).willReturn(false);
         given(emailVerificationService.verifyCode(email, code, VerificationType.RESET)).willReturn(true);
         given(userRepository.findByEmail(email)).willReturn(Optional.of(user));
         given(encoder.encode(newPassword)).willReturn(encodedPassword);
@@ -155,6 +181,7 @@ class AuthServiceTest {
         // given
         String email = "test@email.com";
         String code = "wrong-code";
+        given(emailVerificationService.isVerified(email, VerificationType.RESET)).willReturn(false);
         given(emailVerificationService.verifyCode(email, code, VerificationType.RESET)).willReturn(false);
 
         // when & then
