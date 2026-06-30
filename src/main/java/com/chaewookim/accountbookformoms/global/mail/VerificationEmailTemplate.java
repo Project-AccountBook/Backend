@@ -48,9 +48,9 @@ public final class VerificationEmailTemplate {
                       <td align="center">
                         <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" style="max-width:480px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(15,23,42,0.08);">
                           <tr>
-                            <td style="background:linear-gradient(135deg,#4f46e5 0%%,#3730a3 100%%);padding:32px 24px;text-align:center;">
-                              <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:700;letter-spacing:-0.5px;">Joint Living</h1>
-                              <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:14px;">함께하는 생활, 스마트한 가계부</p>
+                            <td style="background:#0f172a;padding:32px 24px;text-align:center;">
+                              <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:800;letter-spacing:-0.5px;">Joint Living</h1>
+                              <p style="margin:8px 0 0;color:rgba(255,255,255,0.6);font-size:14px;font-weight:500;">함께하는 생활, 스마트한 가계부</p>
                             </td>
                           </tr>
                           <tr>
