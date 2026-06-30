@@ -3,15 +3,19 @@ package com.chaewookim.accountbookformoms.domain.user.application;
 import com.chaewookim.accountbookformoms.domain.user.enums.VerificationType;
 import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
+import com.chaewookim.accountbookformoms.global.mail.VerificationEmailTemplate;
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.mail.MailException;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
+import java.io.UnsupportedEncodingException;
 import java.time.Duration;
 
 @Slf4j
@@ -37,16 +41,19 @@ public class EmailVerificationService {
         redisTemplate.opsForValue().set("VERIFY:" + type + ":" + email, code, Duration.ofMinutes(3));
         redisTemplate.opsForValue().set(lockKey, "locked", Duration.ofMinutes(1));
 
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo(email);
-        message.setFrom(mailFrom);
-        message.setSubject(type == VerificationType.SIGNUP ? "회원가입 인증 번호" : "비밀번호 재설정 인증 번호");
-        message.setText("인증 번호: " + code);
-
         try {
-            mailSender.send(message);
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+            helper.setTo(email);
+            helper.setFrom(mailFrom, VerificationEmailTemplate.SENDER_NAME);
+            helper.setSubject(VerificationEmailTemplate.getSubject(type));
+            helper.setText(
+                    VerificationEmailTemplate.buildPlainText(code, type),
+                    VerificationEmailTemplate.buildHtml(code, type)
+            );
+            mailSender.send(mimeMessage);
             log.info("인증 메일 발송 완료 - email: {}, type: {}", email, type);
-        } catch (MailException e) {
+        } catch (MailException | MessagingException | UnsupportedEncodingException e) {
             redisTemplate.delete("VERIFY:" + type + ":" + email);
             redisTemplate.delete(lockKey);
             log.error("인증 메일 발송 실패 - email: {}, type: {}", email, type, e);
