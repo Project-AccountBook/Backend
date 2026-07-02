@@ -47,7 +47,9 @@ public class UserCommonService {
 
     // 소셜 로그인
     public User saveSocialUser(String email, String username, SocialProvider provider) {
-        return createBaseUser(email, null, username, provider, null, null);
+        User savedUser = createBaseUser(email, null, username, provider, null, null);
+        eventPublisher.publishEvent(new UserSignedUpEvent(savedUser.getId()));
+        return savedUser;
     }
 
     // 탈퇴 후 재가입

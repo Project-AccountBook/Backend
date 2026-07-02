@@ -62,6 +62,7 @@ class UserCommonServiceTest {
         // then
         assertThat(result.getEmail()).isEqualTo("social@email.com");
         verify(userRepository).save(any(User.class));
+        verify(eventPublisher).publishEvent(any(UserSignedUpEvent.class));
     }
 
     @Test
