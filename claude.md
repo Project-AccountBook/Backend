@@ -209,13 +209,23 @@
   - `BoardSearchResponse.tags` 필드 추가 (search API 응답도 태그 포함)
   - 프론트 `BoardSearchResponse.tags` 반영해 검색 결과에도 태그 렌더링
 
+#### 이번 세션에서 추가 구현 완료 (4차)
+- **ES 초기 재색인 배치**:
+  - `BoardReindexService.reindexAll()` — 200건 페이지로 Board 로드 → `tagService.tagsByBoards` 벌크 조회 → `boardSearchRepository.saveAll` 로 배치 upsert. 반환값은 색인된 문서 수.
+  - `POST /api/v1/admin/boards/reindex` 관리자 엔드포인트 (ROLE_ADMIN 필수, `/api/v1/admin/**` 시큐리티 룰 적용).
+  - `BoardReindexRunner`(ApplicationRunner) — `app.board.reindex-on-startup=true` 일 때 부팅 시 자동 재색인. 스키마 변경 배포 직후 1회 실행용 옵션.
+- **HOT 랭킹 Redis 캐싱**:
+  - `BoardService.hot(type, days, limit)` 에 `@Cacheable(cacheNames="board:hot", key="type:days:limit")` 적용.
+  - `RedisConfig.CACHE_BOARD_HOT` 상수 및 5분 TTL 캐시 설정 등록 (`hotConfig`).
+  - `BoardHotWarmupScheduler` — 4분 주기로 `(QNA/KNOWHOW, 7, 3)` 조합 미리 캐시에 적재. ShedLock 으로 다중 인스턴스 중복 실행 차단. `app.cache.warmup.board-hot.enabled=true`(기본값) 로 on/off.
+  - **참고**: 좋아요 토글/게시물 삭제 시 명시적 evict 는 없음. 5분 TTL + warm-up 주기로 stale 흡수. 실시간성이 필요하면 `@CacheEvict(cacheNames="board:hot", allEntries=true)` 를 like/delete 경로에 추가할 것.
+
 #### 남은 갭 (미해결)
 - **이미지 실제 업로드 인프라**: 현재 URL만 받아 저장. S3 presigned URL 발급 API (`POST /api/v1/images/presigned-url`) + 클라이언트 직접 업로드 파이프라인 필요.
-- **초기 reindex 배치**: ES에 tags 필드가 추가됐지만 기존 색인 문서는 tags가 비어 있음. `admin/reindex` 엔드포인트 또는 `ApplicationRunner` 로 전체 재색인 필요.
-- **좋아요/조회수 Redis 캐싱**: `PostLike.countByTargetIdAndTargetType` 는 요청마다 COUNT. 트래픽 증가 시 Redis 카운터 + 배치 동기화 필요 (조회수 의사결정 #4와 동일 패턴).
-- **관리자 게시물/댓글 리스트 API**: 현재 `AdminBoardController` 는 단건 삭제만 지원. 관리자 전용 조회(신고된 게시물, admin_deleted 포함) API는 없음. 지금은 일반 목록 API를 재사용.
+- **좋아요/조회수 Redis 카운터 캐싱**: HOT 랭킹은 캐싱했지만 `PostLike.countByTargetIdAndTargetType` 는 여전히 요청마다 COUNT (게시물 상세 조회 경로). 트래픽 증가 시 Redis 카운터 + 배치 동기화 필요 (조회수 의사결정 #4 와 동일 패턴).
+- **관리자 게시물/댓글 리스트 API**: 현재 `AdminBoardController` 는 단건 삭제 + reindex 만 지원. 관리자 전용 조회(신고된 게시물, admin_deleted 포함) API 는 없음. 지금은 일반 목록 API 를 재사용.
 - **Follow 상대 알림**: 팔로우 시 Notification 도메인 이벤트 미발행.
-- **HOT 랭킹 캐싱**: 매 요청마다 최근 7일 게시물 전체를 로드해 in-memory 정렬. 게시물 수 증가 시 Redis ZSET 도입.
+- **HOT 랭킹 실시간성**: Redis ZSET 기반 실시간 랭킹으로 전환하면 like 이벤트마다 ZINCRBY 로 즉시 반영 가능. 현재는 5분 stale 허용.
 
 #### 결정 사항 (이전 세션에서 마감)
 - `GET /api/v1/boards?type=QNA|KNOWHOW` 필터 파라미터 추가 (BoardRepository.findByType)

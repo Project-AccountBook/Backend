@@ -20,9 +20,11 @@ import com.chaewookim.accountbookformoms.domain.like.enums.LikeTargetType;
 import com.chaewookim.accountbookformoms.domain.tag.application.TagService;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
+import com.chaewookim.accountbookformoms.global.config.RedisConfig;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import com.chaewookim.accountbookformoms.global.event.BoardChangedEvent;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -161,6 +163,10 @@ public class BoardService {
         return board.isUrgent();
     }
 
+    // TTL 5분(RedisConfig.CACHE_BOARD_HOT). 좋아요/조회수 변화는 5분 내에서 stale 허용.
+    // 캐시 미스 시에만 전체 최근 게시물을 로드 + like count 조회 + in-memory 정렬 수행.
+    @Cacheable(cacheNames = RedisConfig.CACHE_BOARD_HOT,
+            key = "T(java.util.Objects).toString(#type) + ':' + #days + ':' + #limit")
     public List<BoardHotResponse> hot(BOARD_TYPE type, int days, int limit) {
         LocalDateTime since = LocalDateTime.now().minusDays(days);
         List<Board> recent = boardRepository.findRecentByType(type, since);
