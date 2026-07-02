@@ -234,12 +234,21 @@
   - 기존 `BoardViewCountService` (INCR + `board:views:dirty` set + `BoardViewSyncScheduler` 5분 주기 DB flush) 유지 — 의사결정 #4 이미 구현.
   - `BoardViewCountService.evict(boardId)` 신설 — dirty set 에서 SREM + counter DEL. `BoardService.delete` 에서 호출해 삭제된 게시물의 delta 가 다음 sync 때 "board not found (delta lost)" 로그를 남기던 문제 해소.
 
+#### 이번 세션에서 추가 구현 완료 (6차)
+- **관리자 게시물/댓글 리스트 API**:
+  - `GET /api/v1/admin/boards?type=&includeDeleted=` — `AdminBoardResponse`(원문 무마스킹 + `adminDeleted`/`userDeleted` 플래그 + `deletedAt`). `includeDeleted=true` 이면 `Board.@SQLRestriction("deleted_at IS NULL")` 를 우회하기 위해 `AdminBoardRepository` 의 native query 사용 (created_at DESC 하드코딩, Pageable 은 LIMIT/OFFSET 만).
+  - `GET /api/v1/admin/comments?referenceType=&referenceId=` — Comment 는 `@SQLRestriction` 이 없어 `findAll(pageable)` 로 소프트 삭제 포함 조회. `AdminCommentResponse` 원문 노출.
+  - 두 엔드포인트 모두 `/api/v1/admin/**` 시큐리티 룰로 ROLE_ADMIN 강제.
+- **좋아요 카운터 정합성 검증 배치**:
+  - `LikeCountReconcileService.reconcile(maxKeys)` — Redis `SCAN like:count:*` → 캐시 값 파싱 → 타입별로 `likeRepository.countByTargets` 벌크 DB COUNT → drift 시 WARN 로그 + DB 정본으로 SET. 손상된 값(NumberFormatException) 도 DEL 처리. `ReconcileReport(scanned, mismatched, corrected)` 반환.
+  - `LikeCountReconcileScheduler` — 매시 7분(`0 7 * * * *`) 실행, ShedLock 다중 인스턴스 차단, 1회 최대 500 키. `app.like.reconcile.enabled=true`(기본) on/off.
+  - `POST /api/v1/admin/likes/reconcile?limit=` 관리자 수동 트리거.
+
 #### 남은 갭 (미해결)
 - **이미지 실제 업로드 인프라**: 현재 URL만 받아 저장. S3 presigned URL 발급 API (`POST /api/v1/images/presigned-url`) + 클라이언트 직접 업로드 파이프라인 필요.
-- **관리자 게시물/댓글 리스트 API**: 현재 `AdminBoardController` 는 단건 삭제 + reindex 만 지원. 관리자 전용 조회(신고된 게시물, admin_deleted 포함) API 는 없음. 지금은 일반 목록 API 를 재사용.
 - **Follow 상대 알림**: 팔로우 시 Notification 도메인 이벤트 미발행.
 - **HOT 랭킹 실시간성**: Redis ZSET 기반 실시간 랭킹으로 전환하면 like 이벤트마다 ZINCRBY 로 즉시 반영 가능. 현재는 5분 stale 허용.
-- **좋아요 카운터 drift 자가 진단**: `LikeCountCacheService` 는 캐시가 없을 때만 DB 정본으로 리셋. 캐시 값과 DB 값이 어긋난 상태로 계속 hit 하면 감지 못 함. 주기 정합성 검증 배치(예: 시간대별 무작위 sample DB COUNT 대조)는 미구현.
+- **관리자 리스트 프론트 UI 확장**: 현재 `AdminView.tsx` 는 boards 만 `listBoards` 재사용해 노출. 위에 신설된 `GET /admin/boards`(원문/삭제 플래그) 및 `GET /admin/comments` 전용 뷰 미연동. 프론트 이월.
 
 #### 결정 사항 (이전 세션에서 마감)
 - `GET /api/v1/boards?type=QNA|KNOWHOW` 필터 파라미터 추가 (BoardRepository.findByType)

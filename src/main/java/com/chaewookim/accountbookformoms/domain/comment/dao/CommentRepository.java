@@ -19,4 +19,9 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
             Long referenceId, ReferenceType referenceType, Pageable pageable);
 
     List<Comment> findByParentIdInOrderByCreatedAtAsc(java.util.Collection<Long> parentIds);
+
+    Page<Comment> findByReferenceType(ReferenceType referenceType, Pageable pageable);
+
+    Page<Comment> findByReferenceIdAndReferenceType(
+            Long referenceId, ReferenceType referenceType, Pageable pageable);
 }
