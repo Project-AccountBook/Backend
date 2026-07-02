@@ -200,9 +200,18 @@
 - **관리자 UI 프론트**: `AdminView.tsx` + Sidebar에 role=ROLE_ADMIN 시 노출. `DELETE /api/v1/admin/boards/{id}` 연동.
 - **서버 페이지네이션 프론트**: QnaListView/KnowhowListView가 `page/totalPages/totalElements` 메타 사용해 서버 페이지 이동. 태그 필터/검색 파라미터도 서버에 전달.
 
+#### 이번 세션에서 추가 구현 완료 (3차)
+- **Elasticsearch에 tags 포함**:
+  - `BoardDocument.tags: List<String>` (`FieldType.Keyword`) 추가
+  - `BoardDocument.from(board, tags)` 오버로드로 색인 시 태그 주입
+  - `BoardIndexEventListener` 가 UPSERT 시 `tagService.tagsOfBoard(boardId)` 로 태그 로딩 후 함께 색인
+  - `BoardSearchQueryRepository.search` 를 bool query 로 변경: `title^2 / content` (multi_match) OR `tags` (term) — should 절 minimum_should_match=1
+  - `BoardSearchResponse.tags` 필드 추가 (search API 응답도 태그 포함)
+  - 프론트 `BoardSearchResponse.tags` 반영해 검색 결과에도 태그 렌더링
+
 #### 남은 갭 (미해결)
 - **이미지 실제 업로드 인프라**: 현재 URL만 받아 저장. S3 presigned URL 발급 API (`POST /api/v1/images/presigned-url`) + 클라이언트 직접 업로드 파이프라인 필요.
-- **Elasticsearch에 tags 포함**: `BoardDocument` 에 `tags[]` 필드 미추가. 태그 기반 필터는 현재 RDB 조회. ES 검색 결과에서 태그 매칭까지 지원하려면 `BoardIndexEventListener` 가 태그를 함께 로딩/색인해야 함.
+- **초기 reindex 배치**: ES에 tags 필드가 추가됐지만 기존 색인 문서는 tags가 비어 있음. `admin/reindex` 엔드포인트 또는 `ApplicationRunner` 로 전체 재색인 필요.
 - **좋아요/조회수 Redis 캐싱**: `PostLike.countByTargetIdAndTargetType` 는 요청마다 COUNT. 트래픽 증가 시 Redis 카운터 + 배치 동기화 필요 (조회수 의사결정 #4와 동일 패턴).
 - **관리자 게시물/댓글 리스트 API**: 현재 `AdminBoardController` 는 단건 삭제만 지원. 관리자 전용 조회(신고된 게시물, admin_deleted 포함) API는 없음. 지금은 일반 목록 API를 재사용.
 - **Follow 상대 알림**: 팔로우 시 Notification 도메인 이벤트 미발행.

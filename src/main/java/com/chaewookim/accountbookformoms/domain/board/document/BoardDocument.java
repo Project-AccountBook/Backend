@@ -13,6 +13,7 @@ import org.springframework.data.elasticsearch.annotations.Field;
 import org.springframework.data.elasticsearch.annotations.FieldType;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Document(indexName = "board")
@@ -39,10 +40,17 @@ public class BoardDocument {
     @Field(type = FieldType.Long)
     private Long categoryId;
 
+    @Field(type = FieldType.Keyword)
+    private List<String> tags;
+
     @Field(type = FieldType.Date, format = DateFormat.date_hour_minute_second_millis)
     private LocalDateTime createdAt;
 
     public static BoardDocument from(Board board) {
+        return from(board, List.of());
+    }
+
+    public static BoardDocument from(Board board, List<String> tags) {
         return BoardDocument.builder()
                 .id(board.getId())
                 .title(board.getTitle())
@@ -50,6 +58,7 @@ public class BoardDocument {
                 .type(board.getType().name())
                 .userId(board.getUserId())
                 .categoryId(board.getCategoryId())
+                .tags(tags != null ? tags : List.of())
                 .createdAt(board.getCreatedAt())
                 .build();
     }

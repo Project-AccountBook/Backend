@@ -3,6 +3,7 @@ package com.chaewookim.accountbookformoms.domain.board.dto.response;
 import com.chaewookim.accountbookformoms.domain.board.document.BoardDocument;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public record BoardSearchResponse(
         Long id,
@@ -11,6 +12,7 @@ public record BoardSearchResponse(
         String title,
         String content,
         String type,
+        List<String> tags,
         LocalDateTime createdAt
 ) {
     public static BoardSearchResponse from(BoardDocument doc) {
@@ -21,6 +23,7 @@ public record BoardSearchResponse(
                 doc.getTitle(),
                 doc.getContent(),
                 doc.getType(),
+                doc.getTags() != null ? doc.getTags() : List.of(),
                 doc.getCreatedAt()
         );
     }
