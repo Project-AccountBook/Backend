@@ -4,6 +4,7 @@ import com.chaewookim.accountbookformoms.domain.board.entity.Board;
 import com.chaewookim.accountbookformoms.domain.board.enums.BOARD_TYPE;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public record BoardResponse(
         Long id,
@@ -19,6 +20,8 @@ public record BoardResponse(
         long likeCount,
         boolean liked,
         boolean bookmarked,
+        List<String> tags,
+        List<String> imageUrls,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
@@ -26,15 +29,15 @@ public record BoardResponse(
     private static final String UNKNOWN_AUTHOR = "탈퇴한 사용자";
 
     public static BoardResponse from(Board board) {
-        return from(board, 0L, null, 0L, false, false);
+        return from(board, 0L, null, 0L, false, false, List.of(), List.of());
     }
 
     public static BoardResponse from(Board board, long pendingViews) {
-        return from(board, pendingViews, null, 0L, false, false);
+        return from(board, pendingViews, null, 0L, false, false, List.of(), List.of());
     }
 
     public static BoardResponse from(Board board, long pendingViews, String authorNickname) {
-        return from(board, pendingViews, authorNickname, 0L, false, false);
+        return from(board, pendingViews, authorNickname, 0L, false, false, List.of(), List.of());
     }
 
     public static BoardResponse from(
@@ -44,6 +47,19 @@ public record BoardResponse(
             long likeCount,
             boolean liked,
             boolean bookmarked
+    ) {
+        return from(board, pendingViews, authorNickname, likeCount, liked, bookmarked, List.of(), List.of());
+    }
+
+    public static BoardResponse from(
+            Board board,
+            long pendingViews,
+            String authorNickname,
+            long likeCount,
+            boolean liked,
+            boolean bookmarked,
+            List<String> tags,
+            List<String> imageUrls
     ) {
         boolean adminDeleted = board.isAdminDeleted();
         return new BoardResponse(
@@ -60,6 +76,8 @@ public record BoardResponse(
                 likeCount,
                 liked,
                 bookmarked,
+                tags,
+                imageUrls,
                 board.getCreatedAt(),
                 board.getUpdatedAt()
         );

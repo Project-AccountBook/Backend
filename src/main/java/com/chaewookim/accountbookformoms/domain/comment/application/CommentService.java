@@ -119,6 +119,36 @@ public class CommentService {
     public List<CommentResponse> list(Long postId, ReferenceType referenceType, Long viewerId) {
         List<Comment> comments = commentRepository
                 .findByReferenceIdAndReferenceTypeOrderByCreatedAtAsc(postId, referenceType);
+        return enrich(comments, viewerId);
+    }
+
+    public org.springframework.data.domain.Page<com.chaewookim.accountbookformoms.domain.comment.dto.response.CommentThreadResponse> listThreads(
+            Long postId,
+            ReferenceType referenceType,
+            org.springframework.data.domain.Pageable pageable,
+            Long viewerId
+    ) {
+        org.springframework.data.domain.Page<Comment> topLevel = commentRepository
+                .findByReferenceIdAndReferenceTypeAndParentIdIsNullOrderByCreatedAtAsc(postId, referenceType, pageable);
+        List<Long> parentIds = topLevel.getContent().stream().map(Comment::getId).toList();
+        List<Comment> replies = parentIds.isEmpty()
+                ? List.of()
+                : commentRepository.findByParentIdInOrderByCreatedAtAsc(parentIds);
+        List<Comment> all = new java.util.ArrayList<>(topLevel.getContent());
+        all.addAll(replies);
+        Map<Long, CommentResponse> byId = enrich(all, viewerId).stream()
+                .collect(Collectors.toMap(CommentResponse::id, r -> r));
+        Map<Long, List<CommentResponse>> repliesByParent = new java.util.HashMap<>();
+        replies.forEach(r -> repliesByParent
+                .computeIfAbsent(r.getParentId(), k -> new java.util.ArrayList<>())
+                .add(byId.get(r.getId())));
+        return topLevel.map(parent -> new com.chaewookim.accountbookformoms.domain.comment.dto.response.CommentThreadResponse(
+                byId.get(parent.getId()),
+                repliesByParent.getOrDefault(parent.getId(), List.of())
+        ));
+    }
+
+    private List<CommentResponse> enrich(List<Comment> comments, Long viewerId) {
         List<Long> ids = comments.stream().map(Comment::getId).toList();
         Map<Long, String> nicknames = loadNicknames(comments.stream().map(Comment::getUserId).toList());
         Map<Long, Long> likeCounts = likeService.countByTargets(LikeTargetType.COMMENT, ids);

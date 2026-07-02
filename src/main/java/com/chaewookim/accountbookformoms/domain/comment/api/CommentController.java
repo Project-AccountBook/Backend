@@ -4,13 +4,19 @@ import com.chaewookim.accountbookformoms.domain.comment.application.CommentServi
 import com.chaewookim.accountbookformoms.domain.comment.dto.request.CommentCreateRequest;
 import com.chaewookim.accountbookformoms.domain.comment.dto.request.CommentUpdateRequest;
 import com.chaewookim.accountbookformoms.domain.comment.dto.response.CommentResponse;
+import com.chaewookim.accountbookformoms.domain.comment.dto.response.CommentThreadResponse;
 import com.chaewookim.accountbookformoms.domain.comment.enums.ReferenceType;
 import com.chaewookim.accountbookformoms.global.common.ApiResponse;
 import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.converters.models.PageableAsQueryParam;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -87,7 +93,7 @@ public class CommentController {
         return ResponseEntity.ok(ApiResponse.success(commentService.delete(commentId, userId)));
     }
 
-    @Operation(summary = "댓글 조회", description = "게시물에 달린 댓글 목록을 조회합니다.")
+    @Operation(summary = "댓글 조회 (전체)", description = "게시물에 달린 댓글 전체를 flat 리스트로 반환합니다.")
     @GetMapping("/{post-id}")
     public ResponseEntity<ApiResponse<List<CommentResponse>>> list(
             @PathVariable("post-id") Long postId,
@@ -96,5 +102,21 @@ public class CommentController {
     ) {
         Long viewerId = principal == null ? null : principal.getUserId();
         return ResponseEntity.ok(ApiResponse.success(commentService.list(postId, referenceType, viewerId)));
+    }
+
+    @Operation(summary = "댓글 스레드 페이지 조회",
+            description = "top-level 댓글을 페이지 단위로 반환하고 각 스레드에 대댓글을 포함합니다.")
+    @PageableAsQueryParam
+    @GetMapping("/{post-id}/threads")
+    public ResponseEntity<ApiResponse<Page<CommentThreadResponse>>> listThreads(
+            @PathVariable("post-id") Long postId,
+            @RequestParam ReferenceType referenceType,
+            @Parameter(hidden = true)
+            @PageableDefault(size = 20) Pageable pageable,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        Long viewerId = principal == null ? null : principal.getUserId();
+        return ResponseEntity.ok(ApiResponse.success(
+                commentService.listThreads(postId, referenceType, pageable, viewerId)));
     }
 }

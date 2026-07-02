@@ -189,17 +189,24 @@
 - **Q&A 상태 필드**: `Board.isResolved`, `Board.isUrgent` 컬럼 + 작성자 전용 토글 엔드포인트 (`PATCH /api/v1/boards/{id}/resolved|urgent`). `Comment.accepted` 컬럼 + Q&A 작성자만 채택 가능(`PATCH /api/v1/comments/{id}/accept`, 채택 시 board.resolved=true 자동 전환).
 - **/users/me 응답에 id 추가**: 프론트에서 "내가 작성자인가?" 판정용. `UserProfileResponse.id`.
 
-#### 백엔드 미구현 (별도 이슈로 이월)
-- **태그**: `#식비절약` 등 프리 태그. Tag ↔ Board M:N + `GET /boards?tag=` 확장. ES 인덱스에도 태그 포함 필요.
-- **본문/썸네일 이미지 업로드**: `Image` 통합 테이블은 있으나 Board 도메인에서 이미지 업로드 API 미노출. `POST /api/v1/boards/{id}/images` (S3 presigned or multipart) 필요.
-- **HOT 랭킹**: 노하우 "이번 주 HOT" 산출용 조회수/좋아요 집계 API 없음. Redis ZSET 랭킹 또는 배치 집계 + `GET /api/v1/boards/hot?type=KNOWHOW&period=weekly`. (이번 세션에서 UI는 이미 제거된 상태)
-- **댓글 페이지네이션**: `GET /api/v1/comments/{postId}` 가 전체 반환. Pageable 도입 필요. 현재 댓글 수 적어 미시급.
-- **팔로우 / 작성자 프로필 통계(게시글 수, 좋아요 수)**: Follow 도메인 및 프로필 집계 API 없음. 사이드바 프로필 카드에서만 사용되므로 우선순위 낮음.
-- **좋아요 캐싱**: `PostLike.countByTargetIdAndTargetType` 가 매 조회 시 COUNT 쿼리. 트래픽 증가 시 Redis 카운터 + 주기 동기화로 전환.
+#### 이번 세션에서 추가 구현 완료 (2차)
+- **Tag 도메인** (`domain/tag/`): `Tag` + `BoardTag` 조인 테이블, `TagService.setTagsForBoard/tagsOfBoard/tagsByBoards/boardIdsWithTag`, `GET /api/v1/tags`. `BoardCreateRequest/BoardUpdateRequest.tags` 추가. `GET /api/v1/boards?tag=` 필터 파라미터.
+- **Image 도메인** (`domain/image/`): `Image` 통합 테이블(reference_type, reference_id, sort_order). `POST /api/v1/boards/{postId}/images`(URL 저장 방식, S3 업로드는 클라이언트 담당), `GET /api/v1/boards/{postId}/images`, `DELETE /api/v1/images/{imageId}`. `BoardResponse.imageUrls`.
+- **HOT 랭킹**: `GET /api/v1/boards/hot?type=KNOWHOW&days=7&limit=3`. Score = views + likeCount * 3, 최근 N일 이내. Redis ZSET는 추후 전환.
+- **댓글 페이지네이션**: `GET /api/v1/comments/{postId}/threads` 로 `Page<CommentThreadResponse>`(top-level 댓글 페이지 + 각 스레드의 대댓글 포함) 반환. 기존 flat `GET /comments/{postId}` 유지.
+- **Follow 도메인** (`domain/follow/`): `Follow(follower_id, following_id)`. `POST /api/v1/users/{userId}/follow` 토글, `GET /followers|following` 목록.
+- **User 프로필 통계** (`domain/userstats/`): `GET /api/v1/users/{userId}/stats` → postCount / followerCount / followingCount / following(viewer 기준).
+- **`UserProfileResponse.role`** 노출 (프론트 관리자 메뉴 판정용).
+- **관리자 UI 프론트**: `AdminView.tsx` + Sidebar에 role=ROLE_ADMIN 시 노출. `DELETE /api/v1/admin/boards/{id}` 연동.
+- **서버 페이지네이션 프론트**: QnaListView/KnowhowListView가 `page/totalPages/totalElements` 메타 사용해 서버 페이지 이동. 태그 필터/검색 파라미터도 서버에 전달.
 
-#### 프론트 미구현 (백엔드에는 있음)
-- **관리자 소프트 삭제 UI**: `DELETE /api/v1/admin/boards|comments/{id}` 엔드포인트 존재. 어드민 화면 트랙에서 별도 연동.
-- **서버 페이지네이션 활용**: `Page<BoardResponse>` 메타(totalElements/totalPages/number)를 그대로 두고 클라이언트가 size=100 로 한 번에 받아 자체 분할 중. 서버 페이지 이동으로 전환 시 대량 데이터에 유리.
+#### 남은 갭 (미해결)
+- **이미지 실제 업로드 인프라**: 현재 URL만 받아 저장. S3 presigned URL 발급 API (`POST /api/v1/images/presigned-url`) + 클라이언트 직접 업로드 파이프라인 필요.
+- **Elasticsearch에 tags 포함**: `BoardDocument` 에 `tags[]` 필드 미추가. 태그 기반 필터는 현재 RDB 조회. ES 검색 결과에서 태그 매칭까지 지원하려면 `BoardIndexEventListener` 가 태그를 함께 로딩/색인해야 함.
+- **좋아요/조회수 Redis 캐싱**: `PostLike.countByTargetIdAndTargetType` 는 요청마다 COUNT. 트래픽 증가 시 Redis 카운터 + 배치 동기화 필요 (조회수 의사결정 #4와 동일 패턴).
+- **관리자 게시물/댓글 리스트 API**: 현재 `AdminBoardController` 는 단건 삭제만 지원. 관리자 전용 조회(신고된 게시물, admin_deleted 포함) API는 없음. 지금은 일반 목록 API를 재사용.
+- **Follow 상대 알림**: 팔로우 시 Notification 도메인 이벤트 미발행.
+- **HOT 랭킹 캐싱**: 매 요청마다 최근 7일 게시물 전체를 로드해 in-memory 정렬. 게시물 수 증가 시 Redis ZSET 도입.
 
 #### 결정 사항 (이전 세션에서 마감)
 - `GET /api/v1/boards?type=QNA|KNOWHOW` 필터 파라미터 추가 (BoardRepository.findByType)

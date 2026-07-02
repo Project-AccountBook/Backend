@@ -7,6 +7,7 @@ public record UserProfileResponse(
         Long id,
         String email,
         String username,
+        String role,
         LocalDate birthDate,
         String address,
         Boolean hasPassword,
