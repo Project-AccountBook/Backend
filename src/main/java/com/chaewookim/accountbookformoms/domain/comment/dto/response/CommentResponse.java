@@ -14,6 +14,9 @@ public record CommentResponse(
         Long parentId,
         String content,
         boolean deleted,
+        boolean accepted,
+        long likeCount,
+        boolean liked,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
@@ -22,10 +25,14 @@ public record CommentResponse(
     private static final String UNKNOWN_AUTHOR = "탈퇴한 사용자";
 
     public static CommentResponse from(Comment comment) {
-        return from(comment, null);
+        return from(comment, null, 0L, false);
     }
 
     public static CommentResponse from(Comment comment, String authorNickname) {
+        return from(comment, authorNickname, 0L, false);
+    }
+
+    public static CommentResponse from(Comment comment, String authorNickname, long likeCount, boolean liked) {
         boolean deleted = comment.isDeleted();
         boolean adminDeleted = comment.isAdminDeleted();
         String content;
@@ -45,6 +52,9 @@ public record CommentResponse(
                 comment.getParentId(),
                 content,
                 deleted || adminDeleted,
+                comment.isAccepted(),
+                likeCount,
+                liked,
                 comment.getCreatedAt(),
                 comment.getUpdatedAt()
         );

@@ -67,6 +67,16 @@ public class CommentController {
         return ResponseEntity.ok(ApiResponse.success(commentService.update(commentId, request, userId)));
     }
 
+    @Operation(summary = "Q&A 답변 채택", description = "Q&A 게시물 작성자가 답변을 채택합니다.")
+    @PatchMapping("/{comment-id}/accept")
+    public ResponseEntity<ApiResponse<Long>> accept(
+            @PathVariable("comment-id") Long commentId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                commentService.acceptAnswer(commentId, userPrincipal.getUserId())));
+    }
+
     @Operation(summary = "댓글 삭제", description = "본인의 댓글을 삭제합니다 (Soft Delete).")
     @DeleteMapping("/{comment-id}")
     public ResponseEntity<ApiResponse<Long>> delete(
@@ -81,8 +91,10 @@ public class CommentController {
     @GetMapping("/{post-id}")
     public ResponseEntity<ApiResponse<List<CommentResponse>>> list(
             @PathVariable("post-id") Long postId,
-            @RequestParam ReferenceType referenceType
+            @RequestParam ReferenceType referenceType,
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
-        return ResponseEntity.ok(ApiResponse.success(commentService.list(postId, referenceType)));
+        Long viewerId = principal == null ? null : principal.getUserId();
+        return ResponseEntity.ok(ApiResponse.success(commentService.list(postId, referenceType, viewerId)));
     }
 }

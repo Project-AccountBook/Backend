@@ -12,6 +12,9 @@ import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardUpdateRe
 import com.chaewookim.accountbookformoms.domain.board.entity.Board;
 import com.chaewookim.accountbookformoms.domain.board.enums.BOARD_TYPE;
 import com.chaewookim.accountbookformoms.domain.board.error.BoardErrorCode;
+import com.chaewookim.accountbookformoms.domain.bookmark.application.BookmarkService;
+import com.chaewookim.accountbookformoms.domain.like.application.PostLikeService;
+import com.chaewookim.accountbookformoms.domain.like.enums.LikeTargetType;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
@@ -25,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -36,17 +40,28 @@ public class BoardService {
     private final BoardSearchQueryRepository boardSearchQueryRepository;
     private final BoardViewCountService viewCountService;
     private final UserRepository userRepository;
+    private final PostLikeService likeService;
+    private final BookmarkService bookmarkService;
     private final ApplicationEventPublisher eventPublisher;
 
-    public Page<BoardResponse> list(BOARD_TYPE type, Pageable pageable) {
+    public Page<BoardResponse> list(BOARD_TYPE type, Pageable pageable, Long viewerId) {
         Page<Board> page = (type == null)
                 ? boardRepository.findAll(pageable)
                 : boardRepository.findByType(type, pageable);
-        List<Long> ids = page.getContent().stream().map(Board::getId).toList();
+        List<Board> boards = page.getContent();
+        List<Long> ids = boards.stream().map(Board::getId).toList();
         Map<Long, Long> pending = viewCountService.getPendingDeltas(ids);
-        Map<Long, String> nicknames = loadNicknames(page.getContent().stream().map(Board::getUserId).toList());
-        return page.map(b ->
-                BoardResponse.from(b, pending.getOrDefault(b.getId(), 0L), nicknames.get(b.getUserId())));
+        Map<Long, String> nicknames = loadNicknames(boards.stream().map(Board::getUserId).toList());
+        Map<Long, Long> likeCounts = likeService.countByTargets(LikeTargetType.BOARD, ids);
+        Set<Long> liked = likeService.likedTargets(LikeTargetType.BOARD, ids, viewerId);
+        Set<Long> bookmarked = bookmarkService.bookmarkedBoards(ids, viewerId);
+        return page.map(b -> BoardResponse.from(
+                b,
+                pending.getOrDefault(b.getId(), 0L),
+                nicknames.get(b.getUserId()),
+                likeCounts.getOrDefault(b.getId(), 0L),
+                liked.contains(b.getId()),
+                bookmarked.contains(b.getId())));
     }
 
     @Transactional
@@ -64,13 +79,16 @@ public class BoardService {
         return new BoardCreateResponse(saved.getId(), saved.getTitle());
     }
 
-    public BoardResponse get(Long postId) {
+    public BoardResponse get(Long postId, Long viewerId) {
         Board board = findBoardOrThrow(postId);
         long pending = viewCountService.increment(postId);
         String nickname = userRepository.findById(board.getUserId())
                 .map(User::getUsername)
                 .orElse(null);
-        return BoardResponse.from(board, pending, nickname);
+        long likeCount = likeService.count(LikeTargetType.BOARD, postId);
+        boolean liked = likeService.isLiked(LikeTargetType.BOARD, postId, viewerId);
+        boolean bookmarked = bookmarkService.isBookmarked(postId, viewerId);
+        return BoardResponse.from(board, pending, nickname, likeCount, liked, bookmarked);
     }
 
     @Transactional
@@ -91,6 +109,22 @@ public class BoardService {
         boardRepository.delete(board);
         eventPublisher.publishEvent(BoardChangedEvent.delete(board.getId()));
         return board.getId();
+    }
+
+    @Transactional
+    public boolean setResolved(Long postId, boolean value, Long userId) {
+        Board board = findBoardOrThrow(postId);
+        validateOwner(board, userId);
+        board.setResolved(value);
+        return board.isResolved();
+    }
+
+    @Transactional
+    public boolean setUrgent(Long postId, boolean value, Long userId) {
+        Board board = findBoardOrThrow(postId);
+        validateOwner(board, userId);
+        board.setUrgent(value);
+        return board.isUrgent();
     }
 
     public Page<BoardSearchResponse> search(String keyword, Pageable pageable) {

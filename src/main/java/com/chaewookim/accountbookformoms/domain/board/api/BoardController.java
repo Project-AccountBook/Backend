@@ -2,6 +2,7 @@ package com.chaewookim.accountbookformoms.domain.board.api;
 
 import com.chaewookim.accountbookformoms.domain.board.application.BoardService;
 import com.chaewookim.accountbookformoms.domain.board.dto.request.BoardCreateRequest;
+import com.chaewookim.accountbookformoms.domain.board.dto.request.BoardStatusRequest;
 import com.chaewookim.accountbookformoms.domain.board.dto.request.BoardUpdateRequest;
 import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardCreateResponse;
 import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardResponse;
@@ -48,9 +49,11 @@ public class BoardController {
     public ResponseEntity<ApiResponse<Page<BoardResponse>>> list(
             @RequestParam(required = false) BOARD_TYPE type,
             @Parameter(hidden = true)
-            @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+            @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
-        return ResponseEntity.ok(ApiResponse.success(boardService.list(type, pageable)));
+        Long viewerId = principal == null ? null : principal.getUserId();
+        return ResponseEntity.ok(ApiResponse.success(boardService.list(type, pageable, viewerId)));
     }
 
     @Operation(summary = "게시물 추가", description = "일반 사용자의 게시물 생성")
@@ -66,9 +69,11 @@ public class BoardController {
     @Operation(summary = "게시물 조회", description = "게시물 단건 조회")
     @GetMapping("/{post-id}")
     public ResponseEntity<ApiResponse<BoardResponse>> get(
-            @PathVariable("post-id") Long postId
+            @PathVariable("post-id") Long postId,
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
-        return ResponseEntity.ok(ApiResponse.success(boardService.get(postId)));
+        Long viewerId = principal == null ? null : principal.getUserId();
+        return ResponseEntity.ok(ApiResponse.success(boardService.get(postId, viewerId)));
     }
 
     @Operation(summary = "게시물 수정", description = "일반 사용자의 게시물 수정")
@@ -80,6 +85,28 @@ public class BoardController {
     ) {
         Long userId = userPrincipal.getUserId();
         return ResponseEntity.ok(ApiResponse.success(boardService.update(postId, request, userId)));
+    }
+
+    @Operation(summary = "Q&A 해결 상태 토글", description = "작성자가 Q&A 게시물의 해결 여부를 설정합니다.")
+    @PatchMapping("/{post-id}/resolved")
+    public ResponseEntity<ApiResponse<Boolean>> setResolved(
+            @PathVariable("post-id") Long postId,
+            @RequestBody @Valid BoardStatusRequest request,
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                boardService.setResolved(postId, request.value(), userPrincipal.getUserId())));
+    }
+
+    @Operation(summary = "Q&A 급함 표시 토글", description = "작성자가 Q&A 게시물의 급함 여부를 설정합니다.")
+    @PatchMapping("/{post-id}/urgent")
+    public ResponseEntity<ApiResponse<Boolean>> setUrgent(
+            @PathVariable("post-id") Long postId,
+            @RequestBody @Valid BoardStatusRequest request,
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                boardService.setUrgent(postId, request.value(), userPrincipal.getUserId())));
     }
 
     @Operation(summary = "게시물 삭제", description = "일반 사용자의 게시물 삭제 (Soft Delete)")

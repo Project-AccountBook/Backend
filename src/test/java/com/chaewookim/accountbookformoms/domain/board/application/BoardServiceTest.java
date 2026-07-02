@@ -12,6 +12,8 @@ import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardUpdateRe
 import com.chaewookim.accountbookformoms.domain.board.entity.Board;
 import com.chaewookim.accountbookformoms.domain.board.enums.BOARD_TYPE;
 import com.chaewookim.accountbookformoms.domain.board.error.BoardErrorCode;
+import com.chaewookim.accountbookformoms.domain.bookmark.application.BookmarkService;
+import com.chaewookim.accountbookformoms.domain.like.application.PostLikeService;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import com.chaewookim.accountbookformoms.global.event.BoardChangedEvent;
@@ -59,6 +61,12 @@ class BoardServiceTest {
     private UserRepository userRepository;
 
     @Mock
+    private PostLikeService likeService;
+
+    @Mock
+    private BookmarkService bookmarkService;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
@@ -94,7 +102,7 @@ class BoardServiceTest {
                     .willReturn(new PageImpl<>(List.of(board), pageable, 1));
             given(viewCountService.getPendingDeltas(anyCollection())).willReturn(Map.of());
 
-            Page<BoardResponse> result = boardService.list(null, pageable);
+            Page<BoardResponse> result = boardService.list(null, pageable, null);
 
             assertThat(result.getTotalElements()).isEqualTo(1);
             assertThat(result.getContent().get(0).id()).isEqualTo(POST_ID);
@@ -112,7 +120,7 @@ class BoardServiceTest {
             given(viewCountService.getPendingDeltas(anyCollection()))
                     .willReturn(Map.of(POST_ID, 7L));
 
-            Page<BoardResponse> result = boardService.list(null, pageable);
+            Page<BoardResponse> result = boardService.list(null, pageable, null);
 
             assertThat(result.getContent().get(0).views()).isEqualTo(17);
         }
@@ -155,7 +163,7 @@ class BoardServiceTest {
             given(boardRepository.findById(POST_ID)).willReturn(Optional.of(board));
             given(viewCountService.increment(POST_ID)).willReturn(3L);
 
-            BoardResponse response = boardService.get(POST_ID);
+            BoardResponse response = boardService.get(POST_ID, null);
 
             assertThat(response.id()).isEqualTo(POST_ID);
             assertThat(response.title()).isEqualTo(board.getTitle());
@@ -169,7 +177,7 @@ class BoardServiceTest {
         void get_fail_not_found() {
             given(boardRepository.findById(POST_ID)).willReturn(Optional.empty());
 
-            assertThatThrownBy(() -> boardService.get(POST_ID))
+            assertThatThrownBy(() -> boardService.get(POST_ID, null))
                     .isInstanceOf(CustomException.class)
                     .hasFieldOrPropertyWithValue("errorCode", BoardErrorCode.BOARD_NOT_FOUND);
         }

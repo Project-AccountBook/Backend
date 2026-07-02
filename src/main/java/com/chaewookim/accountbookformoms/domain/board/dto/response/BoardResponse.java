@@ -14,6 +14,11 @@ public record BoardResponse(
         String content,
         BOARD_TYPE type,
         int views,
+        boolean resolved,
+        boolean urgent,
+        long likeCount,
+        boolean liked,
+        boolean bookmarked,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
@@ -21,14 +26,25 @@ public record BoardResponse(
     private static final String UNKNOWN_AUTHOR = "탈퇴한 사용자";
 
     public static BoardResponse from(Board board) {
-        return from(board, 0L, null);
+        return from(board, 0L, null, 0L, false, false);
     }
 
     public static BoardResponse from(Board board, long pendingViews) {
-        return from(board, pendingViews, null);
+        return from(board, pendingViews, null, 0L, false, false);
     }
 
     public static BoardResponse from(Board board, long pendingViews, String authorNickname) {
+        return from(board, pendingViews, authorNickname, 0L, false, false);
+    }
+
+    public static BoardResponse from(
+            Board board,
+            long pendingViews,
+            String authorNickname,
+            long likeCount,
+            boolean liked,
+            boolean bookmarked
+    ) {
         boolean adminDeleted = board.isAdminDeleted();
         return new BoardResponse(
                 board.getId(),
@@ -39,6 +55,11 @@ public record BoardResponse(
                 adminDeleted ? ADMIN_DELETED_MESSAGE : board.getContent(),
                 board.getType(),
                 board.getViews() + (int) pendingViews,
+                board.isResolved(),
+                board.isUrgent(),
+                likeCount,
+                liked,
+                bookmarked,
                 board.getCreatedAt(),
                 board.getUpdatedAt()
         );

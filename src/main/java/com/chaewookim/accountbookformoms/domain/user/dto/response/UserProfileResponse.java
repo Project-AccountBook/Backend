@@ -4,6 +4,7 @@ import java.time.LocalDate;
 
 public record UserProfileResponse(
 
+        Long id,
         String email,
         String username,
         LocalDate birthDate,

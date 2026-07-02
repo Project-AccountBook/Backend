@@ -1,6 +1,7 @@
 package com.chaewookim.accountbookformoms.domain.comment.application;
 
 import com.chaewookim.accountbookformoms.domain.board.dao.BoardRepository;
+import com.chaewookim.accountbookformoms.domain.board.entity.Board;
 import com.chaewookim.accountbookformoms.domain.board.error.BoardErrorCode;
 import com.chaewookim.accountbookformoms.domain.comment.dao.CommentRepository;
 import com.chaewookim.accountbookformoms.domain.comment.dto.request.CommentCreateRequest;
@@ -10,6 +11,8 @@ import com.chaewookim.accountbookformoms.domain.comment.entity.Comment;
 import com.chaewookim.accountbookformoms.domain.comment.enums.ReferenceType;
 import com.chaewookim.accountbookformoms.domain.comment.error.CommentErrorCode;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseRepository;
+import com.chaewookim.accountbookformoms.domain.like.application.PostLikeService;
+import com.chaewookim.accountbookformoms.domain.like.enums.LikeTargetType;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
@@ -20,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -31,6 +35,7 @@ public class CommentService {
     private final BoardRepository boardRepository;
     private final GroupPurchaseRepository groupPurchaseRepository;
     private final UserRepository userRepository;
+    private final PostLikeService likeService;
 
     @Transactional
     public Long create(Long postId, CommentCreateRequest request, Long userId) {
@@ -83,12 +88,47 @@ public class CommentService {
         return comment.getId();
     }
 
-    public List<CommentResponse> list(Long postId, ReferenceType referenceType) {
+    @Transactional
+    public Long acceptAnswer(Long commentId, Long requesterId) {
+        Comment comment = findCommentOrThrow(commentId);
+        if (comment.getReferenceType() != ReferenceType.QNA) {
+            throw new CustomException(CommentErrorCode.COMMENT_ACCEPT_NOT_QNA);
+        }
+        if (comment.getParentId() != null) {
+            throw new CustomException(CommentErrorCode.COMMENT_ACCEPT_REPLY_NOT_ALLOWED);
+        }
+        Board board = boardRepository.findById(comment.getReferenceId())
+                .orElseThrow(() -> new CustomException(BoardErrorCode.BOARD_NOT_FOUND));
+        if (!board.getUserId().equals(requesterId)) {
+            throw new CustomException(BoardErrorCode.BOARD_ACCESS_DENIED);
+        }
+
+        List<Comment> siblings = commentRepository
+                .findByReferenceIdAndReferenceTypeOrderByCreatedAtAsc(
+                        comment.getReferenceId(), ReferenceType.QNA);
+        for (Comment sibling : siblings) {
+            if (sibling.getParentId() == null && sibling.isAccepted() && !sibling.getId().equals(commentId)) {
+                sibling.setAccepted(false);
+            }
+        }
+        comment.setAccepted(true);
+        board.setResolved(true);
+        return comment.getId();
+    }
+
+    public List<CommentResponse> list(Long postId, ReferenceType referenceType, Long viewerId) {
         List<Comment> comments = commentRepository
                 .findByReferenceIdAndReferenceTypeOrderByCreatedAtAsc(postId, referenceType);
+        List<Long> ids = comments.stream().map(Comment::getId).toList();
         Map<Long, String> nicknames = loadNicknames(comments.stream().map(Comment::getUserId).toList());
+        Map<Long, Long> likeCounts = likeService.countByTargets(LikeTargetType.COMMENT, ids);
+        Set<Long> liked = likeService.likedTargets(LikeTargetType.COMMENT, ids, viewerId);
         return comments.stream()
-                .map(c -> CommentResponse.from(c, nicknames.get(c.getUserId())))
+                .map(c -> CommentResponse.from(
+                        c,
+                        nicknames.get(c.getUserId()),
+                        likeCounts.getOrDefault(c.getId(), 0L),
+                        liked.contains(c.getId())))
                 .toList();
     }
 
