@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 public record CommentResponse(
         Long id,
         Long userId,
-        String userNickname,
+        String authorNickname,
         Long referenceId,
         ReferenceType referenceType,
         Long parentId,
@@ -19,12 +19,13 @@ public record CommentResponse(
 ) {
     private static final String DELETED_MESSAGE = "삭제된 댓글입니다.";
     private static final String ADMIN_DELETED_MESSAGE = "관리자가 삭제한 댓글입니다.";
+    private static final String UNKNOWN_AUTHOR = "탈퇴한 사용자";
 
     public static CommentResponse from(Comment comment) {
-        return of(comment, "이웃");
+        return from(comment, null);
     }
 
-    public static CommentResponse of(Comment comment, String userNickname) {
+    public static CommentResponse from(Comment comment, String authorNickname) {
         boolean deleted = comment.isDeleted();
         boolean adminDeleted = comment.isAdminDeleted();
         String content;
@@ -38,7 +39,7 @@ public record CommentResponse(
         return new CommentResponse(
                 comment.getId(),
                 comment.getUserId(),
-                userNickname,
+                authorNickname != null ? authorNickname : UNKNOWN_AUTHOR,
                 comment.getReferenceId(),
                 comment.getReferenceType(),
                 comment.getParentId(),

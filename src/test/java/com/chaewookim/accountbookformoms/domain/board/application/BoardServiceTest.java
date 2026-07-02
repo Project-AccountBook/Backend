@@ -12,6 +12,7 @@ import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardUpdateRe
 import com.chaewookim.accountbookformoms.domain.board.entity.Board;
 import com.chaewookim.accountbookformoms.domain.board.enums.BOARD_TYPE;
 import com.chaewookim.accountbookformoms.domain.board.error.BoardErrorCode;
+import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import com.chaewookim.accountbookformoms.global.event.BoardChangedEvent;
 import org.junit.jupiter.api.DisplayName;
@@ -55,6 +56,9 @@ class BoardServiceTest {
     private BoardViewCountService viewCountService;
 
     @Mock
+    private UserRepository userRepository;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
@@ -90,7 +94,7 @@ class BoardServiceTest {
                     .willReturn(new PageImpl<>(List.of(board), pageable, 1));
             given(viewCountService.getPendingDeltas(anyCollection())).willReturn(Map.of());
 
-            Page<BoardResponse> result = boardService.list(pageable);
+            Page<BoardResponse> result = boardService.list(null, pageable);
 
             assertThat(result.getTotalElements()).isEqualTo(1);
             assertThat(result.getContent().get(0).id()).isEqualTo(POST_ID);
@@ -108,7 +112,7 @@ class BoardServiceTest {
             given(viewCountService.getPendingDeltas(anyCollection()))
                     .willReturn(Map.of(POST_ID, 7L));
 
-            Page<BoardResponse> result = boardService.list(pageable);
+            Page<BoardResponse> result = boardService.list(null, pageable);
 
             assertThat(result.getContent().get(0).views()).isEqualTo(17);
         }

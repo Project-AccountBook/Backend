@@ -178,3 +178,27 @@
 
 #### Fetch 전략
 - `User`↔`UserSetting` 가 `@OneToOne(cascade)` 인데 fetch 미지정 → 기본 EAGER. 비교 쿼리마다 setting JOIN/즉시 로딩 발생. 명시적 LAZY + 필요 시점 fetch join 권장.
+
+### 게시판(Q&A / 노하우) 프론트 연동 이후 잔여 갭
+프론트(`fix/ACC-102-add-feature` 및 `feat/ACC-33-board-feature-link`)에서 Board/Comment CRUD·검색·수정·삭제·닉네임 노출까지 연동 완료. 추가로 프론트 UI가 요구하지만 백엔드에 없는 항목 및 반대 방향 항목 정리:
+
+#### 백엔드 미구현 (프론트에서 필요)
+- **게시판 카테고리 도메인**: `Board.categoryId` 는 존재하지만 게시판 전용 카테고리 CRUD/조회 API가 없어 프론트가 `categoryId=1` 하드코딩. `BoardCategoryController` + 시드 데이터 필요.
+- **좋아요/도움돼요**: Board·Comment 모두 like 카운터/토글 도메인 없음. `PostLike`, `CommentLike` 별도 테이블 검토.
+- **북마크(저장)**: `Bookmark` 도메인 신설 필요.
+- **태그**: `#식비절약` 등 프리 태그 저장/검색 미지원. Tag ↔ Board M:N + `GET /boards?tag=` 확장.
+- **본문/썸네일 이미지 업로드**: `Image` 통합 테이블은 있으나 Board 도메인에서 이미지 업로드 API 미노출. `POST /api/v1/boards/{id}/images` (S3 presigned or multipart) 필요.
+- **Q&A 상태 필드**: `is_resolved`(해결 여부), `is_urgent`(급해요), 채택 답변 표시(`Comment.is_accepted`) 컬럼 없음. Board 확장 + 채택 API(`PATCH /api/v1/comments/{id}/accept`).
+- **HOT 랭킹**: 노하우 "이번 주 HOT" 산출용 조회수/좋아요 집계 API 없음. Redis ZSET 랭킹 또는 배치 집계 + `GET /api/v1/boards/hot?type=KNOWHOW&period=weekly`.
+- **관리자 화면**: `AdminBoardController`, `AdminCommentController` 는 존재하나 프론트에 관리자 뷰가 없음 (스코프 밖).
+- **댓글 페이지네이션**: `GET /api/v1/comments/{postId}` 가 전체 반환. Pageable 도입 필요.
+- **팔로우 / 작성자 프로필 통계(게시글 수, 좋아요 수)**: Follow 도메인 및 프로필 집계 API 없음.
+
+#### 프론트 미구현 (백엔드에는 있음)
+- **관리자 소프트 삭제 UI**: `DELETE /api/v1/admin/boards|comments/{id}` 엔드포인트 존재. 어드민 화면 트랙에서 별도 연동.
+- **서버 페이지네이션 활용**: `Page<BoardResponse>` 메타(totalElements/totalPages/number)를 그대로 두고 클라이언트가 size=100 로 한 번에 받아 자체 분할 중. 서버 페이지 이동으로 전환 시 대량 데이터에 유리.
+
+#### 결정 사항 (본 작업 범위 내에서 마감)
+- `GET /api/v1/boards?type=QNA|KNOWHOW` 필터 파라미터 추가 (BoardRepository.findByType)
+- `BoardResponse` / `CommentResponse` 에 `authorNickname` 포함, list 경로에서 `UserRepository.findAllById` 일괄 조회로 N+1 방지
+- 게시물/댓글 수정(PATCH) 을 프론트 상세 화면 인라인 편집으로 연결

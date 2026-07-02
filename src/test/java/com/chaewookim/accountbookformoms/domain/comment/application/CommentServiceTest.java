@@ -369,7 +369,7 @@ class CommentServiceTest {
             assertThat(result).hasSize(1);
             assertThat(result.get(0).id()).isEqualTo(COMMENT_ID);
             assertThat(result.get(0).content()).isEqualTo("본문");
-            assertThat(result.get(0).userNickname()).isEqualTo("홍길동");
+            assertThat(result.get(0).authorNickname()).isEqualTo("홍길동");
             assertThat(result.get(0).deleted()).isFalse();
         }
 
@@ -408,7 +408,7 @@ class CommentServiceTest {
             assertThat(result).hasSize(1);
             assertThat(result.get(0).deleted()).isTrue();
             assertThat(result.get(0).content()).isEqualTo("삭제된 댓글입니다.");
-            assertThat(result.get(0).userNickname()).isEqualTo("홍길동");
+            assertThat(result.get(0).authorNickname()).isEqualTo("홍길동");
         }
     }
 }

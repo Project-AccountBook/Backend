@@ -10,7 +10,10 @@ import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardResponse
 import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardSearchResponse;
 import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardUpdateResponse;
 import com.chaewookim.accountbookformoms.domain.board.entity.Board;
+import com.chaewookim.accountbookformoms.domain.board.enums.BOARD_TYPE;
 import com.chaewookim.accountbookformoms.domain.board.error.BoardErrorCode;
+import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
+import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import com.chaewookim.accountbookformoms.global.event.BoardChangedEvent;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,13 +35,18 @@ public class BoardService {
     private final BoardRepository boardRepository;
     private final BoardSearchQueryRepository boardSearchQueryRepository;
     private final BoardViewCountService viewCountService;
+    private final UserRepository userRepository;
     private final ApplicationEventPublisher eventPublisher;
 
-    public Page<BoardResponse> list(Pageable pageable) {
-        Page<Board> page = boardRepository.findAll(pageable);
+    public Page<BoardResponse> list(BOARD_TYPE type, Pageable pageable) {
+        Page<Board> page = (type == null)
+                ? boardRepository.findAll(pageable)
+                : boardRepository.findByType(type, pageable);
         List<Long> ids = page.getContent().stream().map(Board::getId).toList();
         Map<Long, Long> pending = viewCountService.getPendingDeltas(ids);
-        return page.map(b -> BoardResponse.from(b, pending.getOrDefault(b.getId(), 0L)));
+        Map<Long, String> nicknames = loadNicknames(page.getContent().stream().map(Board::getUserId).toList());
+        return page.map(b ->
+                BoardResponse.from(b, pending.getOrDefault(b.getId(), 0L), nicknames.get(b.getUserId())));
     }
 
     @Transactional
@@ -58,7 +67,10 @@ public class BoardService {
     public BoardResponse get(Long postId) {
         Board board = findBoardOrThrow(postId);
         long pending = viewCountService.increment(postId);
-        return BoardResponse.from(board, pending);
+        String nickname = userRepository.findById(board.getUserId())
+                .map(User::getUsername)
+                .orElse(null);
+        return BoardResponse.from(board, pending, nickname);
     }
 
     @Transactional
@@ -84,6 +96,12 @@ public class BoardService {
     public Page<BoardSearchResponse> search(String keyword, Pageable pageable) {
         Page<BoardDocument> hits = boardSearchQueryRepository.search(keyword, pageable);
         return hits.map(BoardSearchResponse::from);
+    }
+
+    private Map<Long, String> loadNicknames(List<Long> userIds) {
+        if (userIds.isEmpty()) return Map.of();
+        return userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, User::getUsername, (a, b) -> a));
     }
 
     private Board findBoardOrThrow(Long postId) {

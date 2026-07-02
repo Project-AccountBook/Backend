@@ -84,17 +84,18 @@ public class CommentService {
     }
 
     public List<CommentResponse> list(Long postId, ReferenceType referenceType) {
-        List<Comment> comments = commentRepository.findByReferenceIdAndReferenceTypeOrderByCreatedAtAsc(postId, referenceType);
-        List<Long> userIds = comments.stream().map(Comment::getUserId).distinct().toList();
-        Map<Long, String> nicknameMap = userRepository.findAllById(userIds).stream()
-                .collect(Collectors.toMap(User::getId, User::getUsername));
-        
+        List<Comment> comments = commentRepository
+                .findByReferenceIdAndReferenceTypeOrderByCreatedAtAsc(postId, referenceType);
+        Map<Long, String> nicknames = loadNicknames(comments.stream().map(Comment::getUserId).toList());
         return comments.stream()
-                .map(comment -> {
-                    String nickname = nicknameMap.getOrDefault(comment.getUserId(), "탈퇴한 사용자");
-                    return CommentResponse.of(comment, nickname);
-                })
+                .map(c -> CommentResponse.from(c, nicknames.get(c.getUserId())))
                 .toList();
+    }
+
+    private Map<Long, String> loadNicknames(List<Long> userIds) {
+        if (userIds.isEmpty()) return Map.of();
+        return userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, User::getUsername, (a, b) -> a));
     }
 
     private Comment findCommentOrThrow(Long commentId) {

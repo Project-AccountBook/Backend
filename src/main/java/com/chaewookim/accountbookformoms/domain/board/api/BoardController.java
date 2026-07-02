@@ -7,6 +7,7 @@ import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardCreateRe
 import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardResponse;
 import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardSearchResponse;
 import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardUpdateResponse;
+import com.chaewookim.accountbookformoms.domain.board.enums.BOARD_TYPE;
 import com.chaewookim.accountbookformoms.global.common.ApiResponse;
 import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -41,14 +42,15 @@ public class BoardController {
 
     private final BoardService boardService;
 
-    @Operation(summary = "게시물 목록 조회", description = "QnA 게시판 게시물 목록 조회")
+    @Operation(summary = "게시물 목록 조회", description = "QNA/KNOWHOW 게시판 게시물 목록 조회. type 파라미터 생략 시 전체 반환.")
     @PageableAsQueryParam
     @GetMapping
     public ResponseEntity<ApiResponse<Page<BoardResponse>>> list(
+            @RequestParam(required = false) BOARD_TYPE type,
             @Parameter(hidden = true)
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        return ResponseEntity.ok(ApiResponse.success(boardService.list(pageable)));
+        return ResponseEntity.ok(ApiResponse.success(boardService.list(type, pageable)));
     }
 
     @Operation(summary = "게시물 추가", description = "일반 사용자의 게시물 생성")
