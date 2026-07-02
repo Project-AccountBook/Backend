@@ -220,12 +220,26 @@
   - `BoardHotWarmupScheduler` — 4분 주기로 `(QNA/KNOWHOW, 7, 3)` 조합 미리 캐시에 적재. ShedLock 으로 다중 인스턴스 중복 실행 차단. `app.cache.warmup.board-hot.enabled=true`(기본값) 로 on/off.
   - **참고**: 좋아요 토글/게시물 삭제 시 명시적 evict 는 없음. 5분 TTL + warm-up 주기로 stale 흡수. 실시간성이 필요하면 `@CacheEvict(cacheNames="board:hot", allEntries=true)` 를 like/delete 경로에 추가할 것.
 
+#### 이번 세션에서 추가 구현 완료 (5차)
+- **좋아요 카운터 Redis 캐싱** (Cache-aside + INCR/DECR 하이브리드):
+  - `LikeCountCacheService` — 키 포맷 `like:count:{BOARD|COMMENT}:{id}`, TTL 30분.
+    - `getCount()`: Redis GET → 미스 시 DB `countByTargetIdAndTargetType` 후 SET.
+    - `getCounts()`: MGET → 미스 ID 만 벌크 DB COUNT (`countByTargets`) → MSET.
+    - `applyDelta(±1)`: `hasKey` 로 존재 확인 후에만 INCR/DECR (없으면 다음 read 가 DB 정본으로 lazy fill). 캐시 미스 상태에서의 INCR-from-null 로 인한 counter drift 방지.
+    - `evict()`: DEL. 게시물/댓글 삭제 시 정리.
+  - `PostLikeService.count/countByTargets` 전부 캐시 경유로 전환 (BoardService.list/get, CommentService.list 의 hot path 가 Redis MGET 으로 해결).
+  - `PostLikeService.toggle` 은 DB mutation 이후 `applyDelta` 로 즉시 반영 (write-through).
+  - `BoardService.delete` / `CommentService.delete` 에서 `likeService.evictCount(...)` 호출로 카운터 잔재 제거.
+- **조회수 Redis 캐싱 완비**:
+  - 기존 `BoardViewCountService` (INCR + `board:views:dirty` set + `BoardViewSyncScheduler` 5분 주기 DB flush) 유지 — 의사결정 #4 이미 구현.
+  - `BoardViewCountService.evict(boardId)` 신설 — dirty set 에서 SREM + counter DEL. `BoardService.delete` 에서 호출해 삭제된 게시물의 delta 가 다음 sync 때 "board not found (delta lost)" 로그를 남기던 문제 해소.
+
 #### 남은 갭 (미해결)
 - **이미지 실제 업로드 인프라**: 현재 URL만 받아 저장. S3 presigned URL 발급 API (`POST /api/v1/images/presigned-url`) + 클라이언트 직접 업로드 파이프라인 필요.
-- **좋아요/조회수 Redis 카운터 캐싱**: HOT 랭킹은 캐싱했지만 `PostLike.countByTargetIdAndTargetType` 는 여전히 요청마다 COUNT (게시물 상세 조회 경로). 트래픽 증가 시 Redis 카운터 + 배치 동기화 필요 (조회수 의사결정 #4 와 동일 패턴).
 - **관리자 게시물/댓글 리스트 API**: 현재 `AdminBoardController` 는 단건 삭제 + reindex 만 지원. 관리자 전용 조회(신고된 게시물, admin_deleted 포함) API 는 없음. 지금은 일반 목록 API 를 재사용.
 - **Follow 상대 알림**: 팔로우 시 Notification 도메인 이벤트 미발행.
 - **HOT 랭킹 실시간성**: Redis ZSET 기반 실시간 랭킹으로 전환하면 like 이벤트마다 ZINCRBY 로 즉시 반영 가능. 현재는 5분 stale 허용.
+- **좋아요 카운터 drift 자가 진단**: `LikeCountCacheService` 는 캐시가 없을 때만 DB 정본으로 리셋. 캐시 값과 DB 값이 어긋난 상태로 계속 hit 하면 감지 못 함. 주기 정합성 검증 배치(예: 시간대별 무작위 sample DB COUNT 대조)는 미구현.
 
 #### 결정 사항 (이전 세션에서 마감)
 - `GET /api/v1/boards?type=QNA|KNOWHOW` 필터 파라미터 추가 (BoardRepository.findByType)

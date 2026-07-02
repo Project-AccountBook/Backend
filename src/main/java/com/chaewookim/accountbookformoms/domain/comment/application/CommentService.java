@@ -85,6 +85,9 @@ public class CommentService {
         Comment comment = findCommentOrThrow(commentId);
         validateOwner(comment, userId);
         commentRepository.delete(comment);
+        likeService.evictCount(
+                com.chaewookim.accountbookformoms.domain.like.enums.LikeTargetType.COMMENT,
+                comment.getId());
         return comment.getId();
     }
 

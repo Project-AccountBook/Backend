@@ -143,6 +143,8 @@ public class BoardService {
         validateOwner(board, userId);
 
         boardRepository.delete(board);
+        likeService.evictCount(LikeTargetType.BOARD, board.getId());
+        viewCountService.evict(board.getId());
         eventPublisher.publishEvent(BoardChangedEvent.delete(board.getId()));
         return board.getId();
     }

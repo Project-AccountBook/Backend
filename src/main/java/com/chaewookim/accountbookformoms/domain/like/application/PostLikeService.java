@@ -15,7 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -29,35 +28,45 @@ public class PostLikeService {
     private final PostLikeRepository likeRepository;
     private final BoardRepository boardRepository;
     private final CommentRepository commentRepository;
+    private final LikeCountCacheService likeCountCache;
 
     @Transactional
     public LikeToggleResponse toggle(LikeTargetType type, Long targetId, Long userId) {
         validateTargetExists(type, targetId);
         Optional<PostLike> existing = likeRepository
                 .findByUserIdAndTargetIdAndTargetType(userId, targetId, type);
+        boolean nowLiked;
+        long delta;
         if (existing.isPresent()) {
             likeRepository.delete(existing.get());
+            nowLiked = false;
+            delta = -1L;
         } else {
             likeRepository.save(PostLike.builder()
                     .userId(userId)
                     .targetId(targetId)
                     .targetType(type)
                     .build());
+            nowLiked = true;
+            delta = 1L;
         }
-        long count = likeRepository.countByTargetIdAndTargetType(targetId, type);
-        return new LikeToggleResponse(existing.isEmpty(), count);
+        // 캐시가 있을 때만 원자적 증감. 미스면 다음 read 가 DB 정본 기준으로 재적재.
+        likeCountCache.applyDelta(type, targetId, delta);
+        long count = likeCountCache.getCount(type, targetId);
+        return new LikeToggleResponse(nowLiked, count);
     }
 
     public Map<Long, Long> countByTargets(LikeTargetType type, Collection<Long> ids) {
-        if (ids.isEmpty()) return Map.of();
-        Map<Long, Long> result = new HashMap<>();
-        likeRepository.countByTargets(type, ids)
-                .forEach(row -> result.put(row.getTargetId(), row.getCnt()));
-        return result;
+        return likeCountCache.getCounts(type, ids);
     }
 
     public long count(LikeTargetType type, Long targetId) {
-        return likeRepository.countByTargetIdAndTargetType(targetId, type);
+        return likeCountCache.getCount(type, targetId);
+    }
+
+    /** 게시물/댓글 삭제 시 좋아요 카운터 캐시 정리. */
+    public void evictCount(LikeTargetType type, Long targetId) {
+        likeCountCache.evict(type, targetId);
     }
 
     public Set<Long> likedTargets(LikeTargetType type, Collection<Long> ids, Long userId) {
