@@ -244,11 +244,19 @@
   - `LikeCountReconcileScheduler` — 매시 7분(`0 7 * * * *`) 실행, ShedLock 다중 인스턴스 차단, 1회 최대 500 키. `app.like.reconcile.enabled=true`(기본) on/off.
   - `POST /api/v1/admin/likes/reconcile?limit=` 관리자 수동 트리거.
 
+#### 이번 세션에서 추가 구현 완료 (7차)
+- **관리자 프론트 UI 확장** (frontend `AdminView.tsx` 전면 개편):
+  - 3 탭 구조: **게시물 / 댓글 / 운영 작업**.
+  - 게시물 탭: `GET /admin/boards?type=&includeDeleted=` 사용, 원문 제목 노출, `adminDeleted`/`userDeleted`/정상 3단 배지, 관리자 삭제 표시(이미 처리된 행은 disabled).
+  - 댓글 탭: `GET /admin/comments?referenceType=&referenceId=` 사용, `parentId` 로 대댓글 여부 노출, 유저 소프트 삭제 행은 opacity 0.6 으로 dim.
+  - 운영 작업 탭: **ES 재색인 실행** (`POST /admin/boards/reindex`, 결과 문서 수 반환) + **좋아요 정합성 검증** (`POST /admin/likes/reconcile?limit=500`, `ReconcileReport` 표시).
+  - 프론트 `boardApi.ts` 에 `adminListBoards`, `adminListComments`, `adminReindexBoards`, `adminReconcileLikes` + 대응 응답 타입(`AdminBoardResponse`, `AdminCommentResponse`, `LikeReconcileReport`) 추가.
+  - Sidebar 는 이전 세션에서 이미 `role=ROLE_ADMIN` 시 관리자 메뉴 노출하도록 되어 있어 그대로 연결.
+
 #### 남은 갭 (미해결)
 - **이미지 실제 업로드 인프라**: 현재 URL만 받아 저장. S3 presigned URL 발급 API (`POST /api/v1/images/presigned-url`) + 클라이언트 직접 업로드 파이프라인 필요.
 - **Follow 상대 알림**: 팔로우 시 Notification 도메인 이벤트 미발행.
 - **HOT 랭킹 실시간성**: Redis ZSET 기반 실시간 랭킹으로 전환하면 like 이벤트마다 ZINCRBY 로 즉시 반영 가능. 현재는 5분 stale 허용.
-- **관리자 리스트 프론트 UI 확장**: 현재 `AdminView.tsx` 는 boards 만 `listBoards` 재사용해 노출. 위에 신설된 `GET /admin/boards`(원문/삭제 플래그) 및 `GET /admin/comments` 전용 뷰 미연동. 프론트 이월.
 
 #### 결정 사항 (이전 세션에서 마감)
 - `GET /api/v1/boards?type=QNA|KNOWHOW` 필터 파라미터 추가 (BoardRepository.findByType)
