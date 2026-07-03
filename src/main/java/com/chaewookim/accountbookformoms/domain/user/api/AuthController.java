@@ -8,7 +8,6 @@ import com.chaewookim.accountbookformoms.domain.user.dto.request.ReissueRequest;
 import com.chaewookim.accountbookformoms.domain.user.dto.request.ResetPasswordRequest;
 import com.chaewookim.accountbookformoms.domain.user.dto.request.VerifyRequest;
 import com.chaewookim.accountbookformoms.domain.user.dto.response.TokenResponse;
-import com.chaewookim.accountbookformoms.domain.user.enums.VerificationType;
 import com.chaewookim.accountbookformoms.global.common.ApiResponse;
 import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -52,7 +51,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> sendSignupCode(
             @RequestBody @Valid EmailRequest request
     ) {
-        emailVerificationService.sendVerificationCode(request.email(), VerificationType.SIGNUP);
+        authService.sendSignupVerificationCode(request.email());
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 

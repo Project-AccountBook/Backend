@@ -9,6 +9,7 @@ import com.chaewookim.accountbookformoms.domain.user.dto.response.UserProfileRes
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.entity.UserNotificationSetting;
 import com.chaewookim.accountbookformoms.domain.user.entity.UserSetting;
+import com.chaewookim.accountbookformoms.domain.user.enums.SocialProvider;
 import com.chaewookim.accountbookformoms.domain.user.enums.VerificationType;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import org.junit.jupiter.api.DisplayName;
@@ -115,12 +116,14 @@ class UserServiceTest {
         given(userRepository.findById(1L)).willReturn(Optional.of(user));
         given(user.getUserSetting()).willReturn(mock(UserSetting.class));
         given(user.getUserNotificationSetting()).willReturn(mock(UserNotificationSetting.class));
+        given(user.getPassword()).willReturn("encoded");
 
         // when
         UserProfileResponse response = userService.getMyProfile(1L);
 
         // then
         assertThat(response).isNotNull();
+        assertThat(response.hasPassword()).isTrue();
     }
 
     @Test
@@ -156,6 +159,42 @@ class UserServiceTest {
 
         // then
         assertThat(user.getPassword()).isEqualTo("newEncoded");
+    }
+
+    @Test
+    @DisplayName("비밀번호 설정 - 소셜 가입 사용자 성공")
+    void updatePassword_success_socialUserWithoutPassword() {
+
+        // given
+        User user = User.builder()
+                .password(null)
+                .provider(SocialProvider.KAKAO)
+                .build();
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        given(passwordEncoder.encode("new")).willReturn("newEncoded");
+
+        // when
+        userService.updatePassword(1L, new UpdatePasswordRequest(null, "new"));
+
+        // then
+        assertThat(user.getPassword()).isEqualTo("newEncoded");
+    }
+
+    @Test
+    @DisplayName("비밀번호 변경 - 현재 비밀번호 불일치")
+    void updatePassword_fail_passwordNotMatch() {
+
+        // given
+        User user = User.builder()
+                .password("encoded")
+                .provider(SocialProvider.KAKAO)
+                .build();
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        given(passwordEncoder.matches("wrong", "encoded")).willReturn(false);
+
+        // when & then
+        assertThatThrownBy(() -> userService.updatePassword(1L, new UpdatePasswordRequest("wrong", "new")))
+                .isInstanceOf(CustomException.class);
     }
 
     @Test

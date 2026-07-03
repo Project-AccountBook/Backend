@@ -76,6 +76,16 @@ public class AuthService {
     }
 
     @Transactional
+    public void sendSignupVerificationCode(String email) {
+
+        if (userRepository.findByEmail(email).isPresent()) {
+            throw new CustomException(UserErrorCode.DUPLICATE_EMAIL);
+        }
+
+        emailVerificationService.sendVerificationCode(email, VerificationType.SIGNUP);
+    }
+
+    @Transactional
     public void requestPasswordReset(String email) {
         userRepository.findByEmail(email).orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
         emailVerificationService.sendVerificationCode(email, VerificationType.RESET);
@@ -84,7 +94,10 @@ public class AuthService {
     @Transactional
     public void resetPassword(String email, String code, String newPassword) {
 
-        if (!emailVerificationService.verifyCode(email, code, VerificationType.RESET)) {
+        boolean verified = emailVerificationService.isVerified(email, VerificationType.RESET)
+                || emailVerificationService.verifyCode(email, code, VerificationType.RESET);
+
+        if (!verified) {
             throw new CustomException(UserErrorCode.INVALID_VERIFICATION_CODE);
         }
 

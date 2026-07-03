@@ -56,7 +56,7 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
-    @Operation(summary = "비밀번호 수정", description = "기존 비밀번호 확인 후 새로운 비밀번호로 변경")
+    @Operation(summary = "비밀번호 설정/변경", description = "비밀번호가 없으면 새로 설정하고, 있으면 기존 비밀번호 확인 후 변경")
     @PatchMapping("/password")
     public ResponseEntity<ApiResponse<Void>> updatePassword(
             @AuthenticationPrincipal UserPrincipal principal,
