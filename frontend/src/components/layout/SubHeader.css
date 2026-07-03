@@ -1,0 +1,102 @@
+.subheader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 70px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 24px;
+  background-color: var(--bg-primary);
+}
+
+.status-badge-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background-color: var(--color-green-light);
+  border-radius: 20px;
+  border: 1px solid rgba(16, 185, 129, 0.15);
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  background-color: var(--color-green);
+  border-radius: 50%;
+}
+
+.status-badge-text {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-green);
+}
+
+.subheader-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.bell-btn {
+  padding: 8px;
+  border-radius: 50%;
+  color: var(--text-muted);
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-smooth);
+}
+
+.bell-btn:hover {
+  background-color: #f1f5f9;
+  color: var(--color-dark);
+}
+
+.user-avatar-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-smooth);
+}
+
+.user-avatar-btn:hover {
+  background-color: #f1f5f9;
+}
+
+.user-avatar-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.budget-settings-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background-color: var(--color-dark);
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 6px;
+  transition: var(--transition-smooth);
+}
+
+.budget-settings-btn:hover {
+  background-color: #1e293b;
+  box-shadow: 0 4px 12px 0 rgba(15, 23, 42, 0.15);
+}

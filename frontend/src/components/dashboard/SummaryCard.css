@@ -1,0 +1,136 @@
+.summary-card {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  flex: 1;
+}
+
+.summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.summary-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.summary-icon-container {
+  padding: 8px;
+  border-radius: var(--border-radius-md);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.summary-icon-container.mint {
+  color: var(--color-mint);
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.summary-icon-container.blue {
+  color: var(--color-blue);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.summary-value-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.summary-value {
+  font-size: 1.85rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.5px;
+}
+
+.summary-subtext {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.progress-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.progress-label-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.progress-bar-bg {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.8s ease-out;
+}
+
+.progress-bar-fill.mint {
+  background: linear-gradient(90deg, var(--color-mint), #34d399);
+}
+
+.progress-bar-fill.blue {
+  background: linear-gradient(90deg, var(--color-blue), #60a5fa);
+}
+
+.quick-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--border-card);
+  transition: var(--transition-smooth);
+}
+
+.action-btn.primary {
+  background: var(--color-mint);
+  color: var(--text-inverse);
+  border: none;
+}
+
+.action-btn.primary:hover {
+  background: #34d399;
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+  transform: translateY(-1px);
+}
+
+.action-btn.secondary {
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-main);
+}
+
+.action-btn.secondary:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+}

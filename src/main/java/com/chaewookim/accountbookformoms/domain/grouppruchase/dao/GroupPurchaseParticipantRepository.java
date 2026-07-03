@@ -13,4 +13,6 @@ public interface GroupPurchaseParticipantRepository extends JpaRepository<GroupP
     boolean existsByGroupPurchaseIdAndUserId(Long groupPurchaseId, Long userId);
     
     List<GroupPurchaseParticipant> findByGroupPurchaseId(Long groupPurchaseId);
+
+    List<GroupPurchaseParticipant> findByUserId(Long userId);
 }

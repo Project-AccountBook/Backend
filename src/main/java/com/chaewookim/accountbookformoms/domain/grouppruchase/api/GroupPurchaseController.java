@@ -122,4 +122,22 @@ public class GroupPurchaseController {
         GroupPurchaseResponse response = groupPurchaseService.leaveGroupPurchase(userPrincipal.getUserId(), id);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
+
+    @Operation(summary = "내가 참여한 공동구매 ID 목록 조회", description = "내가 참여 신청한 공동구매 ID 목록을 조회합니다.")
+    @GetMapping("/joined-ids")
+    public ResponseEntity<ApiResponse<List<Long>>> getJoinedIds(
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        List<Long> response = groupPurchaseService.getJoinedGroupPurchaseIds(userPrincipal.getUserId());
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(summary = "내가 찜한 공동구매 ID 목록 조회", description = "내가 찜한 공동구매 ID 목록을 조회합니다.")
+    @GetMapping("/wished-ids")
+    public ResponseEntity<ApiResponse<List<Long>>> getWishedIds(
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        List<Long> response = groupPurchaseService.getWishedGroupPurchaseIds(userPrincipal.getUserId());
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
 }

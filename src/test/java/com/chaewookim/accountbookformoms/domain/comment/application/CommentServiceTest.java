@@ -10,6 +10,8 @@ import com.chaewookim.accountbookformoms.domain.comment.entity.Comment;
 import com.chaewookim.accountbookformoms.domain.comment.enums.ReferenceType;
 import com.chaewookim.accountbookformoms.domain.comment.error.CommentErrorCode;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseRepository;
+import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
+import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import com.chaewookim.accountbookformoms.global.error.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -29,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -43,6 +46,9 @@ class CommentServiceTest {
 
     @Mock
     private GroupPurchaseRepository groupPurchaseRepository;
+
+    @Mock
+    private UserRepository userRepository;
 
     @InjectMocks
     private CommentService commentService;
@@ -351,6 +357,11 @@ class CommentServiceTest {
             given(commentRepository.findByReferenceIdAndReferenceTypeOrderByCreatedAtAsc(POST_ID, ReferenceType.QNA))
                     .willReturn(List.of(comment));
 
+            User mockUser = mock(User.class);
+            given(mockUser.getId()).willReturn(OWNER_ID);
+            given(mockUser.getUsername()).willReturn("홍길동");
+            given(userRepository.findAllById(List.of(OWNER_ID))).willReturn(List.of(mockUser));
+
             // when
             List<CommentResponse> result = commentService.list(POST_ID, ReferenceType.QNA);
 
@@ -358,6 +369,7 @@ class CommentServiceTest {
             assertThat(result).hasSize(1);
             assertThat(result.get(0).id()).isEqualTo(COMMENT_ID);
             assertThat(result.get(0).content()).isEqualTo("본문");
+            assertThat(result.get(0).userNickname()).isEqualTo("홍길동");
             assertThat(result.get(0).deleted()).isFalse();
         }
 
@@ -384,6 +396,11 @@ class CommentServiceTest {
             given(commentRepository.findByReferenceIdAndReferenceTypeOrderByCreatedAtAsc(POST_ID, ReferenceType.QNA))
                     .willReturn(List.of(deleted));
 
+            User mockUser = mock(User.class);
+            given(mockUser.getId()).willReturn(OWNER_ID);
+            given(mockUser.getUsername()).willReturn("홍길동");
+            given(userRepository.findAllById(List.of(OWNER_ID))).willReturn(List.of(mockUser));
+
             // when
             List<CommentResponse> result = commentService.list(POST_ID, ReferenceType.QNA);
 
@@ -391,6 +408,7 @@ class CommentServiceTest {
             assertThat(result).hasSize(1);
             assertThat(result.get(0).deleted()).isTrue();
             assertThat(result.get(0).content()).isEqualTo("삭제된 댓글입니다.");
+            assertThat(result.get(0).userNickname()).isEqualTo("홍길동");
         }
     }
 }

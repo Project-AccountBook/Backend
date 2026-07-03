@@ -462,4 +462,16 @@ public class GroupPurchaseService {
             }
         }
     }
+
+    public List<Long> getJoinedGroupPurchaseIds(Long userId) {
+        return groupPurchaseParticipantRepository.findByUserId(userId).stream()
+                .map(GroupPurchaseParticipant::getGroupPurchaseId)
+                .collect(Collectors.toList());
+    }
+
+    public List<Long> getWishedGroupPurchaseIds(Long userId) {
+        return wishlistRepository.findByUserId(userId).stream()
+                .map(Wishlist::getGroupPurchaseId)
+                .collect(Collectors.toList());
+    }
 }

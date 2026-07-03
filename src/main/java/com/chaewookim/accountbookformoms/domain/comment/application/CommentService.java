@@ -10,6 +10,8 @@ import com.chaewookim.accountbookformoms.domain.comment.entity.Comment;
 import com.chaewookim.accountbookformoms.domain.comment.enums.ReferenceType;
 import com.chaewookim.accountbookformoms.domain.comment.error.CommentErrorCode;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseRepository;
+import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
+import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import com.chaewookim.accountbookformoms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +19,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +30,7 @@ public class CommentService {
     private final CommentRepository commentRepository;
     private final BoardRepository boardRepository;
     private final GroupPurchaseRepository groupPurchaseRepository;
+    private final UserRepository userRepository;
 
     @Transactional
     public Long create(Long postId, CommentCreateRequest request, Long userId) {
@@ -79,10 +84,16 @@ public class CommentService {
     }
 
     public List<CommentResponse> list(Long postId, ReferenceType referenceType) {
-        return commentRepository
-                .findByReferenceIdAndReferenceTypeOrderByCreatedAtAsc(postId, referenceType)
-                .stream()
-                .map(CommentResponse::from)
+        List<Comment> comments = commentRepository.findByReferenceIdAndReferenceTypeOrderByCreatedAtAsc(postId, referenceType);
+        List<Long> userIds = comments.stream().map(Comment::getUserId).distinct().toList();
+        Map<Long, String> nicknameMap = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, User::getUsername));
+        
+        return comments.stream()
+                .map(comment -> {
+                    String nickname = nicknameMap.getOrDefault(comment.getUserId(), "탈퇴한 사용자");
+                    return CommentResponse.of(comment, nickname);
+                })
                 .toList();
     }
 
