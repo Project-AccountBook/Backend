@@ -62,7 +62,8 @@ public class UserService {
         UserNotificationSetting notificationSetting = user.getUserNotificationSetting();
 
         return new UserProfileResponse(
-                user.getEmail(), user.getUsername(), user.getBirthDate(), user.getAddress(),
+                user.getId(), user.getEmail(), user.getUsername(), user.getRole().name(),
+                user.getBirthDate(), user.getAddress(),
                 user.getPassword() != null,
                 settings.getBudgetAlertThreshold(), settings.getIsPortfolioPublic(),
                 notificationSetting.getIsBudgetAlertEnabled(), notificationSetting.getIsInterestCategoryEnabled(), notificationSetting.getIsSystemAlertEnabled()

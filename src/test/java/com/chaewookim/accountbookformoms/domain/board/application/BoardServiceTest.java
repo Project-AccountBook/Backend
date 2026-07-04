@@ -12,6 +12,11 @@ import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardUpdateRe
 import com.chaewookim.accountbookformoms.domain.board.entity.Board;
 import com.chaewookim.accountbookformoms.domain.board.enums.BOARD_TYPE;
 import com.chaewookim.accountbookformoms.domain.board.error.BoardErrorCode;
+import com.chaewookim.accountbookformoms.domain.bookmark.application.BookmarkService;
+import com.chaewookim.accountbookformoms.domain.image.application.ImageService;
+import com.chaewookim.accountbookformoms.domain.like.application.PostLikeService;
+import com.chaewookim.accountbookformoms.domain.tag.application.TagService;
+import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import com.chaewookim.accountbookformoms.global.event.BoardChangedEvent;
 import org.junit.jupiter.api.DisplayName;
@@ -55,6 +60,21 @@ class BoardServiceTest {
     private BoardViewCountService viewCountService;
 
     @Mock
+    private UserRepository userRepository;
+
+    @Mock
+    private PostLikeService likeService;
+
+    @Mock
+    private BookmarkService bookmarkService;
+
+    @Mock
+    private TagService tagService;
+
+    @Mock
+    private ImageService imageService;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
@@ -90,7 +110,7 @@ class BoardServiceTest {
                     .willReturn(new PageImpl<>(List.of(board), pageable, 1));
             given(viewCountService.getPendingDeltas(anyCollection())).willReturn(Map.of());
 
-            Page<BoardResponse> result = boardService.list(pageable);
+            Page<BoardResponse> result = boardService.list(null, null, pageable, null);
 
             assertThat(result.getTotalElements()).isEqualTo(1);
             assertThat(result.getContent().get(0).id()).isEqualTo(POST_ID);
@@ -108,7 +128,7 @@ class BoardServiceTest {
             given(viewCountService.getPendingDeltas(anyCollection()))
                     .willReturn(Map.of(POST_ID, 7L));
 
-            Page<BoardResponse> result = boardService.list(pageable);
+            Page<BoardResponse> result = boardService.list(null, null, pageable, null);
 
             assertThat(result.getContent().get(0).views()).isEqualTo(17);
         }
@@ -122,7 +142,7 @@ class BoardServiceTest {
         @DisplayName("성공 — 저장 후 UPSERT 이벤트 발행")
         void create_success() {
             BoardCreateRequest request = new BoardCreateRequest(
-                    CATEGORY_ID, "새 제목", "새 본문", BOARD_TYPE.QNA);
+                    CATEGORY_ID, "새 제목", "새 본문", BOARD_TYPE.QNA, null);
             Board saved = buildBoard(POST_ID, OWNER_ID);
             given(boardRepository.save(any(Board.class))).willReturn(saved);
 
@@ -151,7 +171,7 @@ class BoardServiceTest {
             given(boardRepository.findById(POST_ID)).willReturn(Optional.of(board));
             given(viewCountService.increment(POST_ID)).willReturn(3L);
 
-            BoardResponse response = boardService.get(POST_ID);
+            BoardResponse response = boardService.get(POST_ID, null);
 
             assertThat(response.id()).isEqualTo(POST_ID);
             assertThat(response.title()).isEqualTo(board.getTitle());
@@ -165,7 +185,7 @@ class BoardServiceTest {
         void get_fail_not_found() {
             given(boardRepository.findById(POST_ID)).willReturn(Optional.empty());
 
-            assertThatThrownBy(() -> boardService.get(POST_ID))
+            assertThatThrownBy(() -> boardService.get(POST_ID, null))
                     .isInstanceOf(CustomException.class)
                     .hasFieldOrPropertyWithValue("errorCode", BoardErrorCode.BOARD_NOT_FOUND);
         }
@@ -180,7 +200,7 @@ class BoardServiceTest {
         void update_success() {
             Board board = buildBoard(POST_ID, OWNER_ID);
             BoardUpdateRequest request = new BoardUpdateRequest(
-                    "수정된 제목", "수정된 본문", BOARD_TYPE.KNOWHOW);
+                    "수정된 제목", "수정된 본문", BOARD_TYPE.KNOWHOW, null);
             given(boardRepository.findById(POST_ID)).willReturn(Optional.of(board));
 
             BoardUpdateResponse response = boardService.update(POST_ID, request, OWNER_ID);
@@ -199,7 +219,7 @@ class BoardServiceTest {
         @Test
         @DisplayName("실패 — 존재하지 않는 게시물이면 BOARD_NOT_FOUND")
         void update_fail_not_found() {
-            BoardUpdateRequest request = new BoardUpdateRequest("t", "c", BOARD_TYPE.QNA);
+            BoardUpdateRequest request = new BoardUpdateRequest("t", "c", BOARD_TYPE.QNA, null);
             given(boardRepository.findById(POST_ID)).willReturn(Optional.empty());
 
             assertThatThrownBy(() -> boardService.update(POST_ID, request, OWNER_ID))
@@ -214,7 +234,7 @@ class BoardServiceTest {
         void update_fail_not_owner() {
             Board board = buildBoard(POST_ID, OWNER_ID);
             String originalTitle = board.getTitle();
-            BoardUpdateRequest request = new BoardUpdateRequest("hacked", "hacked", BOARD_TYPE.QNA);
+            BoardUpdateRequest request = new BoardUpdateRequest("hacked", "hacked", BOARD_TYPE.QNA, null);
             given(boardRepository.findById(POST_ID)).willReturn(Optional.of(board));
 
             assertThatThrownBy(() -> boardService.update(POST_ID, request, OTHER_USER_ID))

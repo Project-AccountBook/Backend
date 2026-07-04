@@ -6,6 +6,7 @@ import com.chaewookim.accountbookformoms.domain.user.dto.request.UpdatePasswordR
 import com.chaewookim.accountbookformoms.domain.user.dto.request.UpdateProfileRequest;
 import com.chaewookim.accountbookformoms.domain.user.dto.response.SignupResponse;
 import com.chaewookim.accountbookformoms.domain.user.dto.response.UserProfileResponse;
+import com.chaewookim.accountbookformoms.domain.user.enums.UserRole;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.entity.UserNotificationSetting;
 import com.chaewookim.accountbookformoms.domain.user.entity.UserSetting;
@@ -117,6 +118,7 @@ class UserServiceTest {
         given(user.getUserSetting()).willReturn(mock(UserSetting.class));
         given(user.getUserNotificationSetting()).willReturn(mock(UserNotificationSetting.class));
         given(user.getPassword()).willReturn("encoded");
+        given(user.getRole()).willReturn(UserRole.ROLE_USER);
 
         // when
         UserProfileResponse response = userService.getMyProfile(1L);
@@ -124,6 +126,7 @@ class UserServiceTest {
         // then
         assertThat(response).isNotNull();
         assertThat(response.hasPassword()).isTrue();
+        assertThat(response.role()).isEqualTo("ROLE_USER");
     }
 
     @Test

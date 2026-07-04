@@ -56,6 +56,12 @@ public class Board extends BaseEntity {
     @Column(name = "admin_deleted", nullable = false)
     private boolean adminDeleted;
 
+    @Column(name = "is_resolved", nullable = false)
+    private boolean resolved;
+
+    @Column(name = "is_urgent", nullable = false)
+    private boolean urgent;
+
     @Builder
     public Board(Long userId, Long categoryId, String title, String content, BOARD_TYPE type) {
         this.userId = userId;
@@ -65,6 +71,8 @@ public class Board extends BaseEntity {
         this.type = type;
         this.views = 0;
         this.adminDeleted = false;
+        this.resolved = false;
+        this.urgent = false;
     }
 
     public void update(String title, String content, BOARD_TYPE type) {
@@ -79,5 +87,13 @@ public class Board extends BaseEntity {
 
     public void markAsAdminDeleted() {
         this.adminDeleted = true;
+    }
+
+    public void setResolved(boolean resolved) {
+        this.resolved = resolved;
+    }
+
+    public void setUrgent(boolean urgent) {
+        this.urgent = urgent;
     }
 }

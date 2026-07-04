@@ -178,3 +178,87 @@
 
 #### Fetch 전략
 - `User`↔`UserSetting` 가 `@OneToOne(cascade)` 인데 fetch 미지정 → 기본 EAGER. 비교 쿼리마다 setting JOIN/즉시 로딩 발생. 명시적 LAZY + 필요 시점 fetch join 권장.
+
+### 게시판(Q&A / 노하우) 프론트 연동 이후 잔여 갭
+프론트(`fix/ACC-102-add-feature` 및 `feat/ACC-33-board-feature-link`)에서 Board/Comment CRUD·검색·수정·삭제·닉네임 노출까지 연동 완료. 추가로 프론트 UI가 요구하지만 백엔드에 없는 항목 및 반대 방향 항목 정리:
+
+#### 이번 세션에서 구현 완료
+- **게시판 카테고리 도메인** (`domain/boardcategory/`): `BoardCategory` 엔티티 + `GET /api/v1/board-categories?type=QNA|KNOWHOW`. `BoardCategorySeeder`(ApplicationRunner)로 시드 데이터 자동 삽입. 프론트 write 뷰에서 서버 카테고리 사용.
+- **좋아요 도메인** (`domain/like/`): `PostLike` 단일 테이블 + `targetType`(BOARD/COMMENT). `POST /api/v1/boards/{id}/like`, `POST /api/v1/comments/{id}/like` 토글 엔드포인트. `BoardResponse`/`CommentResponse` 에 `likeCount`, `liked` 포함.
+- **북마크 도메인** (`domain/bookmark/`): `Bookmark`(user_id, board_id) + `POST /api/v1/boards/{id}/bookmark`. `BoardResponse.bookmarked` 포함.
+- **Q&A 상태 필드**: `Board.isResolved`, `Board.isUrgent` 컬럼 + 작성자 전용 토글 엔드포인트 (`PATCH /api/v1/boards/{id}/resolved|urgent`). `Comment.accepted` 컬럼 + Q&A 작성자만 채택 가능(`PATCH /api/v1/comments/{id}/accept`, 채택 시 board.resolved=true 자동 전환).
+- **/users/me 응답에 id 추가**: 프론트에서 "내가 작성자인가?" 판정용. `UserProfileResponse.id`.
+
+#### 이번 세션에서 추가 구현 완료 (2차)
+- **Tag 도메인** (`domain/tag/`): `Tag` + `BoardTag` 조인 테이블, `TagService.setTagsForBoard/tagsOfBoard/tagsByBoards/boardIdsWithTag`, `GET /api/v1/tags`. `BoardCreateRequest/BoardUpdateRequest.tags` 추가. `GET /api/v1/boards?tag=` 필터 파라미터.
+- **Image 도메인** (`domain/image/`): `Image` 통합 테이블(reference_type, reference_id, sort_order). `POST /api/v1/boards/{postId}/images`(URL 저장 방식, S3 업로드는 클라이언트 담당), `GET /api/v1/boards/{postId}/images`, `DELETE /api/v1/images/{imageId}`. `BoardResponse.imageUrls`.
+- **HOT 랭킹**: `GET /api/v1/boards/hot?type=KNOWHOW&days=7&limit=3`. Score = views + likeCount * 3, 최근 N일 이내. Redis ZSET는 추후 전환.
+- **댓글 페이지네이션**: `GET /api/v1/comments/{postId}/threads` 로 `Page<CommentThreadResponse>`(top-level 댓글 페이지 + 각 스레드의 대댓글 포함) 반환. 기존 flat `GET /comments/{postId}` 유지.
+- **Follow 도메인** (`domain/follow/`): `Follow(follower_id, following_id)`. `POST /api/v1/users/{userId}/follow` 토글, `GET /followers|following` 목록.
+- **User 프로필 통계** (`domain/userstats/`): `GET /api/v1/users/{userId}/stats` → postCount / followerCount / followingCount / following(viewer 기준).
+- **`UserProfileResponse.role`** 노출 (프론트 관리자 메뉴 판정용).
+- **관리자 UI 프론트**: `AdminView.tsx` + Sidebar에 role=ROLE_ADMIN 시 노출. `DELETE /api/v1/admin/boards/{id}` 연동.
+- **서버 페이지네이션 프론트**: QnaListView/KnowhowListView가 `page/totalPages/totalElements` 메타 사용해 서버 페이지 이동. 태그 필터/검색 파라미터도 서버에 전달.
+
+#### 이번 세션에서 추가 구현 완료 (3차)
+- **Elasticsearch에 tags 포함**:
+  - `BoardDocument.tags: List<String>` (`FieldType.Keyword`) 추가
+  - `BoardDocument.from(board, tags)` 오버로드로 색인 시 태그 주입
+  - `BoardIndexEventListener` 가 UPSERT 시 `tagService.tagsOfBoard(boardId)` 로 태그 로딩 후 함께 색인
+  - `BoardSearchQueryRepository.search` 를 bool query 로 변경: `title^2 / content` (multi_match) OR `tags` (term) — should 절 minimum_should_match=1
+  - `BoardSearchResponse.tags` 필드 추가 (search API 응답도 태그 포함)
+  - 프론트 `BoardSearchResponse.tags` 반영해 검색 결과에도 태그 렌더링
+
+#### 이번 세션에서 추가 구현 완료 (4차)
+- **ES 초기 재색인 배치**:
+  - `BoardReindexService.reindexAll()` — 200건 페이지로 Board 로드 → `tagService.tagsByBoards` 벌크 조회 → `boardSearchRepository.saveAll` 로 배치 upsert. 반환값은 색인된 문서 수.
+  - `POST /api/v1/admin/boards/reindex` 관리자 엔드포인트 (ROLE_ADMIN 필수, `/api/v1/admin/**` 시큐리티 룰 적용).
+  - `BoardReindexRunner`(ApplicationRunner) — `app.board.reindex-on-startup=true` 일 때 부팅 시 자동 재색인. 스키마 변경 배포 직후 1회 실행용 옵션.
+- **HOT 랭킹 Redis 캐싱**:
+  - `BoardService.hot(type, days, limit)` 에 `@Cacheable(cacheNames="board:hot", key="type:days:limit")` 적용.
+  - `RedisConfig.CACHE_BOARD_HOT` 상수 및 5분 TTL 캐시 설정 등록 (`hotConfig`).
+  - `BoardHotWarmupScheduler` — 4분 주기로 `(QNA/KNOWHOW, 7, 3)` 조합 미리 캐시에 적재. ShedLock 으로 다중 인스턴스 중복 실행 차단. `app.cache.warmup.board-hot.enabled=true`(기본값) 로 on/off.
+  - **참고**: 좋아요 토글/게시물 삭제 시 명시적 evict 는 없음. 5분 TTL + warm-up 주기로 stale 흡수. 실시간성이 필요하면 `@CacheEvict(cacheNames="board:hot", allEntries=true)` 를 like/delete 경로에 추가할 것.
+
+#### 이번 세션에서 추가 구현 완료 (5차)
+- **좋아요 카운터 Redis 캐싱** (Cache-aside + INCR/DECR 하이브리드):
+  - `LikeCountCacheService` — 키 포맷 `like:count:{BOARD|COMMENT}:{id}`, TTL 30분.
+    - `getCount()`: Redis GET → 미스 시 DB `countByTargetIdAndTargetType` 후 SET.
+    - `getCounts()`: MGET → 미스 ID 만 벌크 DB COUNT (`countByTargets`) → MSET.
+    - `applyDelta(±1)`: `hasKey` 로 존재 확인 후에만 INCR/DECR (없으면 다음 read 가 DB 정본으로 lazy fill). 캐시 미스 상태에서의 INCR-from-null 로 인한 counter drift 방지.
+    - `evict()`: DEL. 게시물/댓글 삭제 시 정리.
+  - `PostLikeService.count/countByTargets` 전부 캐시 경유로 전환 (BoardService.list/get, CommentService.list 의 hot path 가 Redis MGET 으로 해결).
+  - `PostLikeService.toggle` 은 DB mutation 이후 `applyDelta` 로 즉시 반영 (write-through).
+  - `BoardService.delete` / `CommentService.delete` 에서 `likeService.evictCount(...)` 호출로 카운터 잔재 제거.
+- **조회수 Redis 캐싱 완비**:
+  - 기존 `BoardViewCountService` (INCR + `board:views:dirty` set + `BoardViewSyncScheduler` 5분 주기 DB flush) 유지 — 의사결정 #4 이미 구현.
+  - `BoardViewCountService.evict(boardId)` 신설 — dirty set 에서 SREM + counter DEL. `BoardService.delete` 에서 호출해 삭제된 게시물의 delta 가 다음 sync 때 "board not found (delta lost)" 로그를 남기던 문제 해소.
+
+#### 이번 세션에서 추가 구현 완료 (6차)
+- **관리자 게시물/댓글 리스트 API**:
+  - `GET /api/v1/admin/boards?type=&includeDeleted=` — `AdminBoardResponse`(원문 무마스킹 + `adminDeleted`/`userDeleted` 플래그 + `deletedAt`). `includeDeleted=true` 이면 `Board.@SQLRestriction("deleted_at IS NULL")` 를 우회하기 위해 `AdminBoardRepository` 의 native query 사용 (created_at DESC 하드코딩, Pageable 은 LIMIT/OFFSET 만).
+  - `GET /api/v1/admin/comments?referenceType=&referenceId=` — Comment 는 `@SQLRestriction` 이 없어 `findAll(pageable)` 로 소프트 삭제 포함 조회. `AdminCommentResponse` 원문 노출.
+  - 두 엔드포인트 모두 `/api/v1/admin/**` 시큐리티 룰로 ROLE_ADMIN 강제.
+- **좋아요 카운터 정합성 검증 배치**:
+  - `LikeCountReconcileService.reconcile(maxKeys)` — Redis `SCAN like:count:*` → 캐시 값 파싱 → 타입별로 `likeRepository.countByTargets` 벌크 DB COUNT → drift 시 WARN 로그 + DB 정본으로 SET. 손상된 값(NumberFormatException) 도 DEL 처리. `ReconcileReport(scanned, mismatched, corrected)` 반환.
+  - `LikeCountReconcileScheduler` — 매시 7분(`0 7 * * * *`) 실행, ShedLock 다중 인스턴스 차단, 1회 최대 500 키. `app.like.reconcile.enabled=true`(기본) on/off.
+  - `POST /api/v1/admin/likes/reconcile?limit=` 관리자 수동 트리거.
+
+#### 이번 세션에서 추가 구현 완료 (7차)
+- **관리자 프론트 UI 확장** (frontend `AdminView.tsx` 전면 개편):
+  - 3 탭 구조: **게시물 / 댓글 / 운영 작업**.
+  - 게시물 탭: `GET /admin/boards?type=&includeDeleted=` 사용, 원문 제목 노출, `adminDeleted`/`userDeleted`/정상 3단 배지, 관리자 삭제 표시(이미 처리된 행은 disabled).
+  - 댓글 탭: `GET /admin/comments?referenceType=&referenceId=` 사용, `parentId` 로 대댓글 여부 노출, 유저 소프트 삭제 행은 opacity 0.6 으로 dim.
+  - 운영 작업 탭: **ES 재색인 실행** (`POST /admin/boards/reindex`, 결과 문서 수 반환) + **좋아요 정합성 검증** (`POST /admin/likes/reconcile?limit=500`, `ReconcileReport` 표시).
+  - 프론트 `boardApi.ts` 에 `adminListBoards`, `adminListComments`, `adminReindexBoards`, `adminReconcileLikes` + 대응 응답 타입(`AdminBoardResponse`, `AdminCommentResponse`, `LikeReconcileReport`) 추가.
+  - Sidebar 는 이전 세션에서 이미 `role=ROLE_ADMIN` 시 관리자 메뉴 노출하도록 되어 있어 그대로 연결.
+
+#### 남은 갭 (미해결)
+- **이미지 실제 업로드 인프라**: 현재 URL만 받아 저장. S3 presigned URL 발급 API (`POST /api/v1/images/presigned-url`) + 클라이언트 직접 업로드 파이프라인 필요.
+- **Follow 상대 알림**: 팔로우 시 Notification 도메인 이벤트 미발행.
+- **HOT 랭킹 실시간성**: Redis ZSET 기반 실시간 랭킹으로 전환하면 like 이벤트마다 ZINCRBY 로 즉시 반영 가능. 현재는 5분 stale 허용.
+
+#### 결정 사항 (이전 세션에서 마감)
+- `GET /api/v1/boards?type=QNA|KNOWHOW` 필터 파라미터 추가 (BoardRepository.findByType)
+- `BoardResponse` / `CommentResponse` 에 `authorNickname` 포함, list 경로에서 `UserRepository.findAllById` 일괄 조회로 N+1 방지
+- 게시물/댓글 수정(PATCH) 을 프론트 상세 화면 인라인 편집으로 연결
