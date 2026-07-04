@@ -84,7 +84,10 @@ public class SecurityConfig {
                                 "/api/v1/transactions/**",
 
                                 // fixedTransaction 부분
-                                "/api/v1/fixed-transactions/**"
+                                "/api/v1/fixed-transactions/**",
+
+                                // category 부분
+                                "/api/v1/categories/**"
                         ).authenticated()
 
                         // 그 외 모든 요청은 인증 필요
