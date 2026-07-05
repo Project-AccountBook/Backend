@@ -36,7 +36,7 @@ public class FixedTransactionScheduler {
             LocalDate today = LocalDate.now();
             boolean alreadyExecuted = today.equals(fixedTransaction.getLastExecutedDate());
 
-            if (isTodayTargetDay(fixedTransaction, today) && !alreadyExecuted) {
+            if (fixedTransaction.isExecutionDay(today) && !alreadyExecuted) {
                 try {
                     TransactionRequest request = new TransactionRequest(
                             fixedTransaction.getAccount().getId(),
@@ -57,13 +57,5 @@ public class FixedTransactionScheduler {
                 }
             }
         }
-    }
-
-    private boolean isTodayTargetDay(FixedTransaction fixedTransaction, LocalDate today) {
-
-        if (fixedTransaction.getEndDate() != null && today.isAfter(fixedTransaction.getEndDate())) return false;
-        if (today.isBefore(fixedTransaction.getStartDate())) return false;
-
-        return today.getDayOfMonth() == fixedTransaction.getRepeatDay();
     }
 }

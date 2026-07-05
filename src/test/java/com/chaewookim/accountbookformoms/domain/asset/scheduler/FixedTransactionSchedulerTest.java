@@ -3,6 +3,8 @@ package com.chaewookim.accountbookformoms.domain.asset.scheduler;
 import com.chaewookim.accountbookformoms.domain.asset.application.TransactionService;
 import com.chaewookim.accountbookformoms.domain.asset.dao.FixedTransactionRepository;
 import com.chaewookim.accountbookformoms.domain.asset.entity.*;
+import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionFrequency;
+import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -52,7 +54,9 @@ class FixedTransactionSchedulerTest {
                 .user(user)
                 .account(account)
                 .transactionCategory(category)
+                .type(TransactionType.EXPENSE)
                 .amount(new BigDecimal("10000"))
+                .frequency(TransactionFrequency.MONTHLY)
                 .repeatDay(LocalDate.now().getDayOfMonth())
                 .startDate(LocalDate.now().minusDays(1))
                 .build();
