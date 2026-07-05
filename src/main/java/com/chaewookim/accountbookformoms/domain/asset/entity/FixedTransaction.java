@@ -28,6 +28,7 @@ import org.hibernate.annotations.SQLRestriction;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.YearMonth;
 
 @Entity
 @Getter
@@ -67,17 +68,21 @@ public class FixedTransaction extends BaseEntity {
     @Enumerated(EnumType.STRING)
     private TransactionFrequency frequency;
 
+    /** WEEKLY: 1(월)~7(일), MONTHLY/YEARLY: 1~31일 */
     @Column(nullable = false)
     private Integer repeatDay;
+
+    /** YEARLY 전용: 1~12월 */
+    private Integer repeatMonth;
 
     @Column(nullable = false)
     private LocalDate startDate;
 
     private LocalDate endDate;
 
-    private LocalDate lastExecutedDate;     // 마지막 실행일
+    private LocalDate lastExecutedDate;
 
-    private LocalDate nextExecutionDate;    // 다음 실행 예정일 (배치 최적화용)
+    private LocalDate nextExecutionDate;
 
     private String description;
 
@@ -86,7 +91,8 @@ public class FixedTransaction extends BaseEntity {
 
     @Builder
     public FixedTransaction(User user, Account account, TransactionCategory transactionCategory, TransactionType type, BigDecimal amount,
-                            TransactionFrequency frequency, Integer repeatDay, LocalDate startDate, LocalDate endDate, String description) {
+                            TransactionFrequency frequency, Integer repeatDay, Integer repeatMonth,
+                            LocalDate startDate, LocalDate endDate, String description) {
         this.user = user;
         this.account = account;
         this.transactionCategory = transactionCategory;
@@ -94,30 +100,93 @@ public class FixedTransaction extends BaseEntity {
         this.amount = amount;
         this.frequency = frequency;
         this.repeatDay = repeatDay;
+        this.repeatMonth = repeatMonth;
         this.startDate = startDate;
         this.endDate = endDate;
         this.description = description;
-        this.nextExecutionDate = calculateInitialNextDate(startDate, repeatDay);
+        this.nextExecutionDate = calculateInitialNextDate(startDate, frequency, repeatDay, repeatMonth);
         this.isActive = true;
     }
 
-    private LocalDate calculateInitialNextDate(LocalDate startDate, Integer repeatDay) {
+    public static void validateSchedule(TransactionFrequency frequency, Integer repeatDay, Integer repeatMonth) {
+        switch (frequency) {
+            case WEEKLY -> {
+                if (repeatDay == null || repeatDay < 1 || repeatDay > 7) {
+                    throw new CustomException(AssetErrorCode.INVALID_REPEAT_DAY);
+                }
+            }
+            case MONTHLY -> {
+                if (repeatDay == null || repeatDay < 1 || repeatDay > 31) {
+                    throw new CustomException(AssetErrorCode.INVALID_REPEAT_DAY);
+                }
+            }
+            case YEARLY -> {
+                if (repeatMonth == null || repeatMonth < 1 || repeatMonth > 12) {
+                    throw new CustomException(AssetErrorCode.INVALID_REPEAT_MONTH);
+                }
+                if (repeatDay == null || repeatDay < 1 || repeatDay > 31) {
+                    throw new CustomException(AssetErrorCode.INVALID_REPEAT_DAY);
+                }
+            }
+        }
+    }
 
-        if (repeatDay < 1 || repeatDay > 31) {
-            throw new CustomException(AssetErrorCode.INVALID_REPEAT_DAY);
+    private static int effectiveDayOfMonth(int repeatDay, int year, int month) {
+        return Math.min(repeatDay, YearMonth.of(year, month).lengthOfMonth());
+    }
+
+    private static LocalDate calculateInitialNextDate(LocalDate startDate, TransactionFrequency frequency,
+                                                      Integer repeatDay, Integer repeatMonth) {
+        validateSchedule(frequency, repeatDay, repeatMonth);
+
+        return switch (frequency) {
+            case WEEKLY -> {
+                LocalDate date = startDate;
+                while (date.getDayOfWeek().getValue() != repeatDay) {
+                    date = date.plusDays(1);
+                }
+                yield date;
+            }
+            case MONTHLY -> {
+                int year = startDate.getYear();
+                int month = startDate.getMonthValue();
+                int day = effectiveDayOfMonth(repeatDay, year, month);
+                LocalDate target = LocalDate.of(year, month, day);
+                if (startDate.isAfter(target)) {
+                    LocalDate nextMonth = startDate.plusMonths(1);
+                    day = effectiveDayOfMonth(repeatDay, nextMonth.getYear(), nextMonth.getMonthValue());
+                    target = LocalDate.of(nextMonth.getYear(), nextMonth.getMonthValue(), day);
+                }
+                yield target;
+            }
+            case YEARLY -> {
+                int year = startDate.getYear();
+                int day = effectiveDayOfMonth(repeatDay, year, repeatMonth);
+                LocalDate target = LocalDate.of(year, repeatMonth, day);
+                if (startDate.isAfter(target)) {
+                    year++;
+                    day = effectiveDayOfMonth(repeatDay, year, repeatMonth);
+                    target = LocalDate.of(year, repeatMonth, day);
+                }
+                yield target;
+            }
+        };
+    }
+
+    public boolean isExecutionDay(LocalDate today) {
+        if (endDate != null && today.isAfter(endDate)) {
+            return false;
+        }
+        if (today.isBefore(startDate)) {
+            return false;
         }
 
-        int year = startDate.getYear();
-        int month = startDate.getMonthValue();
-        int lastDayOfMonth = startDate.lengthOfMonth();
-        int validDay = Math.min(repeatDay, lastDayOfMonth);
-        LocalDate targetDate = LocalDate.of(year, month, validDay);
-
-        if (startDate.isAfter(targetDate)) {
-            targetDate = targetDate.plusMonths(1).withDayOfMonth(Math.min(repeatDay, targetDate.plusMonths(1).lengthOfMonth()));
-        }
-
-        return targetDate;
+        return switch (frequency) {
+            case WEEKLY -> today.getDayOfWeek().getValue() == repeatDay;
+            case MONTHLY -> today.getDayOfMonth() == effectiveDayOfMonth(repeatDay, today.getYear(), today.getMonthValue());
+            case YEARLY -> today.getMonthValue() == repeatMonth
+                    && today.getDayOfMonth() == effectiveDayOfMonth(repeatDay, today.getYear(), repeatMonth);
+        };
     }
 
     public void update(Account account, TransactionCategory category, FixedTransactionRequest request) {
@@ -126,9 +195,13 @@ public class FixedTransaction extends BaseEntity {
         this.amount = request.amount();
         this.frequency = request.frequency();
         this.repeatDay = request.repeatDay();
+        this.repeatMonth = request.repeatMonth();
         this.startDate = request.startDate();
         this.endDate = request.endDate();
         this.description = request.description();
+
+        LocalDate basis = LocalDate.now().isBefore(startDate) ? startDate : LocalDate.now();
+        this.nextExecutionDate = calculateInitialNextDate(basis, frequency, repeatDay, repeatMonth);
     }
 
     public void toggleActive() {
@@ -136,7 +209,19 @@ public class FixedTransaction extends BaseEntity {
     }
 
     private LocalDate calculateNextExecutionDate(LocalDate executedDate) {
-        return executedDate.plusMonths(1);
+        return switch (frequency) {
+            case WEEKLY -> executedDate.plusWeeks(1);
+            case MONTHLY -> {
+                LocalDate next = executedDate.plusMonths(1);
+                int day = effectiveDayOfMonth(repeatDay, next.getYear(), next.getMonthValue());
+                yield LocalDate.of(next.getYear(), next.getMonthValue(), day);
+            }
+            case YEARLY -> {
+                int year = executedDate.getYear() + 1;
+                int day = effectiveDayOfMonth(repeatDay, year, repeatMonth);
+                yield LocalDate.of(year, repeatMonth, day);
+            }
+        };
     }
 
     public void updateExecutionStatus(LocalDate executedDate) {

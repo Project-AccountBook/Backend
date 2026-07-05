@@ -42,6 +42,7 @@ public class FixedTransactionService {
                 .amount(request.amount())
                 .frequency(request.frequency())
                 .repeatDay(request.repeatDay())
+                .repeatMonth(request.repeatMonth())
                 .startDate(request.startDate())
                 .endDate(request.endDate())
                 .description(request.description())
