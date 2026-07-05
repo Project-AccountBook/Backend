@@ -106,16 +106,23 @@ class AccountServiceTest {
         Long accountId = 1L;
         User user = User.builder().build();
         ReflectionTestUtils.setField(user, "id", userId);
-        Account account = Account.builder().user(user).accountName("기존 이름").initialBalance(BigDecimal.ZERO).build();
+        Account account = Account.builder()
+                .user(user)
+                .accountName("기존 이름")
+                .initialBalance(BigDecimal.valueOf(10000))
+                .build();
+        ReflectionTestUtils.setField(account, "currentBalance", BigDecimal.valueOf(15000));
 
         given(accountRepository.findById(accountId)).willReturn(Optional.of(account));
-        AccountRequest request = new AccountRequest("새 이름", BigDecimal.ZERO);
+        AccountRequest request = new AccountRequest("새 이름", BigDecimal.valueOf(20000));
 
         // when
         accountService.updateAccount(userId, accountId, request);
 
         // then
         assertThat(account.getAccountName()).isEqualTo("새 이름");
+        assertThat(account.getInitialBalance()).isEqualByComparingTo(BigDecimal.valueOf(20000));
+        assertThat(account.getCurrentBalance()).isEqualByComparingTo(BigDecimal.valueOf(25000));
     }
 
     @Test

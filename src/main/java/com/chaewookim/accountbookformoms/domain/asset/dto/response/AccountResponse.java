@@ -8,12 +8,14 @@ public record AccountResponse(
 
         Long id,
         String accountName,
+        BigDecimal initialBalance,
         BigDecimal currentBalance
 ) {
     public AccountResponse(Account account) {
         this(
                 account.getId(),
                 account.getAccountName(),
+                account.getInitialBalance(),
                 account.getCurrentBalance()
         );
     }

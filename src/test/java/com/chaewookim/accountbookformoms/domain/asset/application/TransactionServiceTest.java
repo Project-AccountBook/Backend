@@ -1,10 +1,8 @@
 package com.chaewookim.accountbookformoms.domain.asset.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.*;
 
 import com.chaewookim.accountbookformoms.domain.asset.dao.*;
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.TransactionRequest;
@@ -22,6 +20,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -39,6 +39,12 @@ class TransactionServiceTest {
 
     @Mock
     private TransactionCategoryRepository categoryRepository;
+
+    @Mock
+    private CacheManager cacheManager;
+
+    @Mock
+    private Cache dashboardCache;
 
     @InjectMocks
     private TransactionService transactionService;
@@ -144,10 +150,11 @@ class TransactionServiceTest {
     void updateTransaction_Success() {
 
         // given
+        given(cacheManager.getCache("dashboard")).willReturn(dashboardCache);
         User user = User.builder().build(); setId(user, 1L);
         Account account = Account.builder().user(user).initialBalance(new BigDecimal("1000")).build(); setId(account, 1L);
         TransactionCategory category = TransactionCategory.builder().build(); setId(category, 1L);
-        Transaction t = Transaction.builder().user(user).account(account).transactionCategory(category).type(TransactionType.EXPENSE).amount(new BigDecimal("100")).build();
+        Transaction t = Transaction.builder().user(user).account(account).transactionCategory(category).type(TransactionType.EXPENSE).amount(new BigDecimal("100")).transactionDate(LocalDate.now()).build();
         setId(t, 1L);
 
         given(transactionRepository.findById(1L)).willReturn(Optional.of(t));
@@ -167,10 +174,11 @@ class TransactionServiceTest {
     void deleteTransaction_Success() {
 
         // given
+        given(cacheManager.getCache("dashboard")).willReturn(dashboardCache);
         User user = User.builder().build(); setId(user, 1L);
         Account account = Account.builder().user(user).initialBalance(new BigDecimal("1000")).build(); setId(account, 1L);
         TransactionCategory category = TransactionCategory.builder().build(); setId(category, 1L);
-        Transaction t = Transaction.builder().user(user).account(account).transactionCategory(category).type(TransactionType.EXPENSE).amount(new BigDecimal("100")).build();
+        Transaction t = Transaction.builder().user(user).account(account).transactionCategory(category).type(TransactionType.EXPENSE).amount(new BigDecimal("100")).transactionDate(LocalDate.now()).build();
         setId(t, 1L);
 
         given(transactionRepository.findById(1L)).willReturn(Optional.of(t));

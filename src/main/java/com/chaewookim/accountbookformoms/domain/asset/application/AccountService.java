@@ -53,6 +53,7 @@ public class AccountService {
     public void updateAccount(Long userId, Long accountId, AccountRequest request) {
         Account account = validateAndGet(userId, accountId);
         account.updateAccountName(request.accountName());
+        account.updateInitialBalance(request.initialBalance());
     }
 
     @Transactional

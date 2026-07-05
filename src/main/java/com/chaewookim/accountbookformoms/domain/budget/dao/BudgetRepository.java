@@ -15,6 +15,18 @@ public interface BudgetRepository extends JpaRepository<Budget, Long> {
 
     Optional<Budget> findByUserIdAndYearMonthAndTransactionCategoryId(Long userId, String yearMonth, Long categoryId);
 
+    @Query(value = """
+            SELECT *
+              FROM budget
+             WHERE user_id = :userId
+               AND `year_month` = :yearMonth
+               AND category_id = :categoryId
+             LIMIT 1
+            """, nativeQuery = true)
+    Optional<Budget> findByUserIdAndYearMonthAndCategoryIdIncludingDeleted(@Param("userId") Long userId,
+                                                                           @Param("yearMonth") String yearMonth,
+                                                                           @Param("categoryId") Long categoryId);
+
     @Query("""
             SELECT b
               FROM Budget b
