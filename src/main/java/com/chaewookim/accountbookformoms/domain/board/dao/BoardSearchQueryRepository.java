@@ -21,9 +21,14 @@ public class BoardSearchQueryRepository {
 
     public Page<BoardDocument> search(String keyword, Pageable pageable) {
         NativeQuery query = NativeQuery.builder()
-                .withQuery(q -> q.multiMatch(mm -> mm
-                        .query(keyword)
-                        .fields("title", "content")))
+                .withQuery(q -> q.bool(b -> b
+                        .should(s -> s.multiMatch(mm -> mm
+                                .query(keyword)
+                                .fields("title^2", "content")))
+                        .should(s -> s.term(t -> t
+                                .field("tags")
+                                .value(keyword)))
+                        .minimumShouldMatch("1")))
                 .withPageable(pageable)
                 .build();
 

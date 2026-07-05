@@ -10,6 +10,7 @@ import com.chaewookim.accountbookformoms.domain.comment.entity.Comment;
 import com.chaewookim.accountbookformoms.domain.comment.enums.ReferenceType;
 import com.chaewookim.accountbookformoms.domain.comment.error.CommentErrorCode;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseRepository;
+import com.chaewookim.accountbookformoms.domain.like.application.PostLikeService;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
@@ -50,6 +51,8 @@ class CommentServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private PostLikeService likeService;
     @InjectMocks
     private CommentService commentService;
 
@@ -363,13 +366,13 @@ class CommentServiceTest {
             given(userRepository.findAllById(List.of(OWNER_ID))).willReturn(List.of(mockUser));
 
             // when
-            List<CommentResponse> result = commentService.list(POST_ID, ReferenceType.QNA);
+            List<CommentResponse> result = commentService.list(POST_ID, ReferenceType.QNA, null);
 
             // then
             assertThat(result).hasSize(1);
             assertThat(result.get(0).id()).isEqualTo(COMMENT_ID);
             assertThat(result.get(0).content()).isEqualTo("본문");
-            assertThat(result.get(0).userNickname()).isEqualTo("홍길동");
+            assertThat(result.get(0).authorNickname()).isEqualTo("홍길동");
             assertThat(result.get(0).deleted()).isFalse();
         }
 
@@ -381,7 +384,7 @@ class CommentServiceTest {
                     .willReturn(List.of());
 
             // when
-            List<CommentResponse> result = commentService.list(POST_ID, ReferenceType.QNA);
+            List<CommentResponse> result = commentService.list(POST_ID, ReferenceType.QNA, null);
 
             // then
             assertThat(result).isEmpty();
@@ -402,13 +405,13 @@ class CommentServiceTest {
             given(userRepository.findAllById(List.of(OWNER_ID))).willReturn(List.of(mockUser));
 
             // when
-            List<CommentResponse> result = commentService.list(POST_ID, ReferenceType.QNA);
+            List<CommentResponse> result = commentService.list(POST_ID, ReferenceType.QNA, null);
 
             // then
             assertThat(result).hasSize(1);
             assertThat(result.get(0).deleted()).isTrue();
             assertThat(result.get(0).content()).isEqualTo("삭제된 댓글입니다.");
-            assertThat(result.get(0).userNickname()).isEqualTo("홍길동");
+            assertThat(result.get(0).authorNickname()).isEqualTo("홍길동");
         }
     }
 }

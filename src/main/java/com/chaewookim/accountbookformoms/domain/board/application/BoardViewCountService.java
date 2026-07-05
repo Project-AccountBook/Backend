@@ -55,6 +55,12 @@ public class BoardViewCountService {
         return previous == null ? 0L : Long.parseLong(previous);
     }
 
+    /** 게시물 삭제 시 dirty set 과 카운터 키를 함께 정리. */
+    public void evict(Long boardId) {
+        redisTemplate.opsForSet().remove(DIRTY_SET_KEY, String.valueOf(boardId));
+        redisTemplate.delete(viewKey(boardId));
+    }
+
     private String viewKey(Long boardId) {
         return VIEW_KEY_PREFIX + boardId;
     }

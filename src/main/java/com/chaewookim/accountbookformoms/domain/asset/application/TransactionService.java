@@ -13,6 +13,7 @@ import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
 import com.chaewookim.accountbookformoms.domain.budget.event.BudgetExceededCheckEvent;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -24,16 +25,20 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class TransactionService {
 
+    private static final DateTimeFormatter YEAR_MONTH_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM");
+
     private final TransactionRepository transactionRepository;
     private final AccountRepository accountRepository;
     private final TransactionCategoryRepository categoryRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final CacheManager cacheManager;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @CacheEvict(value = "dashboard", key = "#userId + ':' + #request.transactionDate.format(T(java.time.format.DateTimeFormatter).ofPattern('yyyy-MM'))")
@@ -121,10 +126,10 @@ public class TransactionService {
     }
 
     @Transactional
-    @CacheEvict(value = "dashboard", key = "#userId + ':' + #transaction.transactionDate.format(T(java.time.format.DateTimeFormatter).ofPattern('yyyy-MM'))")
     public void updateTransaction(Long userId, Long transactionId, TransactionRequest request) {
 
         Transaction transaction = validateAndGet(userId, transactionId);
+        LocalDate previousDate = transaction.getTransactionDate();
 
         Account account = accountRepository.findByIdWithLock(transaction.getAccount().getId())
                 .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
@@ -135,10 +140,12 @@ public class TransactionService {
         account.changeBalance(transaction.getBalanceChangeAmount().negate());
         transaction.update(request, category);
         account.changeBalance(transaction.getBalanceChangeAmount());
+
+        evictDashboardCache(userId, previousDate);
+        evictDashboardCache(userId, request.transactionDate());
     }
 
     @Transactional
-    @CacheEvict(value = "dashboard", key = "#userId + ':' + #transaction.transactionDate.format(T(java.time.format.DateTimeFormatter).ofPattern('yyyy-MM'))")
     public void deleteTransaction(Long userId, Long transactionId) {
 
         Transaction transaction = validateAndGet(userId, transactionId);
@@ -148,6 +155,8 @@ public class TransactionService {
 
         account.changeBalance(transaction.getBalanceChangeAmount().negate());
         transactionRepository.delete(transaction);
+
+        evictDashboardCache(userId, transaction.getTransactionDate());
     }
 
     // 공통 검증 로직
@@ -161,5 +170,16 @@ public class TransactionService {
         }
 
         return transaction;
+    }
+
+    // 대시보드 캐시 삭제
+    private void evictDashboardCache(Long userId, LocalDate date) {
+
+        if (cacheManager.getCache("dashboard") == null) {
+            return;
+        }
+
+        Objects.requireNonNull(cacheManager.getCache("dashboard"))
+                .evict(userId + ":" + date.format(YEAR_MONTH_FORMATTER));
     }
 }

@@ -26,6 +26,9 @@ import java.util.Map;
 @EnableCaching
 public class RedisConfig {
 
+    // Board HOT 랭킹 캐시 (type + days + limit 키, cross-user hit)
+    public static final String CACHE_BOARD_HOT = "board:hot";
+
     // Phase 2: 그룹 평균 캐시 (userId 미포함 키 → cross-user hit)
     public static final String CACHE_GROUP_BUDGET_AGE = "group:budget:age";
     public static final String CACHE_GROUP_BUDGET_AMOUNT = "group:budget:amount";
@@ -80,6 +83,9 @@ public class RedisConfig {
         // 그룹 평균 캐시: warm-up 스케줄(30분 주기)과 정합되도록 TTL 30분
         RedisCacheConfiguration groupConfig = defaultConfig.entryTtl(Duration.ofMinutes(30));
 
+        // Board HOT 랭킹: 좋아요/조회수 변동 대비 5분 TTL
+        RedisCacheConfiguration hotConfig = defaultConfig.entryTtl(Duration.ofMinutes(5));
+
         List<String> groupCacheNames = List.of(
                 CACHE_GROUP_BUDGET_AGE, CACHE_GROUP_BUDGET_AMOUNT, CACHE_GROUP_BUDGET_CATEGORY,
                 CACHE_GROUP_EXPENSE_AGE_FIXED, CACHE_GROUP_EXPENSE_AGE_VARIABLE,
@@ -91,6 +97,7 @@ public class RedisConfig {
 
         Map<String, RedisCacheConfiguration> perCacheConfig = new java.util.HashMap<>();
         groupCacheNames.forEach(name -> perCacheConfig.put(name, groupConfig));
+        perCacheConfig.put(CACHE_BOARD_HOT, hotConfig);
 
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)

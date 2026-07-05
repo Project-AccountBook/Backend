@@ -53,6 +53,9 @@ public class Comment extends BaseEntity {
     @Column(name = "admin_deleted", nullable = false)
     private boolean adminDeleted;
 
+    @Column(name = "is_accepted", nullable = false)
+    private boolean accepted;
+
     @Builder
     public Comment(Long userId, Long referenceId, ReferenceType referenceType, Long parentId, String content) {
         this.userId = userId;
@@ -61,6 +64,7 @@ public class Comment extends BaseEntity {
         this.parentId = parentId;
         this.content = content;
         this.adminDeleted = false;
+        this.accepted = false;
     }
 
     public void update(String content) {
@@ -69,6 +73,10 @@ public class Comment extends BaseEntity {
 
     public void markAsAdminDeleted() {
         this.adminDeleted = true;
+    }
+
+    public void setAccepted(boolean accepted) {
+        this.accepted = accepted;
     }
 
     public boolean isDeleted() {

@@ -57,6 +57,12 @@ public class Account extends BaseEntity {
         this.accountName = accountName;
     }
 
+    public void updateInitialBalance(BigDecimal newInitialBalance) {
+        BigDecimal delta = newInitialBalance.subtract(this.initialBalance);
+        this.initialBalance = newInitialBalance;
+        this.currentBalance = this.currentBalance.add(delta);
+    }
+
     public void changeBalance(BigDecimal amount) {
         if (amount.compareTo(BigDecimal.ZERO) < 0 && this.currentBalance.add(amount).compareTo(BigDecimal.ZERO) < 0) {
             throw new CustomException(AssetErrorCode.INSUFFICIENT_BALANCE);

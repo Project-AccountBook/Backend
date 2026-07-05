@@ -3,20 +3,21 @@ package com.chaewookim.accountbookformoms.domain.user.application;
 import com.chaewookim.accountbookformoms.domain.user.enums.VerificationType;
 import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
+import com.chaewookim.accountbookformoms.global.mail.AsyncVerificationEmailSender;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class EmailVerificationService {
 
     private final RedisTemplate<String, String> redisTemplate;
-    private final JavaMailSender mailSender;
+    private final AsyncVerificationEmailSender asyncVerificationEmailSender;
 
     // 인증 번호 발송
     public void sendVerificationCode(String email, VerificationType type) {
@@ -30,12 +31,8 @@ public class EmailVerificationService {
         redisTemplate.opsForValue().set("VERIFY:" + type + ":" + email, code, Duration.ofMinutes(3));
         redisTemplate.opsForValue().set(lockKey, "locked", Duration.ofMinutes(1));
 
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo(email);
-        message.setFrom("Joint-Living <rlatjddms030@gmail.com>");
-        message.setSubject(type == VerificationType.SIGNUP ? "회원가입 인증 번호" : "비밀번호 재설정 인증 번호");
-        message.setText("인증 번호: " + code);
-        mailSender.send(message);
+        asyncVerificationEmailSender.send(email, code, type);
+        log.info("인증 메일 발송 요청 - email: {}, type: {}", email, type);
     }
 
     // 인증 번호 검증

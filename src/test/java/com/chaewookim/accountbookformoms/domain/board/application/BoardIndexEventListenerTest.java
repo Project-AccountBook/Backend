@@ -5,6 +5,7 @@ import com.chaewookim.accountbookformoms.domain.board.dao.BoardSearchRepository;
 import com.chaewookim.accountbookformoms.domain.board.document.BoardDocument;
 import com.chaewookim.accountbookformoms.domain.board.entity.Board;
 import com.chaewookim.accountbookformoms.domain.board.enums.BOARD_TYPE;
+import com.chaewookim.accountbookformoms.domain.tag.application.TagService;
 import com.chaewookim.accountbookformoms.global.event.BoardChangedEvent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,6 +35,9 @@ class BoardIndexEventListenerTest {
     @Mock
     private BoardSearchRepository boardSearchRepository;
 
+    @Mock
+    private TagService tagService;
+
     @InjectMocks
     private BoardIndexEventListener listener;
 
@@ -54,10 +58,11 @@ class BoardIndexEventListenerTest {
     }
 
     @Test
-    @DisplayName("UPSERT — 게시물이 존재하면 ES에 색인")
+    @DisplayName("UPSERT — 게시물이 존재하면 태그와 함께 ES에 색인")
     void handle_upsert_indexes_when_board_exists() {
         Board board = buildBoard();
         given(boardRepository.findById(BOARD_ID)).willReturn(Optional.of(board));
+        given(tagService.tagsOfBoard(BOARD_ID)).willReturn(java.util.List.of("절약", "재테크"));
 
         listener.handle(BoardChangedEvent.upsert(BOARD_ID));
 
@@ -70,6 +75,7 @@ class BoardIndexEventListenerTest {
         assertThat(indexed.getType()).isEqualTo(BOARD_TYPE.QNA.name());
         assertThat(indexed.getUserId()).isEqualTo(USER_ID);
         assertThat(indexed.getCategoryId()).isEqualTo(CATEGORY_ID);
+        assertThat(indexed.getTags()).containsExactly("절약", "재테크");
     }
 
     @Test
@@ -96,6 +102,7 @@ class BoardIndexEventListenerTest {
     void handle_swallows_es_exception() {
         Board board = buildBoard();
         given(boardRepository.findById(BOARD_ID)).willReturn(Optional.of(board));
+        given(tagService.tagsOfBoard(BOARD_ID)).willReturn(java.util.List.of());
         willThrow(new RuntimeException("ES down"))
                 .given(boardSearchRepository).save(any(BoardDocument.class));
 

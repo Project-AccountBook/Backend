@@ -19,7 +19,8 @@ public enum AssetErrorCode implements BaseErrorCode {
     TRANSFER_TO_SELF_FORBIDDEN(HttpStatus.BAD_REQUEST, "자기 자신에게는 이체할 수 없습니다."),
 
     // FixedTransaction
-    INVALID_REPEAT_DAY(HttpStatus.BAD_REQUEST, "반복일은 1일부터 31일 사이여야 합니다."),
+    INVALID_REPEAT_DAY(HttpStatus.BAD_REQUEST, "반복일 값이 올바르지 않습니다. (매주: 1~7, 매월/매년: 1~31)"),
+    INVALID_REPEAT_MONTH(HttpStatus.BAD_REQUEST, "반복 월은 1월부터 12월 사이여야 합니다."),
     FIXED_TRANSACTION_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 고정 내역을 찾을 수 없습니다."),
     FIXED_TRANSACTION_FORBIDDEN(HttpStatus.FORBIDDEN, "본인의 고정 내역만 접근할 수 있습니다."),
 

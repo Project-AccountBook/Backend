@@ -27,9 +27,10 @@ public record FixedTransactionRequest(
         TransactionFrequency frequency,
 
         @NotNull(message = "반복일은 필수입니다.")
-        @Min(value = 1, message = "반복일은 1일부터 가능합니다.")
-        @Max(value = 31, message = "반복일은 31일까지 가능합니다.")
         Integer repeatDay,
+
+        /** YEARLY 전용 (1~12). WEEKLY/MONTHLY는 null */
+        Integer repeatMonth,
 
         @NotNull(message = "시작일은 필수입니다.")
         LocalDate startDate,

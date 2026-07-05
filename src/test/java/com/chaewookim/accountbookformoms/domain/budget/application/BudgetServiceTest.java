@@ -45,6 +45,36 @@ class BudgetServiceTest {
     private BudgetService budgetService;
 
     @Test
+    @DisplayName("예산 생성 - 소프트 삭제된 예산 복구")
+    void createBudget_restoreDeleted() {
+
+        // given
+        Long userId = 1L;
+        BudgetRequest request = new BudgetRequest(1L, "2026-07", new BigDecimal("1000"), new BigDecimal("500"));
+        Budget deletedBudget = Budget.builder()
+                .yearMonth("2026-07")
+                .totalBudget(new BigDecimal("100"))
+                .expectedExpense(BigDecimal.ZERO)
+                .build();
+        deletedBudget.delete();
+
+        given(budgetRepository.findByUserIdAndYearMonthAndTransactionCategoryId(userId, request.yearMonth(), request.categoryId()))
+                .willReturn(Optional.empty());
+        given(budgetRepository.findByUserIdAndYearMonthAndCategoryIdIncludingDeleted(userId, request.yearMonth(), request.categoryId()))
+                .willReturn(Optional.of(deletedBudget));
+        given(budgetRepository.save(deletedBudget)).willReturn(deletedBudget);
+
+        // when
+        budgetService.createBudget(userId, request);
+
+        // then
+        assertThat(deletedBudget.getDeletedAt()).isNull();
+        verify(budgetRepository, times(1)).save(deletedBudget);
+        verify(userRepository, never()).getReferenceById(any());
+        verify(categoryRepository, never()).getReferenceById(any());
+    }
+
+    @Test
     @DisplayName("예산 생성 - 성공")
     void createBudget_success() {
 
@@ -56,6 +86,7 @@ class BudgetServiceTest {
         given(userRepository.getReferenceById(userId)).willReturn(mock(com.chaewookim.accountbookformoms.domain.user.entity.User.class));
         given(categoryRepository.getReferenceById(categoryId)).willReturn(mock(com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory.class));
         given(budgetRepository.findByUserIdAndYearMonthAndTransactionCategoryId(any(), any(), any())).willReturn(Optional.empty());
+        given(budgetRepository.findByUserIdAndYearMonthAndCategoryIdIncludingDeleted(any(), any(), any())).willReturn(Optional.empty());
         given(budgetRepository.save(any())).willReturn(Budget.builder().build());
 
         // when

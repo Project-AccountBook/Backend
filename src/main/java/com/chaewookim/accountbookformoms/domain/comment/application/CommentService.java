@@ -1,6 +1,7 @@
 package com.chaewookim.accountbookformoms.domain.comment.application;
 
 import com.chaewookim.accountbookformoms.domain.board.dao.BoardRepository;
+import com.chaewookim.accountbookformoms.domain.board.entity.Board;
 import com.chaewookim.accountbookformoms.domain.board.error.BoardErrorCode;
 import com.chaewookim.accountbookformoms.domain.comment.dao.CommentRepository;
 import com.chaewookim.accountbookformoms.domain.comment.dto.request.CommentCreateRequest;
@@ -10,6 +11,8 @@ import com.chaewookim.accountbookformoms.domain.comment.entity.Comment;
 import com.chaewookim.accountbookformoms.domain.comment.enums.ReferenceType;
 import com.chaewookim.accountbookformoms.domain.comment.error.CommentErrorCode;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseRepository;
+import com.chaewookim.accountbookformoms.domain.like.application.PostLikeService;
+import com.chaewookim.accountbookformoms.domain.like.enums.LikeTargetType;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
@@ -20,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -31,6 +35,7 @@ public class CommentService {
     private final BoardRepository boardRepository;
     private final GroupPurchaseRepository groupPurchaseRepository;
     private final UserRepository userRepository;
+    private final PostLikeService likeService;
 
     @Transactional
     public Long create(Long postId, CommentCreateRequest request, Long userId) {
@@ -80,21 +85,90 @@ public class CommentService {
         Comment comment = findCommentOrThrow(commentId);
         validateOwner(comment, userId);
         commentRepository.delete(comment);
+        likeService.evictCount(
+                com.chaewookim.accountbookformoms.domain.like.enums.LikeTargetType.COMMENT,
+                comment.getId());
         return comment.getId();
     }
 
-    public List<CommentResponse> list(Long postId, ReferenceType referenceType) {
-        List<Comment> comments = commentRepository.findByReferenceIdAndReferenceTypeOrderByCreatedAtAsc(postId, referenceType);
-        List<Long> userIds = comments.stream().map(Comment::getUserId).distinct().toList();
-        Map<Long, String> nicknameMap = userRepository.findAllById(userIds).stream()
-                .collect(Collectors.toMap(User::getId, User::getUsername));
-        
+    @Transactional
+    public Long acceptAnswer(Long commentId, Long requesterId) {
+        Comment comment = findCommentOrThrow(commentId);
+        if (comment.getReferenceType() != ReferenceType.QNA) {
+            throw new CustomException(CommentErrorCode.COMMENT_ACCEPT_NOT_QNA);
+        }
+        if (comment.getParentId() != null) {
+            throw new CustomException(CommentErrorCode.COMMENT_ACCEPT_REPLY_NOT_ALLOWED);
+        }
+        Board board = boardRepository.findById(comment.getReferenceId())
+                .orElseThrow(() -> new CustomException(BoardErrorCode.BOARD_NOT_FOUND));
+        if (!board.getUserId().equals(requesterId)) {
+            throw new CustomException(BoardErrorCode.BOARD_ACCESS_DENIED);
+        }
+
+        List<Comment> siblings = commentRepository
+                .findByReferenceIdAndReferenceTypeOrderByCreatedAtAsc(
+                        comment.getReferenceId(), ReferenceType.QNA);
+        for (Comment sibling : siblings) {
+            if (sibling.getParentId() == null && sibling.isAccepted() && !sibling.getId().equals(commentId)) {
+                sibling.setAccepted(false);
+            }
+        }
+        comment.setAccepted(true);
+        board.setResolved(true);
+        return comment.getId();
+    }
+
+    public List<CommentResponse> list(Long postId, ReferenceType referenceType, Long viewerId) {
+        List<Comment> comments = commentRepository
+                .findByReferenceIdAndReferenceTypeOrderByCreatedAtAsc(postId, referenceType);
+        return enrich(comments, viewerId);
+    }
+
+    public org.springframework.data.domain.Page<com.chaewookim.accountbookformoms.domain.comment.dto.response.CommentThreadResponse> listThreads(
+            Long postId,
+            ReferenceType referenceType,
+            org.springframework.data.domain.Pageable pageable,
+            Long viewerId
+    ) {
+        org.springframework.data.domain.Page<Comment> topLevel = commentRepository
+                .findByReferenceIdAndReferenceTypeAndParentIdIsNullOrderByCreatedAtAsc(postId, referenceType, pageable);
+        List<Long> parentIds = topLevel.getContent().stream().map(Comment::getId).toList();
+        List<Comment> replies = parentIds.isEmpty()
+                ? List.of()
+                : commentRepository.findByParentIdInOrderByCreatedAtAsc(parentIds);
+        List<Comment> all = new java.util.ArrayList<>(topLevel.getContent());
+        all.addAll(replies);
+        Map<Long, CommentResponse> byId = enrich(all, viewerId).stream()
+                .collect(Collectors.toMap(CommentResponse::id, r -> r));
+        Map<Long, List<CommentResponse>> repliesByParent = new java.util.HashMap<>();
+        replies.forEach(r -> repliesByParent
+                .computeIfAbsent(r.getParentId(), k -> new java.util.ArrayList<>())
+                .add(byId.get(r.getId())));
+        return topLevel.map(parent -> new com.chaewookim.accountbookformoms.domain.comment.dto.response.CommentThreadResponse(
+                byId.get(parent.getId()),
+                repliesByParent.getOrDefault(parent.getId(), List.of())
+        ));
+    }
+
+    private List<CommentResponse> enrich(List<Comment> comments, Long viewerId) {
+        List<Long> ids = comments.stream().map(Comment::getId).toList();
+        Map<Long, String> nicknames = loadNicknames(comments.stream().map(Comment::getUserId).toList());
+        Map<Long, Long> likeCounts = likeService.countByTargets(LikeTargetType.COMMENT, ids);
+        Set<Long> liked = likeService.likedTargets(LikeTargetType.COMMENT, ids, viewerId);
         return comments.stream()
-                .map(comment -> {
-                    String nickname = nicknameMap.getOrDefault(comment.getUserId(), "탈퇴한 사용자");
-                    return CommentResponse.of(comment, nickname);
-                })
+                .map(c -> CommentResponse.from(
+                        c,
+                        nicknames.get(c.getUserId()),
+                        likeCounts.getOrDefault(c.getId(), 0L),
+                        liked.contains(c.getId())))
                 .toList();
+    }
+
+    private Map<Long, String> loadNicknames(List<Long> userIds) {
+        if (userIds.isEmpty()) return Map.of();
+        return userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, User::getUsername, (a, b) -> a));
     }
 
     private Comment findCommentOrThrow(Long commentId) {

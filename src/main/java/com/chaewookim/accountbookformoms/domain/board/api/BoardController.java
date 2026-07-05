@@ -2,11 +2,13 @@ package com.chaewookim.accountbookformoms.domain.board.api;
 
 import com.chaewookim.accountbookformoms.domain.board.application.BoardService;
 import com.chaewookim.accountbookformoms.domain.board.dto.request.BoardCreateRequest;
+import com.chaewookim.accountbookformoms.domain.board.dto.request.BoardStatusRequest;
 import com.chaewookim.accountbookformoms.domain.board.dto.request.BoardUpdateRequest;
 import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardCreateResponse;
 import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardResponse;
 import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardSearchResponse;
 import com.chaewookim.accountbookformoms.domain.board.dto.response.BoardUpdateResponse;
+import com.chaewookim.accountbookformoms.domain.board.enums.BOARD_TYPE;
 import com.chaewookim.accountbookformoms.global.common.ApiResponse;
 import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -41,14 +43,18 @@ public class BoardController {
 
     private final BoardService boardService;
 
-    @Operation(summary = "게시물 목록 조회", description = "QnA 게시판 게시물 목록 조회")
+    @Operation(summary = "게시물 목록 조회", description = "QNA/KNOWHOW 게시판 게시물 목록 조회. type 파라미터 생략 시 전체 반환.")
     @PageableAsQueryParam
     @GetMapping
     public ResponseEntity<ApiResponse<Page<BoardResponse>>> list(
+            @RequestParam(required = false) BOARD_TYPE type,
+            @RequestParam(required = false) String tag,
             @Parameter(hidden = true)
-            @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+            @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
-        return ResponseEntity.ok(ApiResponse.success(boardService.list(pageable)));
+        Long viewerId = principal == null ? null : principal.getUserId();
+        return ResponseEntity.ok(ApiResponse.success(boardService.list(type, tag, pageable, viewerId)));
     }
 
     @Operation(summary = "게시물 추가", description = "일반 사용자의 게시물 생성")
@@ -64,9 +70,11 @@ public class BoardController {
     @Operation(summary = "게시물 조회", description = "게시물 단건 조회")
     @GetMapping("/{post-id}")
     public ResponseEntity<ApiResponse<BoardResponse>> get(
-            @PathVariable("post-id") Long postId
+            @PathVariable("post-id") Long postId,
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
-        return ResponseEntity.ok(ApiResponse.success(boardService.get(postId)));
+        Long viewerId = principal == null ? null : principal.getUserId();
+        return ResponseEntity.ok(ApiResponse.success(boardService.get(postId, viewerId)));
     }
 
     @Operation(summary = "게시물 수정", description = "일반 사용자의 게시물 수정")
@@ -80,6 +88,28 @@ public class BoardController {
         return ResponseEntity.ok(ApiResponse.success(boardService.update(postId, request, userId)));
     }
 
+    @Operation(summary = "Q&A 해결 상태 토글", description = "작성자가 Q&A 게시물의 해결 여부를 설정합니다.")
+    @PatchMapping("/{post-id}/resolved")
+    public ResponseEntity<ApiResponse<Boolean>> setResolved(
+            @PathVariable("post-id") Long postId,
+            @RequestBody @Valid BoardStatusRequest request,
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                boardService.setResolved(postId, request.value(), userPrincipal.getUserId())));
+    }
+
+    @Operation(summary = "Q&A 급함 표시 토글", description = "작성자가 Q&A 게시물의 급함 여부를 설정합니다.")
+    @PatchMapping("/{post-id}/urgent")
+    public ResponseEntity<ApiResponse<Boolean>> setUrgent(
+            @PathVariable("post-id") Long postId,
+            @RequestBody @Valid BoardStatusRequest request,
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                boardService.setUrgent(postId, request.value(), userPrincipal.getUserId())));
+    }
+
     @Operation(summary = "게시물 삭제", description = "일반 사용자의 게시물 삭제 (Soft Delete)")
     @DeleteMapping("/{post-id}")
     public ResponseEntity<ApiResponse<Long>> delete(
@@ -88,6 +118,16 @@ public class BoardController {
     ) {
         Long userId = userPrincipal.getUserId();
         return ResponseEntity.ok(ApiResponse.success(boardService.delete(postId, userId)));
+    }
+
+    @Operation(summary = "HOT 게시물", description = "지정 기간(최근 days일) 이내 게시물을 조회수+좋아요 기반으로 랭킹")
+    @GetMapping("/hot")
+    public ResponseEntity<ApiResponse<java.util.List<com.chaewookim.accountbookformoms.domain.board.dto.response.BoardHotResponse>>> hot(
+            @RequestParam BOARD_TYPE type,
+            @RequestParam(defaultValue = "7") int days,
+            @RequestParam(defaultValue = "3") int limit
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(boardService.hot(type, days, limit)));
     }
 
     @Operation(summary = "게시물 검색", description = "Elasticsearch nori 기반 게시물 검색")

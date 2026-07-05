@@ -21,6 +21,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,6 +39,15 @@ public class BudgetService {
 
         if (budgetRepository.findByUserIdAndYearMonthAndTransactionCategoryId(userId, request.yearMonth(), request.categoryId()).isPresent()) {
             throw new CustomException(BudgetErrorCode.BUDGET_ALREADY_EXISTS);
+        }
+
+        Optional<Budget> deletedBudget = budgetRepository.findByUserIdAndYearMonthAndCategoryIdIncludingDeleted(
+                userId, request.yearMonth(), request.categoryId());
+        if (deletedBudget.isPresent() && deletedBudget.get().getDeletedAt() != null) {
+            Budget budget = deletedBudget.get();
+            budget.restore();
+            budget.update(request.totalBudget(), request.expectedExpense());
+            return budgetRepository.save(budget).getId();
         }
 
         Budget budget = Budget.builder()
