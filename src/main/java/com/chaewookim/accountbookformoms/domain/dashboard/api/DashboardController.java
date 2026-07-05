@@ -25,6 +25,10 @@ public class DashboardController {
             @AuthenticationPrincipal UserPrincipal userPrincipal,
             @RequestParam String yearMonth
     ) {
+        if (userPrincipal == null) {
+            return ResponseEntity.status(401)
+                    .body(ApiResponse.error("인증이 필요합니다."));
+        }
         return ResponseEntity.ok(ApiResponse.success(
                 dashboardService.getDashboard(userPrincipal.getUserId(), yearMonth)
         ));
