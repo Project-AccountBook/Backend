@@ -12,7 +12,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Slf4j
 @Component
@@ -28,12 +31,27 @@ public class FixedTransactionScheduler {
     @Transactional
     public void processFixedTransactions() {
 
-        log.info("고정 거래 스케줄러 시작: {}", LocalDate.now());
-        List<FixedTransaction> targetTransactions = fixedTransactionRepository.findAllByIsActiveTrueAndNextExecutionDateLessThanEqual(LocalDate.now());
+        LocalDate today = LocalDate.now();
+        log.info("고정 거래 스케줄러 시작: {}", today);
+        List<FixedTransaction> targetTransactions = new ArrayList<>(
+                fixedTransactionRepository.findAllByIsActiveTrueAndNextExecutionDateLessThanEqual(today)
+        );
+        Set<Long> seenIds = new HashSet<>();
+        targetTransactions.forEach(ft -> seenIds.add(ft.getId()));
+
+        for (FixedTransaction candidate : fixedTransactionRepository.findAllByIsActiveTrue()) {
+            if (seenIds.contains(candidate.getId())) {
+                continue;
+            }
+            if (candidate.isExecutionDay(today) && !today.equals(candidate.getLastExecutedDate())) {
+                candidate.alignNextExecutionDateIfStale(today);
+                targetTransactions.add(candidate);
+                seenIds.add(candidate.getId());
+            }
+        }
 
         for (FixedTransaction fixedTransaction : targetTransactions) {
 
-            LocalDate today = LocalDate.now();
             boolean alreadyExecuted = today.equals(fixedTransaction.getLastExecutedDate());
 
             if (fixedTransaction.isExecutionDay(today) && !alreadyExecuted) {

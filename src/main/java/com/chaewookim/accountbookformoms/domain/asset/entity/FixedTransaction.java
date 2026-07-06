@@ -228,4 +228,10 @@ public class FixedTransaction extends BaseEntity {
         this.lastExecutedDate = executedDate;
         this.nextExecutionDate = calculateNextExecutionDate(executedDate);
     }
+
+    public void alignNextExecutionDateIfStale(LocalDate today) {
+        if (isExecutionDay(today) && nextExecutionDate != null && nextExecutionDate.isAfter(today)) {
+            this.nextExecutionDate = today;
+        }
+    }
 }

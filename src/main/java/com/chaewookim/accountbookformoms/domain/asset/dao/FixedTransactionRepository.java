@@ -14,6 +14,7 @@ import java.util.List;
 public interface FixedTransactionRepository extends JpaRepository<FixedTransaction, Long> {
 
     List<FixedTransaction> findAllByUserId(Long userId);
+    List<FixedTransaction> findAllByIsActiveTrue();
     List<FixedTransaction> findAllByIsActiveTrueAndNextExecutionDateLessThanEqual(LocalDate today);
 
     /**
