@@ -1,6 +1,7 @@
 package com.chaewookim.accountbookformoms.domain.asset.dao;
 
 import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory;
+import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,4 +15,6 @@ public interface TransactionCategoryRepository extends JpaRepository<Transaction
 
     @Query("SELECT c.id FROM TransactionCategory c WHERE c.user IS NULL")
     List<Long> findSystemCategoryIds();
+
+    boolean existsByUserIsNullAndNameAndType(String name, TransactionType type);
 }
