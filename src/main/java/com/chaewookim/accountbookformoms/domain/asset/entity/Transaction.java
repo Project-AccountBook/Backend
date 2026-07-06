@@ -50,6 +50,10 @@ public class Transaction extends BaseEntity {
     private Account account;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "target_account_id")
+    private Account targetAccount;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")
     private TransactionCategory transactionCategory;
 
@@ -66,10 +70,11 @@ public class Transaction extends BaseEntity {
     private String description;
 
     @Builder
-    public Transaction(User user, Account account, TransactionCategory transactionCategory, TransactionType type,
-                       BigDecimal amount, LocalDate transactionDate, String description) {
+    public Transaction(User user, Account account, Account targetAccount, TransactionCategory transactionCategory,
+                       TransactionType type, BigDecimal amount, LocalDate transactionDate, String description) {
         this.user = user;
         this.account = account;
+        this.targetAccount = targetAccount;
         this.transactionCategory = transactionCategory;
         this.type = type;
         this.amount = amount;
@@ -77,12 +82,14 @@ public class Transaction extends BaseEntity {
         this.description = description;
     }
 
-    public void update(TransactionRequest request, TransactionCategory category) {
+    public void update(TransactionRequest request, TransactionCategory category, Account account, Account targetAccount) {
+        this.account = account;
         this.transactionCategory = category;
         this.type = request.type();
         this.amount = request.amount();
         this.transactionDate = request.transactionDate();
         this.description = request.description();
+        this.targetAccount = request.type() == TransactionType.TRANSFER ? targetAccount : null;
     }
 
     public BigDecimal getBalanceChangeAmount() {
