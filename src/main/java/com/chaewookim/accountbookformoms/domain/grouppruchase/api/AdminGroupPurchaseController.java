@@ -13,9 +13,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.PurchaseStatus;
 
 @Tag(name = "어드민 공동구매 관리", description = "어드민 공동구매 대시보드 및 요약 API")
 @RestController
@@ -40,5 +39,24 @@ public class AdminGroupPurchaseController {
     ) {
         Page<GroupPurchaseAdminResponse> response = groupPurchaseService.getGroupPurchasesForAdmin(status, pageable);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(summary = "공동구매 상태 조정 (관리자용)", description = "관리자 권한으로 공동구매 상태를 강제 변경합니다.")
+    @PutMapping("/{id}/status")
+    public ResponseEntity<ApiResponse<Long>> updateStatus(
+            @PathVariable Long id,
+            @RequestParam PurchaseStatus status
+    ) {
+        groupPurchaseService.updateGroupPurchaseStatusByAdmin(id, status);
+        return ResponseEntity.ok(ApiResponse.success(id));
+    }
+
+    @Operation(summary = "공동구매 글 삭제 (관리자용)", description = "관리자 권한으로 공동구매 글을 삭제(Soft Delete)합니다.")
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<String>> deleteByAdmin(
+            @PathVariable Long id
+    ) {
+        groupPurchaseService.deleteGroupPurchaseByAdmin(id);
+        return ResponseEntity.ok(ApiResponse.success("공동구매가 성공적으로 삭제되었습니다."));
     }
 }
