@@ -15,6 +15,8 @@ import java.util.List;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
 
+    boolean existsByTransactionCategoryId(Long categoryId);
+
     @Query("""
             SELECT t FROM Transaction t
             JOIN FETCH t.transactionCategory

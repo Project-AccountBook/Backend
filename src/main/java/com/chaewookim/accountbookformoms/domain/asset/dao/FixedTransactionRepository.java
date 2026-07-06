@@ -13,6 +13,8 @@ import java.util.List;
 
 public interface FixedTransactionRepository extends JpaRepository<FixedTransaction, Long> {
 
+    boolean existsByTransactionCategoryId(Long categoryId);
+
     List<FixedTransaction> findAllByUserId(Long userId);
     List<FixedTransaction> findAllByIsActiveTrue();
     List<FixedTransaction> findAllByIsActiveTrueAndNextExecutionDateLessThanEqual(LocalDate today);

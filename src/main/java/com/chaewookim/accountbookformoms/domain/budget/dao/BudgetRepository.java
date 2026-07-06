@@ -13,6 +13,8 @@ import java.util.Optional;
 
 public interface BudgetRepository extends JpaRepository<Budget, Long> {
 
+    boolean existsByTransactionCategoryId(Long categoryId);
+
     Optional<Budget> findByUserIdAndYearMonthAndTransactionCategoryId(Long userId, String yearMonth, Long categoryId);
 
     @Query(value = """

@@ -1,7 +1,10 @@
 package com.chaewookim.accountbookformoms.domain.asset.application;
 
+import com.chaewookim.accountbookformoms.domain.asset.dao.FixedTransactionRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionCategoryRepository;
+import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.CategoryRequest;
+import com.chaewookim.accountbookformoms.domain.budget.dao.BudgetRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dto.response.CategoryResponse;
 import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory;
 import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
@@ -19,6 +22,9 @@ import java.util.List;
 public class CategoryService {
 
     private final TransactionCategoryRepository categoryRepository;
+    private final TransactionRepository transactionRepository;
+    private final FixedTransactionRepository fixedTransactionRepository;
+    private final BudgetRepository budgetRepository;
 
     public List<CategoryResponse> getCategories(Long userId) {
         return categoryRepository.findAllByUserOrSystem(userId).stream()
@@ -41,7 +47,16 @@ public class CategoryService {
     @Transactional
     public void deleteCategory(Long categoryId, Long userId) {
         TransactionCategory category = validateAndGetCategory(categoryId, userId);
+        validateCategoryNotInUse(categoryId);
         categoryRepository.delete(category);
+    }
+
+    private void validateCategoryNotInUse(Long categoryId) {
+        if (transactionRepository.existsByTransactionCategoryId(categoryId)
+                || fixedTransactionRepository.existsByTransactionCategoryId(categoryId)
+                || budgetRepository.existsByTransactionCategoryId(categoryId)) {
+            throw new CustomException(AssetErrorCode.CATEGORY_IN_USE);
+        }
     }
 
     // 공통 검증 로직

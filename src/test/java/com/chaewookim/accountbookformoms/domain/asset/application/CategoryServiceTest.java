@@ -6,12 +6,15 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 
+import com.chaewookim.accountbookformoms.domain.asset.dao.FixedTransactionRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionCategoryRepository;
+import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.CategoryRequest;
 import com.chaewookim.accountbookformoms.domain.asset.dto.response.CategoryResponse;
 import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
+import com.chaewookim.accountbookformoms.domain.budget.dao.BudgetRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import java.util.List;
@@ -28,6 +31,15 @@ class CategoryServiceTest {
 
     @Mock
     private TransactionCategoryRepository categoryRepository;
+
+    @Mock
+    private TransactionRepository transactionRepository;
+
+    @Mock
+    private FixedTransactionRepository fixedTransactionRepository;
+
+    @Mock
+    private BudgetRepository budgetRepository;
 
     @InjectMocks
     private CategoryService categoryService;
@@ -119,12 +131,38 @@ class CategoryServiceTest {
 
         TransactionCategory category = TransactionCategory.builder().user(user).build();
         given(categoryRepository.findById(categoryId)).willReturn(Optional.of(category));
+        given(transactionRepository.existsByTransactionCategoryId(categoryId)).willReturn(false);
+        given(fixedTransactionRepository.existsByTransactionCategoryId(categoryId)).willReturn(false);
+        given(budgetRepository.existsByTransactionCategoryId(categoryId)).willReturn(false);
 
         // when
         categoryService.deleteCategory(categoryId, userId);
 
         // then
         verify(categoryRepository, times(1)).delete(category);
+    }
+
+    @Test
+    @DisplayName("카테고리 삭제 - 사용 중인 카테고리 삭제 시 예외 발생")
+    void deleteCategory_Fail_InUse() {
+
+        // given
+        Long categoryId = 1L;
+        Long userId = 1L;
+        User user = mock(User.class);
+        given(user.getId()).willReturn(userId);
+
+        TransactionCategory category = TransactionCategory.builder().user(user).build();
+        given(categoryRepository.findById(categoryId)).willReturn(Optional.of(category));
+        given(transactionRepository.existsByTransactionCategoryId(categoryId)).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> categoryService.deleteCategory(categoryId, userId))
+                .isInstanceOf(CustomException.class)
+                .satisfies(ex -> {
+                    CustomException customEx = (CustomException) ex;
+                    assertThat(customEx.getErrorCode()).isEqualTo(AssetErrorCode.CATEGORY_IN_USE);
+                });
     }
 
     @Test
