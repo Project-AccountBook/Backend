@@ -127,4 +127,8 @@ public class GroupPurchase extends BaseEntity {
             this.status = PurchaseStatus.RECRUITING;
         }
     }
+
+    public void updateStatusByAdmin(PurchaseStatus status) {
+        this.status = status;
+    }
 }

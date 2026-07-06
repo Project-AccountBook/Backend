@@ -276,6 +276,20 @@ public class GroupPurchaseService {
     }
 
     @Transactional
+    public void updateGroupPurchaseStatusByAdmin(Long id, PurchaseStatus status) {
+        GroupPurchase gp = groupPurchaseRepository.findById(id)
+                .orElseThrow(() -> new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND));
+        gp.updateStatusByAdmin(status);
+    }
+
+    @Transactional
+    public void deleteGroupPurchaseByAdmin(Long id) {
+        GroupPurchase gp = groupPurchaseRepository.findById(id)
+                .orElseThrow(() -> new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND));
+        groupPurchaseRepository.delete(gp);
+    }
+
+    @Transactional
     public boolean toggleWish(Long userId, Long groupPurchaseId) {
         if (!groupPurchaseRepository.existsById(groupPurchaseId)) {
             throw new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND);
