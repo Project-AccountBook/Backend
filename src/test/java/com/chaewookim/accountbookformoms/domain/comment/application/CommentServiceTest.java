@@ -53,7 +53,6 @@ class CommentServiceTest {
 
     @Mock
     private PostLikeService likeService;
-
     @InjectMocks
     private CommentService commentService;
 
