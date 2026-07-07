@@ -1,6 +1,8 @@
 package com.chaewookim.accountbookformoms.domain.asset.application;
 
 import com.chaewookim.accountbookformoms.domain.asset.dao.AccountRepository;
+import com.chaewookim.accountbookformoms.domain.asset.dao.FixedTransactionRepository;
+import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.AccountRequest;
 import com.chaewookim.accountbookformoms.domain.asset.dto.response.AccountResponse;
 import com.chaewookim.accountbookformoms.domain.asset.entity.Account;
@@ -33,6 +35,12 @@ class AccountServiceTest {
 
     @Mock
     UserRepository userRepository;
+
+    @Mock
+    FixedTransactionRepository fixedTransactionRepository;
+
+    @Mock
+    TransactionRepository transactionRepository;
 
     @InjectMocks
     AccountService accountService;
@@ -155,11 +163,17 @@ class AccountServiceTest {
         Account account = Account.builder().user(user).build();
 
         given(accountRepository.findById(1L)).willReturn(Optional.of(account));
+        given(fixedTransactionRepository.findAllByAccountId(1L)).willReturn(List.of());
 
         // when
         accountService.deleteAccount(userId, 1L);
 
         // then
+        verify(fixedTransactionRepository).findAllByAccountId(1L);
+        verify(transactionRepository).backfillSourceAccountSnapshot(1L, account.getAccountName());
+        verify(transactionRepository).backfillTargetAccountSnapshot(1L, account.getAccountName());
+        verify(transactionRepository).markSourceAccountArchived(1L);
+        verify(transactionRepository).markTargetAccountArchived(1L);
         verify(accountRepository).delete(account);
     }
 }

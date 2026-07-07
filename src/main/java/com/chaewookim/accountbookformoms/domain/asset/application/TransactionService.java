@@ -139,6 +139,11 @@ public class TransactionService {
                 .map(TransactionResponse::from);
     }
 
+    public Page<TransactionResponse> getAllUserTransactions(Long userId, LocalDate startDate, LocalDate endDate, Pageable pageable) {
+        return transactionRepository.findAllByUserIdAndTransactionDateBetween(userId, startDate, endDate, pageable)
+                .map(TransactionResponse::from);
+    }
+
     public TransactionResponse getTransaction(Long transactionId) {
         Transaction transaction = transactionRepository.findById(transactionId)
                 .orElseThrow(() -> new CustomException(AssetErrorCode.TRANSACTION_NOT_FOUND));

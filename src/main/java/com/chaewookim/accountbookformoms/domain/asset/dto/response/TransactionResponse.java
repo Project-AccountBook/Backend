@@ -10,8 +10,10 @@ public record TransactionResponse(
         Long id,
         Long accountId,
         String accountName,
+        boolean accountArchived,
         Long targetAccountId,
         String targetAccountName,
+        boolean targetAccountArchived,
         Long categoryId,
         String categoryName,
         TransactionType type,
@@ -20,12 +22,28 @@ public record TransactionResponse(
         String description
 ) {
     public static TransactionResponse from(Transaction transaction) {
+        Long accountId = transaction.getSnapshotAccountId() != null
+                ? transaction.getSnapshotAccountId()
+                : (transaction.getAccount() != null ? transaction.getAccount().getId() : null);
+        String accountName = transaction.getSnapshotAccountName() != null
+                ? transaction.getSnapshotAccountName()
+                : (transaction.getAccount() != null ? transaction.getAccount().getAccountName() : "삭제된 계좌");
+
+        Long targetAccountId = transaction.getSnapshotTargetAccountId() != null
+                ? transaction.getSnapshotTargetAccountId()
+                : (transaction.getTargetAccount() != null ? transaction.getTargetAccount().getId() : null);
+        String targetAccountName = transaction.getSnapshotTargetAccountName() != null
+                ? transaction.getSnapshotTargetAccountName()
+                : (transaction.getTargetAccount() != null ? transaction.getTargetAccount().getAccountName() : null);
+
         return new TransactionResponse(
                 transaction.getId(),
-                transaction.getAccount().getId(),
-                transaction.getAccount().getAccountName(),
-                transaction.getTargetAccount() != null ? transaction.getTargetAccount().getId() : null,
-                transaction.getTargetAccount() != null ? transaction.getTargetAccount().getAccountName() : null,
+                accountId,
+                accountName,
+                transaction.isAccountArchived(),
+                targetAccountId,
+                targetAccountName,
+                transaction.isTargetAccountArchived(),
                 transaction.getTransactionCategory().getId(),
                 transaction.getTransactionCategory().getName(),
                 transaction.getType(),

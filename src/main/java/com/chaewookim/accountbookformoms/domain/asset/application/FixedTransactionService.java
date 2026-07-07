@@ -51,10 +51,27 @@ public class FixedTransactionService {
         return fixedTransactionRepository.save(fixedTransaction).getId();
     }
 
+    @Transactional
     public List<FixedTransactionResponse> getFixedTransactions(Long userId) {
-        return fixedTransactionRepository.findAllByUserId(userId).stream()
-                .map(FixedTransactionResponse::from)
-                .toList();
+        List<FixedTransactionResponse> responses = new java.util.ArrayList<>();
+
+        for (FixedTransaction fixedTransaction : fixedTransactionRepository.findAllByUserId(userId)) {
+            if (!hasActiveAccount(fixedTransaction)) {
+                fixedTransactionRepository.delete(fixedTransaction);
+                continue;
+            }
+            responses.add(FixedTransactionResponse.from(fixedTransaction));
+        }
+
+        return responses;
+    }
+
+    private boolean hasActiveAccount(FixedTransaction fixedTransaction) {
+        Account account = fixedTransaction.getAccount();
+        if (account == null) {
+            return false;
+        }
+        return accountRepository.findById(account.getId()).isPresent();
     }
 
     @Transactional

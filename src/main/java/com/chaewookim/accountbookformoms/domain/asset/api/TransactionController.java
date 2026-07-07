@@ -46,6 +46,19 @@ public class TransactionController {
         return ResponseEntity.ok(ApiResponse.success(responses));
     }
 
+    @Operation(summary = "전체 거래 내역 조회", description = "삭제된 계좌 거래를 포함한 사용자 전체 거래 내역 조회")
+    @GetMapping("/all")
+    public ResponseEntity<ApiResponse<Page<TransactionResponse>>> getAllUserTransactions(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @PageableDefault(size = 500, sort = "transactionDate", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        Page<TransactionResponse> responses = transactionService.getAllUserTransactions(
+                userPrincipal.getUserId(), startDate, endDate, pageable);
+        return ResponseEntity.ok(ApiResponse.success(responses));
+    }
+
     @Operation(summary = "거래 내역 상세 조회", description = "특정 거래 내역 상세 정보 조회")
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<TransactionResponse>> getTransaction(

@@ -81,15 +81,18 @@ class FixedTransactionServiceTest {
 
         // given
         Long userId = 1L;
+        Account account = Account.builder().accountName("Bank").build();
+        ReflectionTestUtils.setField(account, "id", 1L);
         FixedTransaction ft = FixedTransaction.builder()
                 .type(TransactionType.EXPENSE)
                 .frequency(TransactionFrequency.MONTHLY)
                 .startDate(now)
                 .repeatDay(1)
-                .account(Account.builder().accountName("Bank").build())
+                .account(account)
                 .transactionCategory(TransactionCategory.builder().name("Food").build())
                 .build();
         given(fixedTransactionRepository.findAllByUserId(userId)).willReturn(List.of(ft));
+        given(accountRepository.findById(1L)).willReturn(Optional.of(account));
 
         // when
         List<FixedTransactionResponse> results = fixedTransactionService.getFixedTransactions(userId);

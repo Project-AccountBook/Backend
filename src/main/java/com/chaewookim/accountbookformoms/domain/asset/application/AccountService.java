@@ -1,9 +1,12 @@
 package com.chaewookim.accountbookformoms.domain.asset.application;
 
 import com.chaewookim.accountbookformoms.domain.asset.dao.AccountRepository;
+import com.chaewookim.accountbookformoms.domain.asset.dao.FixedTransactionRepository;
+import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.AccountRequest;
 import com.chaewookim.accountbookformoms.domain.asset.dto.response.AccountResponse;
 import com.chaewookim.accountbookformoms.domain.asset.entity.Account;
+import com.chaewookim.accountbookformoms.domain.asset.entity.FixedTransaction;
 import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
@@ -23,6 +26,8 @@ public class AccountService {
 
     private final AccountRepository accountRepository;
     private final UserRepository userRepository;
+    private final FixedTransactionRepository fixedTransactionRepository;
+    private final TransactionRepository transactionRepository;
 
     @Transactional
     public Long createAccount(Long userId, AccountRequest request) {
@@ -58,7 +63,18 @@ public class AccountService {
 
     @Transactional
     public void deleteAccount(Long userId, Long accountId) {
-        accountRepository.delete(validateAndGet(userId, accountId));
+
+        Account account = validateAndGet(userId, accountId);
+
+        List<FixedTransaction> fixedTransactions = fixedTransactionRepository.findAllByAccountId(accountId);
+        fixedTransactions.forEach(fixedTransactionRepository::delete);
+
+        transactionRepository.backfillSourceAccountSnapshot(accountId, account.getAccountName());
+        transactionRepository.backfillTargetAccountSnapshot(accountId, account.getAccountName());
+        transactionRepository.markSourceAccountArchived(accountId);
+        transactionRepository.markTargetAccountArchived(accountId);
+
+        accountRepository.delete(account);
     }
 
     // 공통 검증 로직
