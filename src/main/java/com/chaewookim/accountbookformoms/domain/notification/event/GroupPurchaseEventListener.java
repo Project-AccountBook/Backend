@@ -43,7 +43,7 @@ public class GroupPurchaseEventListener {
                         NotificationType.INTEREST_CATEGORY,
                         "새 공동구매 알림",
                         event.title(),
-                        "/group-purchase/" + event.groupPurchaseId(),
+                        "groupbuy",
                         event.groupPurchaseId()
                 ));
             }

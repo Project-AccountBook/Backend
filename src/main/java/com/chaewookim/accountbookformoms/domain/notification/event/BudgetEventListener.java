@@ -50,7 +50,7 @@ public class BudgetEventListener {
                             NotificationType.BUDGET,
                             "예산 알림",
                             message,
-                            "/budget-page",
+                            "budget",
                             null
                     ));
 
