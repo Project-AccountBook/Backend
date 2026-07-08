@@ -19,7 +19,8 @@ public record TransactionResponse(
         TransactionType type,
         BigDecimal amount,
         LocalDate transactionDate,
-        String description
+        String description,
+        boolean fixedTransactionGenerated
 ) {
     public static TransactionResponse from(Transaction transaction) {
         Long accountId = transaction.getSnapshotAccountId() != null
@@ -49,7 +50,8 @@ public record TransactionResponse(
                 transaction.getType(),
                 transaction.getAmount(),
                 transaction.getTransactionDate(),
-                transaction.getDescription()
+                transaction.getDescription(),
+                transaction.isFixedTransactionGenerated()
         );
     }
 }

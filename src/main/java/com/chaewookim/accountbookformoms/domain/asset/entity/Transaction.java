@@ -69,6 +69,9 @@ public class Transaction extends BaseEntity {
 
     private String description;
 
+    @Column(nullable = false)
+    private boolean fixedTransactionGenerated = false;
+
     @Column(name = "snapshot_account_id")
     private Long snapshotAccountId;
 
@@ -99,6 +102,10 @@ public class Transaction extends BaseEntity {
         this.transactionDate = transactionDate;
         this.description = description;
         syncAccountSnapshots();
+    }
+
+    public void markAsFixedTransactionGenerated() {
+        this.fixedTransactionGenerated = true;
     }
 
     public void update(TransactionRequest request, TransactionCategory category, Account account, Account targetAccount) {

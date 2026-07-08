@@ -43,10 +43,20 @@ public class TransactionService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @CacheEvict(value = "dashboard", key = "#userId + ':' + #request.transactionDate.format(T(java.time.format.DateTimeFormatter).ofPattern('yyyy-MM'))")
     public Long createTransaction(Long userId, TransactionRequest request) {
+        return createTransaction(userId, request, false);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @CacheEvict(value = "dashboard", key = "#userId + ':' + #request.transactionDate.format(T(java.time.format.DateTimeFormatter).ofPattern('yyyy-MM'))")
+    public Long createTransactionFromFixed(Long userId, TransactionRequest request) {
+        return createTransaction(userId, request, true);
+    }
+
+    private Long createTransaction(Long userId, TransactionRequest request, boolean fromFixedTransaction) {
         if (request.type() == TransactionType.TRANSFER) {
             return createTransferTransaction(userId, request);
         }
-        return createNormalTransaction(userId, request);
+        return createNormalTransaction(userId, request, fromFixedTransaction);
     }
 
     // 이체 전용 로직
@@ -75,7 +85,7 @@ public class TransactionService {
     }
 
     // 일반 거래 전용 로직
-    private Long createNormalTransaction(Long userId, TransactionRequest request) {
+    private Long createNormalTransaction(Long userId, TransactionRequest request, boolean fromFixedTransaction) {
 
         Account account = accountRepository.findByIdWithLock(request.accountId())
                 .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
@@ -87,11 +97,12 @@ public class TransactionService {
         BigDecimal amount = (request.type() == TransactionType.EXPENSE) ? request.amount().negate() : request.amount();
         account.changeBalance(amount);
 
-        return saveTransaction(account, account, request);
+        return saveTransaction(account, account, request, fromFixedTransaction);
     }
 
     // 거래 내역 저장 로직
-    private Long saveTransaction(Account userAccount, Account transactionAccount, TransactionRequest request) {
+    private Long saveTransaction(Account userAccount, Account transactionAccount, TransactionRequest request,
+                                 boolean fromFixedTransaction) {
 
         TransactionCategory category = categoryRepository.findById(request.categoryId())
                 .orElseThrow(() -> new CustomException(AssetErrorCode.CATEGORY_NOT_FOUND));
@@ -106,6 +117,10 @@ public class TransactionService {
                 .transactionDate(request.transactionDate())
                 .description(request.description())
                 .build();
+
+        if (fromFixedTransaction) {
+            transaction.markAsFixedTransactionGenerated();
+        }
 
         if (request.type() == TransactionType.EXPENSE) {
             String yearMonth = request.transactionDate().format(DateTimeFormatter.ofPattern("yyyy-MM"));
