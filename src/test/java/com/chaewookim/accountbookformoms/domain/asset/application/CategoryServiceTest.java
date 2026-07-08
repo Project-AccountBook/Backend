@@ -67,8 +67,13 @@ class CategoryServiceTest {
 
         // given
         User user = mock(User.class);
+        given(user.getId()).willReturn(1L);
         CategoryRequest request = new CategoryRequest("쇼핑", TransactionType.EXPENSE);
-        TransactionCategory savedCategory = request.toEntity(user);
+        TransactionCategory savedCategory = TransactionCategory.builder().user(user).name("쇼핑").type(TransactionType.EXPENSE).build();
+        given(categoryRepository.findByUserIdAndNameAndTypeIncludingDeleted(1L, "쇼핑", "EXPENSE"))
+                .willReturn(Optional.empty());
+        given(categoryRepository.existsByUserIsNullAndNameAndType("쇼핑", TransactionType.EXPENSE)).willReturn(false);
+        given(categoryRepository.existsByUserIdAndNameAndType(1L, "쇼핑", TransactionType.EXPENSE)).willReturn(false);
         given(categoryRepository.save(any())).willReturn(savedCategory);
 
         // when
@@ -90,6 +95,9 @@ class CategoryServiceTest {
 
         TransactionCategory category = TransactionCategory.builder().user(user).name("기존").type(TransactionType.EXPENSE).build();
         given(categoryRepository.findById(categoryId)).willReturn(Optional.of(category));
+        given(categoryRepository.existsByUserIsNullAndNameAndType("변경", TransactionType.INCOME)).willReturn(false);
+        given(categoryRepository.existsByUserIdAndNameAndTypeAndIdNot(userId, "변경", TransactionType.INCOME, categoryId))
+                .willReturn(false);
 
         CategoryRequest request = new CategoryRequest("변경", TransactionType.INCOME);
 
@@ -183,6 +191,49 @@ class CategoryServiceTest {
                 .satisfies(ex -> {
                     CustomException customEx = (CustomException) ex;
                     assertThat(customEx.getErrorCode()).isEqualTo(AssetErrorCode.CATEGORY_FORBIDDEN);
+                });
+    }
+
+    @Test
+    @DisplayName("카테고리 생성 - 중복 이름 시 예외 발생")
+    void createCustomCategory_Fail_DuplicateName() {
+
+        // given
+        User user = mock(User.class);
+        given(user.getId()).willReturn(1L);
+        CategoryRequest request = new CategoryRequest("쇼핑", TransactionType.EXPENSE);
+        given(categoryRepository.findByUserIdAndNameAndTypeIncludingDeleted(1L, "쇼핑", "EXPENSE"))
+                .willReturn(Optional.empty());
+        given(categoryRepository.existsByUserIsNullAndNameAndType("쇼핑", TransactionType.EXPENSE)).willReturn(false);
+        given(categoryRepository.existsByUserIdAndNameAndType(1L, "쇼핑", TransactionType.EXPENSE)).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> categoryService.createCustomCategory(user, request))
+                .isInstanceOf(CustomException.class)
+                .satisfies(ex -> {
+                    CustomException customEx = (CustomException) ex;
+                    assertThat(customEx.getErrorCode()).isEqualTo(AssetErrorCode.DUPLICATE_CATEGORY_NAME);
+                });
+    }
+
+    @Test
+    @DisplayName("카테고리 생성 - 기본 카테고리와 이름 중복 시 예외 발생")
+    void createCustomCategory_Fail_DuplicateSystemCategory() {
+
+        // given
+        User user = mock(User.class);
+        given(user.getId()).willReturn(1L);
+        CategoryRequest request = new CategoryRequest("식비", TransactionType.EXPENSE);
+        given(categoryRepository.findByUserIdAndNameAndTypeIncludingDeleted(1L, "식비", "EXPENSE"))
+                .willReturn(Optional.empty());
+        given(categoryRepository.existsByUserIsNullAndNameAndType("식비", TransactionType.EXPENSE)).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> categoryService.createCustomCategory(user, request))
+                .isInstanceOf(CustomException.class)
+                .satisfies(ex -> {
+                    CustomException customEx = (CustomException) ex;
+                    assertThat(customEx.getErrorCode()).isEqualTo(AssetErrorCode.DUPLICATE_CATEGORY_NAME);
                 });
     }
 }

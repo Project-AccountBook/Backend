@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -35,9 +36,23 @@ public class AccountService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
+        String accountName = request.accountName().trim();
+
+        Optional<Account> deletedAccount = accountRepository.findByUserIdAndAccountNameIncludingDeleted(userId, accountName);
+        if (deletedAccount.isPresent() && deletedAccount.get().getDeletedAt() != null) {
+            Account account = deletedAccount.get();
+            account.restore();
+            account.resetBalance(request.initialBalance());
+            return accountRepository.save(account).getId();
+        }
+
+        if (accountRepository.existsByUserIdAndAccountName(userId, accountName)) {
+            throw new CustomException(AssetErrorCode.DUPLICATE_ACCOUNT_NAME);
+        }
+
         Account account = Account.builder()
                 .user(user)
-                .accountName(request.accountName())
+                .accountName(accountName)
                 .initialBalance(request.initialBalance())
                 .build();
 
@@ -57,7 +72,14 @@ public class AccountService {
     @Transactional
     public void updateAccount(Long userId, Long accountId, AccountRequest request) {
         Account account = validateAndGet(userId, accountId);
-        account.updateAccountName(request.accountName());
+        String accountName = request.accountName().trim();
+
+        if (!accountName.equals(account.getAccountName())
+                && accountRepository.existsByUserIdAndAccountNameAndIdNot(userId, accountName, accountId)) {
+            throw new CustomException(AssetErrorCode.DUPLICATE_ACCOUNT_NAME);
+        }
+
+        account.updateAccountName(accountName);
         account.updateInitialBalance(request.initialBalance());
     }
 

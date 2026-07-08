@@ -7,6 +7,7 @@ import com.chaewookim.accountbookformoms.domain.asset.dto.request.CategoryReques
 import com.chaewookim.accountbookformoms.domain.budget.dao.BudgetRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dto.response.CategoryResponse;
 import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory;
+import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -34,14 +36,36 @@ public class CategoryService {
 
     @Transactional
     public CategoryResponse createCustomCategory(User user, CategoryRequest request) {
-        TransactionCategory savedCategory = categoryRepository.save(request.toEntity(user));
+        String name = request.name().trim();
+        Long userId = user.getId();
+
+        Optional<TransactionCategory> deletedCategory = categoryRepository
+                .findByUserIdAndNameAndTypeIncludingDeleted(userId, name, request.type().name());
+        if (deletedCategory.isPresent() && deletedCategory.get().getDeletedAt() != null) {
+            TransactionCategory category = deletedCategory.get();
+            category.restore();
+            category.update(name, request.type());
+            return CategoryResponse.from(categoryRepository.save(category));
+        }
+
+        validateCategoryNameUnique(userId, name, request.type(), null);
+
+        TransactionCategory savedCategory = categoryRepository.save(
+                TransactionCategory.builder()
+                        .user(user)
+                        .name(name)
+                        .type(request.type())
+                        .build()
+        );
         return CategoryResponse.from(savedCategory);
     }
 
     @Transactional
     public void updateCategory(Long categoryId, Long userId, CategoryRequest request) {
         TransactionCategory category = validateAndGetCategory(categoryId, userId);
-        category.update(request.name(), request.type());
+        String name = request.name().trim();
+        validateCategoryNameUnique(userId, name, request.type(), categoryId);
+        category.update(name, request.type());
     }
 
     @Transactional
@@ -56,6 +80,20 @@ public class CategoryService {
                 || fixedTransactionRepository.existsByTransactionCategoryId(categoryId)
                 || budgetRepository.existsByTransactionCategoryId(categoryId)) {
             throw new CustomException(AssetErrorCode.CATEGORY_IN_USE);
+        }
+    }
+
+    private void validateCategoryNameUnique(Long userId, String name, TransactionType type, Long excludeId) {
+        if (categoryRepository.existsByUserIsNullAndNameAndType(name, type)) {
+            throw new CustomException(AssetErrorCode.DUPLICATE_CATEGORY_NAME);
+        }
+
+        boolean duplicate = excludeId == null
+                ? categoryRepository.existsByUserIdAndNameAndType(userId, name, type)
+                : categoryRepository.existsByUserIdAndNameAndTypeAndIdNot(userId, name, type, excludeId);
+
+        if (duplicate) {
+            throw new CustomException(AssetErrorCode.DUPLICATE_CATEGORY_NAME);
         }
     }
 
