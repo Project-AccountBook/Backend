@@ -48,8 +48,8 @@ public class TransactionService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @CacheEvict(value = "dashboard", key = "#userId + ':' + #request.transactionDate.format(T(java.time.format.DateTimeFormatter).ofPattern('yyyy-MM'))")
-    public Long createTransactionFromFixed(Long userId, TransactionRequest request) {
-        return createTransaction(userId, request, true);
+    public void createTransactionFromFixed(Long userId, TransactionRequest request) {
+        createTransaction(userId, request, true);
     }
 
     private Long createTransaction(Long userId, TransactionRequest request, boolean fromFixedTransaction) {
