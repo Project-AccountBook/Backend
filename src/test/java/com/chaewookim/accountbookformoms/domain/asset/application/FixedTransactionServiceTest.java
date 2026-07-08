@@ -41,6 +41,9 @@ class FixedTransactionServiceTest {
     @Mock
     private TransactionCategoryRepository categoryRepository;
 
+    @Mock
+    private FixedTransactionImmediateExecutionService fixedTransactionImmediateExecutionService;
+
     @InjectMocks
     private FixedTransactionService fixedTransactionService;
 
@@ -54,16 +57,19 @@ class FixedTransactionServiceTest {
         Long userId = 1L;
         User user = User.builder().build();
         ReflectionTestUtils.setField(user, "id", userId);
-        FixedTransactionRequest request = new FixedTransactionRequest(1L, 1L, TransactionType.EXPENSE, new BigDecimal("10000"), TransactionFrequency.MONTHLY, 1, null, now, null, "desc");
+        FixedTransactionRequest request = new FixedTransactionRequest(1L, 1L, TransactionType.EXPENSE, new BigDecimal("10000"), TransactionFrequency.MONTHLY, now.getDayOfMonth(), null, now, null, "desc");
 
         given(accountRepository.findByIdAndUserId(any(), any())).willReturn(Optional.of(Account.builder().build()));
         given(categoryRepository.findById(any())).willReturn(Optional.of(TransactionCategory.builder().build()));
 
         FixedTransaction savedFt = FixedTransaction.builder()
+                .user(user)
+                .account(Account.builder().build())
+                .transactionCategory(TransactionCategory.builder().build())
                 .type(TransactionType.EXPENSE)
                 .frequency(TransactionFrequency.MONTHLY)
                 .startDate(now)
-                .repeatDay(1)
+                .repeatDay(now.getDayOfMonth())
                 .build();
         ReflectionTestUtils.setField(savedFt, "id", 1L);
         given(fixedTransactionRepository.save(any())).willReturn(savedFt);
@@ -73,6 +79,7 @@ class FixedTransactionServiceTest {
 
         // then
         assertThat(id).isEqualTo(1L);
+        verify(fixedTransactionImmediateExecutionService).executeIfDue(1L);
     }
 
     @Test
