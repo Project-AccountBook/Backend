@@ -50,6 +50,10 @@ public class Transaction extends BaseEntity {
     private Account account;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "target_account_id")
+    private Account targetAccount;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")
     private TransactionCategory transactionCategory;
 
@@ -65,24 +69,71 @@ public class Transaction extends BaseEntity {
 
     private String description;
 
+    @Column(nullable = false)
+    private boolean fixedTransactionGenerated = false;
+
+    @Column(name = "snapshot_account_id")
+    private Long snapshotAccountId;
+
+    @Column(name = "snapshot_account_name")
+    private String snapshotAccountName;
+
+    @Column(name = "snapshot_target_account_id")
+    private Long snapshotTargetAccountId;
+
+    @Column(name = "snapshot_target_account_name")
+    private String snapshotTargetAccountName;
+
+    @Column(nullable = false)
+    private boolean accountArchived = false;
+
+    @Column(nullable = false)
+    private boolean targetAccountArchived = false;
+
     @Builder
-    public Transaction(User user, Account account, TransactionCategory transactionCategory, TransactionType type,
-                       BigDecimal amount, LocalDate transactionDate, String description) {
+    public Transaction(User user, Account account, Account targetAccount, TransactionCategory transactionCategory,
+                       TransactionType type, BigDecimal amount, LocalDate transactionDate, String description) {
         this.user = user;
         this.account = account;
+        this.targetAccount = targetAccount;
         this.transactionCategory = transactionCategory;
         this.type = type;
         this.amount = amount;
         this.transactionDate = transactionDate;
         this.description = description;
+        syncAccountSnapshots();
     }
 
-    public void update(TransactionRequest request, TransactionCategory category) {
+    public void markAsFixedTransactionGenerated() {
+        this.fixedTransactionGenerated = true;
+    }
+
+    public void update(TransactionRequest request, TransactionCategory category, Account account, Account targetAccount) {
+        this.account = account;
         this.transactionCategory = category;
         this.type = request.type();
         this.amount = request.amount();
         this.transactionDate = request.transactionDate();
         this.description = request.description();
+        this.targetAccount = request.type() == TransactionType.TRANSFER ? targetAccount : null;
+        syncAccountSnapshots();
+    }
+
+    public void syncAccountSnapshots() {
+        if (this.account != null) {
+            this.snapshotAccountId = this.account.getId();
+            this.snapshotAccountName = this.account.getAccountName();
+            this.accountArchived = false;
+        }
+        if (this.targetAccount != null) {
+            this.snapshotTargetAccountId = this.targetAccount.getId();
+            this.snapshotTargetAccountName = this.targetAccount.getAccountName();
+            this.targetAccountArchived = false;
+        } else {
+            this.snapshotTargetAccountId = null;
+            this.snapshotTargetAccountName = null;
+            this.targetAccountArchived = false;
+        }
     }
 
     public BigDecimal getBalanceChangeAmount() {

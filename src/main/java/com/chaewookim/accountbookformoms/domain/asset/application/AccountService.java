@@ -1,9 +1,12 @@
 package com.chaewookim.accountbookformoms.domain.asset.application;
 
 import com.chaewookim.accountbookformoms.domain.asset.dao.AccountRepository;
+import com.chaewookim.accountbookformoms.domain.asset.dao.FixedTransactionRepository;
+import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.AccountRequest;
 import com.chaewookim.accountbookformoms.domain.asset.dto.response.AccountResponse;
 import com.chaewookim.accountbookformoms.domain.asset.entity.Account;
+import com.chaewookim.accountbookformoms.domain.asset.entity.FixedTransaction;
 import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
@@ -14,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -23,6 +27,8 @@ public class AccountService {
 
     private final AccountRepository accountRepository;
     private final UserRepository userRepository;
+    private final FixedTransactionRepository fixedTransactionRepository;
+    private final TransactionRepository transactionRepository;
 
     @Transactional
     public Long createAccount(Long userId, AccountRequest request) {
@@ -30,9 +36,23 @@ public class AccountService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
+        String accountName = request.accountName().trim();
+
+        Optional<Account> deletedAccount = accountRepository.findByUserIdAndAccountNameIncludingDeleted(userId, accountName);
+        if (deletedAccount.isPresent() && deletedAccount.get().getDeletedAt() != null) {
+            Account account = deletedAccount.get();
+            account.restore();
+            account.resetBalance(request.initialBalance());
+            return accountRepository.save(account).getId();
+        }
+
+        if (accountRepository.existsByUserIdAndAccountName(userId, accountName)) {
+            throw new CustomException(AssetErrorCode.DUPLICATE_ACCOUNT_NAME);
+        }
+
         Account account = Account.builder()
                 .user(user)
-                .accountName(request.accountName())
+                .accountName(accountName)
                 .initialBalance(request.initialBalance())
                 .build();
 
@@ -52,13 +72,31 @@ public class AccountService {
     @Transactional
     public void updateAccount(Long userId, Long accountId, AccountRequest request) {
         Account account = validateAndGet(userId, accountId);
-        account.updateAccountName(request.accountName());
+        String accountName = request.accountName().trim();
+
+        if (!accountName.equals(account.getAccountName())
+                && accountRepository.existsByUserIdAndAccountNameAndIdNot(userId, accountName, accountId)) {
+            throw new CustomException(AssetErrorCode.DUPLICATE_ACCOUNT_NAME);
+        }
+
+        account.updateAccountName(accountName);
         account.updateInitialBalance(request.initialBalance());
     }
 
     @Transactional
     public void deleteAccount(Long userId, Long accountId) {
-        accountRepository.delete(validateAndGet(userId, accountId));
+
+        Account account = validateAndGet(userId, accountId);
+
+        List<FixedTransaction> fixedTransactions = fixedTransactionRepository.findAllByAccountId(accountId);
+        fixedTransactions.forEach(fixedTransactionRepository::delete);
+
+        transactionRepository.backfillSourceAccountSnapshot(accountId, account.getAccountName());
+        transactionRepository.backfillTargetAccountSnapshot(accountId, account.getAccountName());
+        transactionRepository.markSourceAccountArchived(accountId);
+        transactionRepository.markTargetAccountArchived(accountId);
+
+        accountRepository.delete(account);
     }
 
     // 공통 검증 로직

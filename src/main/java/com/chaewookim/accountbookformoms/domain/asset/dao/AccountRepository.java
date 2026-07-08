@@ -14,6 +14,20 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 
     List<Account> findByUserId(Long userId);
 
+    boolean existsByUserIdAndAccountName(Long userId, String accountName);
+
+    boolean existsByUserIdAndAccountNameAndIdNot(Long userId, String accountName, Long id);
+
+    @Query(value = """
+            SELECT *
+              FROM account
+             WHERE user_id = :userId
+               AND account_name = :accountName
+             LIMIT 1
+            """, nativeQuery = true)
+    Optional<Account> findByUserIdAndAccountNameIncludingDeleted(@Param("userId") Long userId,
+                                                                 @Param("accountName") String accountName);
+
     Optional<Account> findByIdAndUserId(Long id, Long userId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

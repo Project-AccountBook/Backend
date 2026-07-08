@@ -1,6 +1,6 @@
 package com.chaewookim.accountbookformoms.domain.asset.scheduler;
 
-import com.chaewookim.accountbookformoms.domain.asset.application.TransactionService;
+import com.chaewookim.accountbookformoms.domain.asset.application.FixedTransactionExecutor;
 import com.chaewookim.accountbookformoms.domain.asset.dao.FixedTransactionRepository;
 import com.chaewookim.accountbookformoms.domain.asset.entity.*;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionFrequency;
@@ -22,6 +22,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -32,7 +33,7 @@ class FixedTransactionSchedulerTest {
     private FixedTransactionRepository fixedTransactionRepository;
 
     @Mock
-    private TransactionService transactionService;
+    private FixedTransactionExecutor fixedTransactionExecutor;
 
     @InjectMocks
     private FixedTransactionScheduler scheduler;
@@ -73,11 +74,11 @@ class FixedTransactionSchedulerTest {
         scheduler.processFixedTransactions();
 
         // then
-        verify(transactionService, times(1)).createTransaction(any(), any());
+        verify(fixedTransactionExecutor, times(1)).executeIfDue(eq(fixedTransaction), any(LocalDate.class));
     }
 
     @Test
-    @DisplayName("고정 거래 스케줄러 - 오늘 이미 실행한 거래는 다시 생성하지 않음")
+    @DisplayName("고정 거래 스케줄러 - 오늘 이미 실행한 거래도 executor에 위임")
     void processFixedTransactions_AlreadyExecuted() {
 
         // given
@@ -88,7 +89,7 @@ class FixedTransactionSchedulerTest {
         scheduler.processFixedTransactions();
 
         // then
-        verify(transactionService, never()).createTransaction(any(), any());
+        verify(fixedTransactionExecutor, times(1)).executeIfDue(eq(fixedTransaction), any(LocalDate.class));
     }
 
     @Test
@@ -97,12 +98,31 @@ class FixedTransactionSchedulerTest {
 
         // given
         ReflectionTestUtils.setField(fixedTransaction, "repeatDay", LocalDate.now().getDayOfMonth() + 1);
-        when(fixedTransactionRepository.findAllByIsActiveTrueAndNextExecutionDateLessThanEqual(any(LocalDate.class))).thenReturn(List.of(fixedTransaction));
+        when(fixedTransactionRepository.findAllByIsActiveTrueAndNextExecutionDateLessThanEqual(any(LocalDate.class))).thenReturn(List.of());
+        when(fixedTransactionRepository.findAllByIsActiveTrue()).thenReturn(List.of(fixedTransaction));
 
         // when
         scheduler.processFixedTransactions();
 
         // then
-        verify(transactionService, never()).createTransaction(any(), any());
+        verify(fixedTransactionExecutor, never()).executeIfDue(any(), any());
+    }
+
+    @Test
+    @DisplayName("고정 거래 스케줄러 - 지난 예정일은 보정 생성한다")
+    void processFixedTransactions_CatchUpMissedDate() {
+
+        // given
+        LocalDate missedDate = LocalDate.now().minusDays(1);
+        ReflectionTestUtils.setField(fixedTransaction, "repeatDay", missedDate.getDayOfMonth());
+        ReflectionTestUtils.setField(fixedTransaction, "nextExecutionDate", missedDate);
+        when(fixedTransactionRepository.findAllByIsActiveTrueAndNextExecutionDateLessThanEqual(any(LocalDate.class)))
+                .thenReturn(List.of(fixedTransaction));
+
+        // when
+        scheduler.processFixedTransactions();
+
+        // then
+        verify(fixedTransactionExecutor, times(1)).executeIfDue(eq(fixedTransaction), any(LocalDate.class));
     }
 }

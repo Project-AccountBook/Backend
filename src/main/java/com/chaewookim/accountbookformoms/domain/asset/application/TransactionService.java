@@ -43,10 +43,20 @@ public class TransactionService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @CacheEvict(value = "dashboard", key = "#userId + ':' + #request.transactionDate.format(T(java.time.format.DateTimeFormatter).ofPattern('yyyy-MM'))")
     public Long createTransaction(Long userId, TransactionRequest request) {
+        return createTransaction(userId, request, false);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @CacheEvict(value = "dashboard", key = "#userId + ':' + #request.transactionDate.format(T(java.time.format.DateTimeFormatter).ofPattern('yyyy-MM'))")
+    public void createTransactionFromFixed(Long userId, TransactionRequest request) {
+        createTransaction(userId, request, true);
+    }
+
+    private Long createTransaction(Long userId, TransactionRequest request, boolean fromFixedTransaction) {
         if (request.type() == TransactionType.TRANSFER) {
             return createTransferTransaction(userId, request);
         }
-        return createNormalTransaction(userId, request);
+        return createNormalTransaction(userId, request, fromFixedTransaction);
     }
 
     // 이체 전용 로직
@@ -71,11 +81,11 @@ public class TransactionService {
         source.changeBalance(request.amount().negate());
         target.changeBalance(request.amount());
 
-        return saveTransaction(source, source, request);
+        return saveTransferTransaction(source, target, request);
     }
 
     // 일반 거래 전용 로직
-    private Long createNormalTransaction(Long userId, TransactionRequest request) {
+    private Long createNormalTransaction(Long userId, TransactionRequest request, boolean fromFixedTransaction) {
 
         Account account = accountRepository.findByIdWithLock(request.accountId())
                 .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
@@ -87,11 +97,12 @@ public class TransactionService {
         BigDecimal amount = (request.type() == TransactionType.EXPENSE) ? request.amount().negate() : request.amount();
         account.changeBalance(amount);
 
-        return saveTransaction(account, account, request);
+        return saveTransaction(account, account, request, fromFixedTransaction);
     }
 
     // 거래 내역 저장 로직
-    private Long saveTransaction(Account userAccount, Account transactionAccount, TransactionRequest request) {
+    private Long saveTransaction(Account userAccount, Account transactionAccount, TransactionRequest request,
+                                 boolean fromFixedTransaction) {
 
         TransactionCategory category = categoryRepository.findById(request.categoryId())
                 .orElseThrow(() -> new CustomException(AssetErrorCode.CATEGORY_NOT_FOUND));
@@ -99,12 +110,17 @@ public class TransactionService {
         Transaction transaction = Transaction.builder()
                 .user(userAccount.getUser())
                 .account(transactionAccount)
+                .targetAccount(null)
                 .transactionCategory(category)
                 .type(request.type())
                 .amount(request.amount())
                 .transactionDate(request.transactionDate())
                 .description(request.description())
                 .build();
+
+        if (fromFixedTransaction) {
+            transaction.markAsFixedTransactionGenerated();
+        }
 
         if (request.type() == TransactionType.EXPENSE) {
             String yearMonth = request.transactionDate().format(DateTimeFormatter.ofPattern("yyyy-MM"));
@@ -114,8 +130,32 @@ public class TransactionService {
         return transactionRepository.save(transaction).getId();
     }
 
+    private Long saveTransferTransaction(Account source, Account target, TransactionRequest request) {
+
+        TransactionCategory category = categoryRepository.findById(request.categoryId())
+                .orElseThrow(() -> new CustomException(AssetErrorCode.CATEGORY_NOT_FOUND));
+
+        Transaction transaction = Transaction.builder()
+                .user(source.getUser())
+                .account(source)
+                .targetAccount(target)
+                .transactionCategory(category)
+                .type(request.type())
+                .amount(request.amount())
+                .transactionDate(request.transactionDate())
+                .description(request.description())
+                .build();
+
+        return transactionRepository.save(transaction).getId();
+    }
+
     public Page<TransactionResponse> getTransactions(Long userId, Long accountId, LocalDate startDate, LocalDate endDate, Pageable pageable) {
         return transactionRepository.findAllByUserIdAndAccountIdAndTransactionDateBetween(userId, accountId, startDate, endDate, pageable)
+                .map(TransactionResponse::from);
+    }
+
+    public Page<TransactionResponse> getAllUserTransactions(Long userId, LocalDate startDate, LocalDate endDate, Pageable pageable) {
+        return transactionRepository.findAllByUserIdAndTransactionDateBetween(userId, startDate, endDate, pageable)
                 .map(TransactionResponse::from);
     }
 
@@ -131,15 +171,43 @@ public class TransactionService {
         Transaction transaction = validateAndGet(userId, transactionId);
         LocalDate previousDate = transaction.getTransactionDate();
 
-        Account account = accountRepository.findByIdWithLock(transaction.getAccount().getId())
-                .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
+        reverseTransactionBalances(transaction);
 
         TransactionCategory category = categoryRepository.findById(request.categoryId())
                 .orElseThrow(() -> new CustomException(AssetErrorCode.CATEGORY_NOT_FOUND));
 
-        account.changeBalance(transaction.getBalanceChangeAmount().negate());
-        transaction.update(request, category);
-        account.changeBalance(transaction.getBalanceChangeAmount());
+        if (request.type() == TransactionType.TRANSFER) {
+            if (request.targetAccountId() == null || request.accountId().equals(request.targetAccountId())) {
+                throw new CustomException(AssetErrorCode.TRANSFER_TO_SELF_FORBIDDEN);
+            }
+
+            Account first = accountRepository.findByIdWithLock(Math.min(request.accountId(), request.targetAccountId()))
+                    .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
+            Account second = accountRepository.findByIdWithLock(Math.max(request.accountId(), request.targetAccountId()))
+                    .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
+
+            Account source = request.accountId().equals(first.getId()) ? first : second;
+            Account target = request.targetAccountId().equals(first.getId()) ? first : second;
+
+            if (!source.getUser().getId().equals(userId)) {
+                throw new CustomException(AssetErrorCode.TRANSACTION_FORBIDDEN);
+            }
+
+            transaction.update(request, category, source, target);
+            source.changeBalance(request.amount().negate());
+            target.changeBalance(request.amount());
+        } else {
+            Account account = accountRepository.findByIdWithLock(request.accountId())
+                    .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
+
+            if (!account.getUser().getId().equals(userId)) {
+                throw new CustomException(AssetErrorCode.TRANSACTION_FORBIDDEN);
+            }
+
+            transaction.update(request, category, account, null);
+            BigDecimal amount = (request.type() == TransactionType.EXPENSE) ? request.amount().negate() : request.amount();
+            account.changeBalance(amount);
+        }
 
         evictDashboardCache(userId, previousDate);
         evictDashboardCache(userId, request.transactionDate());
@@ -150,13 +218,25 @@ public class TransactionService {
 
         Transaction transaction = validateAndGet(userId, transactionId);
 
-        Account account = accountRepository.findByIdWithLock(transaction.getAccount().getId())
-                .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
-
-        account.changeBalance(transaction.getBalanceChangeAmount().negate());
+        reverseTransactionBalances(transaction);
         transactionRepository.delete(transaction);
 
         evictDashboardCache(userId, transaction.getTransactionDate());
+    }
+
+    private void reverseTransactionBalances(Transaction transaction) {
+        Account source = accountRepository.findByIdWithLock(transaction.getAccount().getId())
+                .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
+
+        if (transaction.getType() == TransactionType.TRANSFER && transaction.getTargetAccount() != null) {
+            source.changeBalance(transaction.getAmount());
+            Account target = accountRepository.findByIdWithLock(transaction.getTargetAccount().getId())
+                    .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
+            target.changeBalance(transaction.getAmount().negate());
+            return;
+        }
+
+        source.changeBalance(transaction.getBalanceChangeAmount().negate());
     }
 
     // 공통 검증 로직

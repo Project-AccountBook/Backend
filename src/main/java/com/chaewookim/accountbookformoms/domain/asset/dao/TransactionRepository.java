@@ -3,6 +3,7 @@ package com.chaewookim.accountbookformoms.domain.asset.dao;
 import com.chaewookim.accountbookformoms.domain.asset.entity.Transaction;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.domain.Page;
@@ -14,6 +15,8 @@ import java.util.Collection;
 import java.util.List;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
+
+    boolean existsByTransactionCategoryId(Long categoryId);
 
     @Query("""
             SELECT t FROM Transaction t
@@ -203,6 +206,36 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
                                            @Param("excludeUserId") Long excludeUserId);
            
     Page<Transaction> findAllByUserIdAndAccountIdAndTransactionDateBetween(Long userId, Long accountId, LocalDate startDate, LocalDate endDate, Pageable pageable);
+
+    Page<Transaction> findAllByUserIdAndTransactionDateBetween(Long userId, LocalDate startDate, LocalDate endDate, Pageable pageable);
+
+    @Modifying(clearAutomatically = true)
+    @Query("""
+            UPDATE Transaction t
+               SET t.snapshotAccountId = :accountId,
+                   t.snapshotAccountName = :accountName
+             WHERE t.account.id = :accountId
+               AND t.snapshotAccountName IS NULL
+            """)
+    void backfillSourceAccountSnapshot(@Param("accountId") Long accountId, @Param("accountName") String accountName);
+
+    @Modifying(clearAutomatically = true)
+    @Query("""
+            UPDATE Transaction t
+               SET t.snapshotTargetAccountId = :accountId,
+                   t.snapshotTargetAccountName = :accountName
+             WHERE t.targetAccount.id = :accountId
+               AND t.snapshotTargetAccountName IS NULL
+            """)
+    void backfillTargetAccountSnapshot(@Param("accountId") Long accountId, @Param("accountName") String accountName);
+
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE Transaction t SET t.accountArchived = true WHERE t.snapshotAccountId = :accountId")
+    void markSourceAccountArchived(@Param("accountId") Long accountId);
+
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE Transaction t SET t.targetAccountArchived = true WHERE t.snapshotTargetAccountId = :accountId")
+    void markTargetAccountArchived(@Param("accountId") Long accountId);
 
     /**
      * 지정 userId 집합(공개 사용자만) 의 월 합계(사용자 단위). 위치 기반 비교용.

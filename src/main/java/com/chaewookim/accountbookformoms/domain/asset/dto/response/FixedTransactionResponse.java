@@ -22,9 +22,13 @@ public record FixedTransactionResponse(
         Boolean isActive
 ) {
     public static FixedTransactionResponse from(FixedTransaction entity) {
+        String accountName = entity.getAccount() != null
+                ? entity.getAccount().getAccountName()
+                : "삭제된 계좌";
+
         return new FixedTransactionResponse(
                 entity.getId(),
-                entity.getAccount().getAccountName(),
+                accountName,
                 entity.getTransactionCategory().getName(),
                 entity.getType(),
                 entity.getAmount(),

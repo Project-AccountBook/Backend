@@ -1,8 +1,7 @@
 package com.chaewookim.accountbookformoms.domain.asset.scheduler;
 
-import com.chaewookim.accountbookformoms.domain.asset.application.TransactionService;
+import com.chaewookim.accountbookformoms.domain.asset.application.FixedTransactionExecutor;
 import com.chaewookim.accountbookformoms.domain.asset.dao.FixedTransactionRepository;
-import com.chaewookim.accountbookformoms.domain.asset.dto.request.TransactionRequest;
 import com.chaewookim.accountbookformoms.domain.asset.entity.FixedTransaction;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,7 +11,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Slf4j
 @Component
@@ -20,41 +22,38 @@ import java.util.List;
 public class FixedTransactionScheduler {
 
     private final FixedTransactionRepository fixedTransactionRepository;
-    private final TransactionService transactionService;
+    private final FixedTransactionExecutor fixedTransactionExecutor;
 
-    @Scheduled(cron = "0 0 0 * * *")
+    @Scheduled(cron = "5 0 0 * * *")
     @SchedulerLock(name = "FixedTransactionScheduler_processFixedTransactions",
             lockAtMostFor = "PT1H", lockAtLeastFor = "PT1M")
     @Transactional
     public void processFixedTransactions() {
 
-        log.info("고정 거래 스케줄러 시작: {}", LocalDate.now());
-        List<FixedTransaction> targetTransactions = fixedTransactionRepository.findAllByIsActiveTrueAndNextExecutionDateLessThanEqual(LocalDate.now());
+        LocalDate today = LocalDate.now();
+        log.info("고정 거래 스케줄러 시작: {}", today);
+        List<FixedTransaction> targetTransactions = new ArrayList<>(
+                fixedTransactionRepository.findAllByIsActiveTrueAndNextExecutionDateLessThanEqual(today)
+        );
+        Set<Long> seenIds = new HashSet<>();
+        targetTransactions.forEach(ft -> seenIds.add(ft.getId()));
+
+        for (FixedTransaction candidate : fixedTransactionRepository.findAllByIsActiveTrue()) {
+            if (seenIds.contains(candidate.getId())) {
+                continue;
+            }
+            if (candidate.isExecutionDay(today) && !today.equals(candidate.getLastExecutedDate())) {
+                candidate.alignNextExecutionDateIfStale(today);
+                targetTransactions.add(candidate);
+                seenIds.add(candidate.getId());
+            }
+        }
 
         for (FixedTransaction fixedTransaction : targetTransactions) {
-
-            LocalDate today = LocalDate.now();
-            boolean alreadyExecuted = today.equals(fixedTransaction.getLastExecutedDate());
-
-            if (fixedTransaction.isExecutionDay(today) && !alreadyExecuted) {
-                try {
-                    TransactionRequest request = new TransactionRequest(
-                            fixedTransaction.getAccount().getId(),
-                            null,
-                            fixedTransaction.getTransactionCategory().getId(),
-                            fixedTransaction.getType(),
-                            fixedTransaction.getAmount(),
-                            today,
-                            fixedTransaction.getDescription()
-                    );
-
-                    transactionService.createTransaction(fixedTransaction.getUser().getId(), request);
-                    fixedTransaction.updateExecutionStatus(today);
-
-                    log.info("고정 거래 생성 완료: ID={}", fixedTransaction.getId());
-                } catch (Exception e) {
-                    log.error("고정 거래 생성 실패: ID={}, error={}", fixedTransaction.getId(), e.getMessage());
-                }
+            try {
+                fixedTransactionExecutor.executeIfDue(fixedTransaction, today);
+            } catch (Exception e) {
+                log.error("고정 거래 생성 실패: ID={}, error={}", fixedTransaction.getId(), e.getMessage());
             }
         }
     }

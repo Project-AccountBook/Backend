@@ -14,6 +14,8 @@ import com.chaewookim.accountbookformoms.global.error.CustomException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.List;
 
@@ -25,6 +27,7 @@ public class FixedTransactionService {
     private final FixedTransactionRepository fixedTransactionRepository;
     private final AccountRepository accountRepository;
     private final TransactionCategoryRepository categoryRepository;
+    private final FixedTransactionImmediateExecutionService fixedTransactionImmediateExecutionService;
 
     @Transactional
     public Long createFixedTransaction(Long userId, User user, FixedTransactionRequest request) {
@@ -48,13 +51,46 @@ public class FixedTransactionService {
                 .description(request.description())
                 .build();
 
-        return fixedTransactionRepository.save(fixedTransaction).getId();
+        FixedTransaction saved = fixedTransactionRepository.save(fixedTransaction);
+        scheduleImmediateExecution(saved.getId());
+        return saved.getId();
     }
 
+    private void scheduleImmediateExecution(Long fixedTransactionId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            fixedTransactionImmediateExecutionService.executeIfDue(fixedTransactionId);
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                fixedTransactionImmediateExecutionService.executeIfDue(fixedTransactionId);
+            }
+        });
+    }
+
+    @Transactional
     public List<FixedTransactionResponse> getFixedTransactions(Long userId) {
-        return fixedTransactionRepository.findAllByUserId(userId).stream()
-                .map(FixedTransactionResponse::from)
-                .toList();
+        List<FixedTransactionResponse> responses = new java.util.ArrayList<>();
+
+        for (FixedTransaction fixedTransaction : fixedTransactionRepository.findAllByUserId(userId)) {
+            if (!hasActiveAccount(fixedTransaction)) {
+                fixedTransactionRepository.delete(fixedTransaction);
+                continue;
+            }
+            responses.add(FixedTransactionResponse.from(fixedTransaction));
+        }
+
+        return responses;
+    }
+
+    private boolean hasActiveAccount(FixedTransaction fixedTransaction) {
+        Account account = fixedTransaction.getAccount();
+        if (account == null) {
+            return false;
+        }
+        return accountRepository.findById(account.getId()).isPresent();
     }
 
     @Transactional
