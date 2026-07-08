@@ -24,11 +24,16 @@ public class TransactionCategorySeeder {
             "급여", "사업", "투자", "용돈"
     );
 
+    private static final List<String> TRANSFER_CATEGORIES = List.of(
+            "적금", "비상금"
+    );
+
     @Bean
     public ApplicationRunner seedTransactionCategories(TransactionCategoryRepository repository) {
         return args -> {
             seed(repository, TransactionType.EXPENSE, EXPENSE_CATEGORIES);
             seed(repository, TransactionType.INCOME, INCOME_CATEGORIES);
+            seed(repository, TransactionType.TRANSFER, TRANSFER_CATEGORIES);
         };
     }
 
