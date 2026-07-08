@@ -28,13 +28,28 @@ public class TransactionCategorySeeder {
             "적금", "비상금"
     );
 
+    private static final List<String> LEGACY_CATEGORY_NAMES = List.of("기타");
+
     @Bean
     public ApplicationRunner seedTransactionCategories(TransactionCategoryRepository repository) {
         return args -> {
+            removeLegacyCategories(repository);
             seed(repository, TransactionType.EXPENSE, EXPENSE_CATEGORIES);
             seed(repository, TransactionType.INCOME, INCOME_CATEGORIES);
             seed(repository, TransactionType.TRANSFER, TRANSFER_CATEGORIES);
         };
+    }
+
+    private void removeLegacyCategories(TransactionCategoryRepository repository) {
+        for (String name : LEGACY_CATEGORY_NAMES) {
+            for (TransactionType type : TransactionType.values()) {
+                repository.findByUserIsNullAndNameAndType(name, type)
+                        .ifPresent(category -> {
+                            repository.delete(category);
+                            log.info("Removed legacy TransactionCategory type={}, name={}", type, name);
+                        });
+            }
+        }
     }
 
     private void seed(TransactionCategoryRepository repository, TransactionType type, List<String> names) {

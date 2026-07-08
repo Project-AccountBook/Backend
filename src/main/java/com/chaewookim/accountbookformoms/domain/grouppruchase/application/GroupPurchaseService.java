@@ -427,7 +427,7 @@ public class GroupPurchaseService {
 
         String categoryName = groupPurchaseCategoryRepository.findById(groupPurchase.getCategoryId())
                 .map(Category::getName)
-                .orElse("기타");
+                .orElse("");
 
         BigDecimal amount = BigDecimal.valueOf(groupPurchase.getPrice());
         String description = "공동구매 지출: " + groupPurchase.getTitle();
@@ -447,13 +447,9 @@ public class GroupPurchaseService {
                         .filter(c -> c.getType() == TransactionType.EXPENSE && c.getName().equals(categoryName))
                         .findFirst()
                         .orElseGet(() -> userCategories.stream()
-                                .filter(c -> c.getType() == TransactionType.EXPENSE &&
-                                        (c.getName().contains("기타") || c.getName().contains("공동구매")))
+                                .filter(c -> c.getType() == TransactionType.EXPENSE)
                                 .findFirst()
-                                .orElseGet(() -> userCategories.stream()
-                                        .filter(c -> c.getType() == TransactionType.EXPENSE)
-                                        .findFirst()
-                                        .orElse(null)));
+                                .orElse(null));
 
                 if (targetCategory == null) {
                     log.warn("가계부 자동 기입 실패: 사용자(ID={})의 지출 카테고리가 존재하지 않습니다.", memberId);

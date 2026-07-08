@@ -19,6 +19,8 @@ public interface TransactionCategoryRepository extends JpaRepository<Transaction
 
     boolean existsByUserIsNullAndNameAndType(String name, TransactionType type);
 
+    Optional<TransactionCategory> findByUserIsNullAndNameAndType(String name, TransactionType type);
+
     boolean existsByUserIdAndNameAndType(Long userId, String name, TransactionType type);
 
     boolean existsByUserIdAndNameAndTypeAndIdNot(Long userId, String name, TransactionType type, Long id);

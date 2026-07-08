@@ -42,7 +42,7 @@ public class TransactionExportService {
                 Row row = sheet1.createRow(rowIdx++);
                 row.createCell(0).setCellValue(t.getTransactionDate().toString());
                 row.createCell(1).setCellValue(t.getType().toString());
-                row.createCell(2).setCellValue(t.getTransactionCategory() != null ? t.getTransactionCategory().getName() : "미분류");
+                row.createCell(2).setCellValue(t.getTransactionCategory() != null ? t.getTransactionCategory().getName() : "기타");
                 row.createCell(3).setCellValue(t.getAmount().doubleValue());
                 row.createCell(4).setCellValue(t.getDescription());
             }
@@ -52,7 +52,7 @@ public class TransactionExportService {
             Map<String, BigDecimal> summaryData = transactions.stream()
                     .filter(t -> t.getType() == TransactionType.EXPENSE)
                     .collect(Collectors.groupingBy(
-                            t -> t.getTransactionCategory() != null ? t.getTransactionCategory().getName() : "미분류",
+                            t -> t.getTransactionCategory() != null ? t.getTransactionCategory().getName() : "기타",
                             Collectors.reducing(BigDecimal.ZERO, Transaction::getAmount, BigDecimal::add)
                     ));
 
