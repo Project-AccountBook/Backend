@@ -101,7 +101,16 @@ public class SecurityConfig {
                         .successHandler(oAuth2SuccessHandler)
                 )
                 // JWT 필터 추가
-                .addFilterBefore(new JwtFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(new JwtFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class)
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            if (request.getRequestURI().startsWith("/api/")) {
+                                response.sendError(jakarta.servlet.http.HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
+                            } else {
+                                response.sendRedirect("/login");
+                            }
+                        })
+                );
 
         return http.build();
     }
