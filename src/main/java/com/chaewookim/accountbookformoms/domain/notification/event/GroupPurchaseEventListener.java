@@ -31,7 +31,7 @@ public class GroupPurchaseEventListener {
         Category category = groupPurchaseCategoryRepository.findById(event.categoryId())
                 .orElseThrow(() -> new CustomException(ErrorCode.CATEGORY_NOT_FOUND));
 
-        var subscribers = interestCategoryRepository.findByCategoryAndIsAlarmEnabledTrue(category);
+        var subscribers = interestCategoryRepository.findSubscribersWithNotificationSettings(category);
 
         subscribers.forEach(sub -> {
             User user = sub.getUser();

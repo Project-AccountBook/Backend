@@ -27,13 +27,15 @@ public class NotificationEventListener {
     @EventListener
     public void handleNotificationEvent(NotificationEvent event) {
 
-        notificationService.createNotification(
-                event.user(),
-                event.type(),
-                event.title(),
-                event.message(),
-                event.redirectUrl(),
-                event.referenceId()
+        userRepository.findById(event.user().getId()).ifPresent(user ->
+                notificationService.createNotification(
+                        user,
+                        event.type(),
+                        event.title(),
+                        event.message(),
+                        event.redirectUrl(),
+                        event.referenceId()
+                )
         );
     }
 
