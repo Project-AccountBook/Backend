@@ -13,6 +13,7 @@ public enum AssetErrorCode implements BaseErrorCode {
     ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "계좌를 찾을 수 없습니다."),
     DUPLICATE_ACCOUNT_NAME(HttpStatus.CONFLICT, "이미 존재하는 계좌 이름입니다."),
     INSUFFICIENT_BALANCE(HttpStatus.BAD_REQUEST, "잔액이 부족합니다."),
+    INVALID_GOAL_AMOUNT(HttpStatus.BAD_REQUEST, "목표 금액은 0보다 커야 합니다."),
 
     // Transaction
     TRANSACTION_NOT_FOUND(HttpStatus.NOT_FOUND, "거래 내역을 찾을 수 없습니다."),

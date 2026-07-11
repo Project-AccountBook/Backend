@@ -1,5 +1,6 @@
 package com.chaewookim.accountbookformoms.domain.asset.dto.request;
 
+import com.chaewookim.accountbookformoms.domain.asset.enums.AccountRole;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -11,6 +12,8 @@ public record AccountRequest(
         String accountName,
 
         @NotNull(message = "초기 잔고는 필수 입력 값입니다.")
-        BigDecimal initialBalance
+        BigDecimal initialBalance,
+
+        AccountRole role
 ) {
 }

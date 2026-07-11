@@ -1,6 +1,7 @@
 package com.chaewookim.accountbookformoms.domain.asset.api;
 
 import com.chaewookim.accountbookformoms.domain.asset.application.AccountService;
+import com.chaewookim.accountbookformoms.domain.asset.dto.request.AccountGoalRequest;
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.AccountRequest;
 import com.chaewookim.accountbookformoms.domain.asset.dto.response.AccountResponse;
 import com.chaewookim.accountbookformoms.global.common.ApiResponse;
@@ -64,6 +65,27 @@ public class AccountController {
             @Valid @RequestBody AccountRequest dto
     ) {
         accountService.updateAccount(user.getUserId(), accountId, dto);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @Operation(summary = "계좌 목표 수정", description = "특정 계좌의 목표 금액·목표일 설정")
+    @PatchMapping("/{accountId}/goal")
+    public ResponseEntity<ApiResponse<Void>> updateAccountGoal(
+            @AuthenticationPrincipal UserPrincipal user,
+            @PathVariable Long accountId,
+            @Valid @RequestBody AccountGoalRequest dto
+    ) {
+        accountService.updateAccountGoal(user.getUserId(), accountId, dto);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @Operation(summary = "계좌 목표 삭제", description = "특정 계좌의 목표 금액·목표일 삭제 (역할은 유지)")
+    @DeleteMapping("/{accountId}/goal")
+    public ResponseEntity<ApiResponse<Void>> clearAccountGoal(
+            @AuthenticationPrincipal UserPrincipal user,
+            @PathVariable Long accountId
+    ) {
+        accountService.clearAccountGoal(user.getUserId(), accountId);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
