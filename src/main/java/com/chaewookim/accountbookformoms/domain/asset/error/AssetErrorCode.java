@@ -31,7 +31,8 @@ public enum AssetErrorCode implements BaseErrorCode {
     CATEGORY_FORBIDDEN(HttpStatus.FORBIDDEN, "본인의 카테고리만 수정/삭제 가능합니다."),
     CATEGORY_IMMUTABLE(HttpStatus.BAD_REQUEST, "기본 카테고리는 수정하거나 삭제할 수 없습니다."),
     CATEGORY_IN_USE(HttpStatus.BAD_REQUEST, "이 카테고리를 사용 중인 거래·고정내역·예산이 있어 삭제할 수 없습니다."),
-    DUPLICATE_CATEGORY_NAME(HttpStatus.CONFLICT, "이미 존재하는 카테고리 이름입니다.");
+    DUPLICATE_CATEGORY_NAME(HttpStatus.CONFLICT, "이미 존재하는 카테고리 이름입니다."),
+    CATEGORY_ALLOCATION_ONLY_TRANSFER(HttpStatus.BAD_REQUEST, "이체 카테고리만 저축률·투자율 설정이 가능합니다.");
 
     private final HttpStatus status;
     private final String message;
