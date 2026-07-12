@@ -138,7 +138,7 @@ class UserServiceTest {
         given(userRepository.findById(1L)).willReturn(Optional.of(user));
         given(user.getUserSetting()).willReturn(mock(UserSetting.class));
         given(user.getUserNotificationSetting()).willReturn(mock(UserNotificationSetting.class));
-        UpdateProfileRequest request = new UpdateProfileRequest("new", LocalDate.now(), "newAddress", 50, true, true, true, true);
+        UpdateProfileRequest request = new UpdateProfileRequest("new", LocalDate.now(), "newAddress", 50, true, true, true, true, true);
 
         // when
         userService.updateMyProfile(1L, request);

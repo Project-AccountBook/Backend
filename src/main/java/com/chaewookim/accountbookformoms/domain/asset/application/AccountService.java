@@ -12,9 +12,11 @@ import com.chaewookim.accountbookformoms.domain.asset.entity.FixedTransaction;
 import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
+import com.chaewookim.accountbookformoms.domain.asset.event.GoalAchievedCheckEvent;
 import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +33,7 @@ public class AccountService {
     private final UserRepository userRepository;
     private final FixedTransactionRepository fixedTransactionRepository;
     private final TransactionRepository transactionRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public Long createAccount(Long userId, AccountRequest request) {
@@ -88,12 +91,14 @@ public class AccountService {
         if (request.role() != null) {
             account.updateRole(request.role());
         }
+        eventPublisher.publishEvent(new GoalAchievedCheckEvent(userId, accountId));
     }
 
     @Transactional
     public void updateAccountGoal(Long userId, Long accountId, AccountGoalRequest request) {
         Account account = validateAndGet(userId, accountId);
         account.updateGoal(request.goalAmount(), request.goalDate());
+        eventPublisher.publishEvent(new GoalAchievedCheckEvent(userId, accountId));
     }
 
     @Transactional

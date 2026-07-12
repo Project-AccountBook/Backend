@@ -30,6 +30,9 @@ public record UpdateProfileRequest(
         @NotNull(message = "관심 카테고리 알림 여부는 필수 입력 값입니다.")
         Boolean isInterestCategoryEnabled,
 
+        @NotNull(message = "계좌 목표 달성 알림 여부는 필수 입력 값입니다.")
+        Boolean isGoalAlertEnabled,
+
         @NotNull(message = "보안 알림 여부는 필수 입력 값입니다.")
         Boolean isSystemAlertEnabled
 ) {

@@ -59,6 +59,9 @@ public class Account extends BaseEntity {
     @Column
     private LocalDate goalDate;
 
+    @Column(nullable = false)
+    private boolean goalAchievedNotified;
+
     @Builder
     public Account(User user, String accountName, BigDecimal initialBalance, AccountRole role) {
         this.user = user;
@@ -100,10 +103,20 @@ public class Account extends BaseEntity {
         }
         this.goalAmount = goalAmount;
         this.goalDate = goalDate;
+        this.goalAchievedNotified = false;
     }
 
     public void clearGoal() {
         this.goalAmount = null;
         this.goalDate = null;
+        this.goalAchievedNotified = false;
+    }
+
+    public void markGoalAchievedNotified() {
+        this.goalAchievedNotified = true;
+    }
+
+    public void resetGoalAchievedNotified() {
+        this.goalAchievedNotified = false;
     }
 }

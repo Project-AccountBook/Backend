@@ -4,5 +4,6 @@ public enum NotificationType {
 
     BUDGET,
     INTEREST_CATEGORY,
+    GOAL,
     SYSTEM
 }

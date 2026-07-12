@@ -11,6 +11,7 @@ import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
 import com.chaewookim.accountbookformoms.domain.budget.event.BudgetExceededCheckEvent;
+import com.chaewookim.accountbookformoms.domain.asset.event.GoalAchievedCheckEvent;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.CacheManager;
@@ -81,6 +82,9 @@ public class TransactionService {
         source.changeBalance(request.amount().negate());
         target.changeBalance(request.amount());
 
+        publishGoalAchievedCheck(source.getUser().getId(), source.getId());
+        publishGoalAchievedCheck(target.getUser().getId(), target.getId());
+
         return saveTransferTransaction(source, target, request);
     }
 
@@ -96,6 +100,8 @@ public class TransactionService {
 
         BigDecimal amount = (request.type() == TransactionType.EXPENSE) ? request.amount().negate() : request.amount();
         account.changeBalance(amount);
+
+        publishGoalAchievedCheck(userId, account.getId());
 
         return saveTransaction(account, account, request, fromFixedTransaction);
     }
@@ -172,6 +178,7 @@ public class TransactionService {
         LocalDate previousDate = transaction.getTransactionDate();
 
         reverseTransactionBalances(transaction);
+        publishGoalChecksAfterReverse(transaction);
 
         TransactionCategory category = categoryRepository.findById(request.categoryId())
                 .orElseThrow(() -> new CustomException(AssetErrorCode.CATEGORY_NOT_FOUND));
@@ -196,6 +203,8 @@ public class TransactionService {
             transaction.update(request, category, source, target);
             source.changeBalance(request.amount().negate());
             target.changeBalance(request.amount());
+            publishGoalAchievedCheck(userId, source.getId());
+            publishGoalAchievedCheck(target.getUser().getId(), target.getId());
         } else {
             Account account = accountRepository.findByIdWithLock(request.accountId())
                     .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
@@ -207,6 +216,7 @@ public class TransactionService {
             transaction.update(request, category, account, null);
             BigDecimal amount = (request.type() == TransactionType.EXPENSE) ? request.amount().negate() : request.amount();
             account.changeBalance(amount);
+            publishGoalAchievedCheck(userId, account.getId());
         }
 
         evictDashboardCache(userId, previousDate);
@@ -219,6 +229,7 @@ public class TransactionService {
         Transaction transaction = validateAndGet(userId, transactionId);
 
         reverseTransactionBalances(transaction);
+        publishGoalChecksAfterReverse(transaction);
         transactionRepository.delete(transaction);
 
         evictDashboardCache(userId, transaction.getTransactionDate());
@@ -250,6 +261,20 @@ public class TransactionService {
         }
 
         return transaction;
+    }
+
+    private void publishGoalAchievedCheck(Long userId, Long accountId) {
+        eventPublisher.publishEvent(new GoalAchievedCheckEvent(userId, accountId));
+    }
+
+    private void publishGoalChecksAfterReverse(Transaction transaction) {
+        Account source = transaction.getAccount();
+        publishGoalAchievedCheck(transaction.getUser().getId(), source.getId());
+
+        if (transaction.getType() == TransactionType.TRANSFER && transaction.getTargetAccount() != null) {
+            Account target = transaction.getTargetAccount();
+            publishGoalAchievedCheck(target.getUser().getId(), target.getId());
+        }
     }
 
     // 대시보드 캐시 삭제

@@ -15,6 +15,7 @@ public record UserProfileResponse(
         Boolean isPortfolioPublic,
         Boolean isBudgetAlertEnabled,
         Boolean isInterestCategoryEnabled,
+        Boolean isGoalAlertEnabled,
         Boolean isSystemAlertEnabled
 ) {
 }

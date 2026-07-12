@@ -32,19 +32,26 @@ public class UserNotificationSetting {
     private Boolean isInterestCategoryEnabled;  // 관심 카테고리 알림
 
     @Column(nullable = false)
+    private Boolean isGoalAlertEnabled;         // 계좌 목표 달성 알림
+
+    @Column(nullable = false)
     private Boolean isSystemAlertEnabled;       // 시스템 알림
 
     @Builder
-    public UserNotificationSetting(User user, Boolean isBudgetAlertEnabled, Boolean isInterestCategoryEnabled, Boolean isSystemAlertEnabled) {
+    public UserNotificationSetting(User user, Boolean isBudgetAlertEnabled, Boolean isInterestCategoryEnabled,
+                                   Boolean isGoalAlertEnabled, Boolean isSystemAlertEnabled) {
         this.user = user;
         this.isBudgetAlertEnabled = (isBudgetAlertEnabled != null) ? isBudgetAlertEnabled : true;
         this.isInterestCategoryEnabled = (isInterestCategoryEnabled != null) ? isInterestCategoryEnabled : true;
+        this.isGoalAlertEnabled = (isGoalAlertEnabled != null) ? isGoalAlertEnabled : true;
         this.isSystemAlertEnabled = (isSystemAlertEnabled != null) ? isSystemAlertEnabled : true;
     }
 
-    public void updateNotificationSettings(Boolean isBudgetAlertEnabled, Boolean isInterestCategoryEnabled, Boolean isSystemAlertEnabled) {
+    public void updateNotificationSettings(Boolean isBudgetAlertEnabled, Boolean isInterestCategoryEnabled,
+                                           Boolean isGoalAlertEnabled, Boolean isSystemAlertEnabled) {
         if (isBudgetAlertEnabled != null) this.isBudgetAlertEnabled = isBudgetAlertEnabled;
         if (isInterestCategoryEnabled != null) this.isInterestCategoryEnabled = isInterestCategoryEnabled;
+        if (isGoalAlertEnabled != null) this.isGoalAlertEnabled = isGoalAlertEnabled;
         if (isSystemAlertEnabled != null) this.isSystemAlertEnabled = isSystemAlertEnabled;
     }
 }
