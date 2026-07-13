@@ -82,6 +82,9 @@ public class TransactionService {
         source.changeBalance(request.amount().negate());
         target.changeBalance(request.amount());
 
+        resetGoalAchievementStateIfNeeded(source);
+        resetGoalAchievementStateIfNeeded(target);
+
         publishGoalAchievedCheck(source.getUser().getId(), source.getId());
         publishGoalAchievedCheck(target.getUser().getId(), target.getId());
 
@@ -100,6 +103,8 @@ public class TransactionService {
 
         BigDecimal amount = (request.type() == TransactionType.EXPENSE) ? request.amount().negate() : request.amount();
         account.changeBalance(amount);
+
+        resetGoalAchievementStateIfNeeded(account);
 
         publishGoalAchievedCheck(userId, account.getId());
 
@@ -178,7 +183,6 @@ public class TransactionService {
         LocalDate previousDate = transaction.getTransactionDate();
 
         reverseTransactionBalances(transaction);
-        publishGoalChecksAfterReverse(transaction);
 
         TransactionCategory category = categoryRepository.findById(request.categoryId())
                 .orElseThrow(() -> new CustomException(AssetErrorCode.CATEGORY_NOT_FOUND));
@@ -203,6 +207,8 @@ public class TransactionService {
             transaction.update(request, category, source, target);
             source.changeBalance(request.amount().negate());
             target.changeBalance(request.amount());
+            resetGoalAchievementStateIfNeeded(source);
+            resetGoalAchievementStateIfNeeded(target);
             publishGoalAchievedCheck(userId, source.getId());
             publishGoalAchievedCheck(target.getUser().getId(), target.getId());
         } else {
@@ -216,6 +222,7 @@ public class TransactionService {
             transaction.update(request, category, account, null);
             BigDecimal amount = (request.type() == TransactionType.EXPENSE) ? request.amount().negate() : request.amount();
             account.changeBalance(amount);
+            resetGoalAchievementStateIfNeeded(account);
             publishGoalAchievedCheck(userId, account.getId());
         }
 
@@ -244,10 +251,22 @@ public class TransactionService {
             Account target = accountRepository.findByIdWithLock(transaction.getTargetAccount().getId())
                     .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
             target.changeBalance(transaction.getAmount().negate());
+            resetGoalAchievementStateIfNeeded(source);
+            resetGoalAchievementStateIfNeeded(target);
             return;
         }
 
         source.changeBalance(transaction.getBalanceChangeAmount().negate());
+        resetGoalAchievementStateIfNeeded(source);
+    }
+
+    private void resetGoalAchievementStateIfNeeded(Account account) {
+        if (account.getGoalAmount() == null) {
+            return;
+        }
+        if (!account.isGoalAchieved() && account.isGoalAchievedNotified()) {
+            account.resetGoalAchievedNotified();
+        }
     }
 
     // 공통 검증 로직

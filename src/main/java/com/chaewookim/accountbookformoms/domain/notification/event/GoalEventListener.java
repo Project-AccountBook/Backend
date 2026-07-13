@@ -3,68 +3,65 @@ package com.chaewookim.accountbookformoms.domain.notification.event;
 import com.chaewookim.accountbookformoms.domain.asset.dao.AccountRepository;
 import com.chaewookim.accountbookformoms.domain.asset.entity.Account;
 import com.chaewookim.accountbookformoms.domain.asset.event.GoalAchievedCheckEvent;
+import com.chaewookim.accountbookformoms.domain.notification.application.NotificationService;
 import com.chaewookim.accountbookformoms.domain.notification.enums.NotificationType;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
-import com.chaewookim.accountbookformoms.domain.user.entity.UserNotificationSetting;
+import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.annotation.Async;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class GoalEventListener {
 
     private final UserRepository userRepository;
     private final AccountRepository accountRepository;
-    private final ApplicationEventPublisher eventPublisher;
+    private final NotificationService notificationService;
 
-    @Async
-    @EventListener
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleGoalAchievedCheckEvent(GoalAchievedCheckEvent event) {
+        try {
+            process(event);
+        } catch (Exception ex) {
+            log.error("목표 달성 알림 처리 실패 userId={}, accountId={}", event.userId(), event.accountId(), ex);
+        }
+    }
 
+    private void process(GoalAchievedCheckEvent event) {
         Account account = accountRepository.findByIdAndUserId(event.accountId(), event.userId())
+                .filter(a -> a.getGoalAmount() != null && a.isGoalAchieved())
                 .orElse(null);
-        if (account == null || account.getGoalAmount() == null) {
+        if (account == null) {
             return;
         }
 
-        boolean achieved = account.getCurrentBalance().compareTo(account.getGoalAmount()) >= 0;
-
-        if (!achieved) {
-            if (account.isGoalAchievedNotified()) {
-                account.resetGoalAchievedNotified();
-                accountRepository.save(account);
-            }
+        User user = userRepository.findByIdWithNotificationSetting(event.userId())
+                .filter(User::isGoalAlertEnabled)
+                .orElse(null);
+        if (user == null) {
             return;
         }
 
-        if (account.isGoalAchievedNotified()) {
+        if (accountRepository.claimGoalAchievedNotification(event.accountId(), event.userId()) != 1) {
             return;
         }
 
-        userRepository.findById(event.userId()).ifPresent(user -> {
-            UserNotificationSetting setting = user.getUserNotificationSetting();
-            if (setting == null || !Boolean.TRUE.equals(setting.getIsGoalAlertEnabled())) {
-                return;
-            }
+        String message = String.format("[%s] 계좌 목표 금액에 도달했습니다!", account.getAccountName());
 
-            String message = String.format("[%s] 계좌 목표 금액에 도달했습니다!", account.getAccountName());
-
-            eventPublisher.publishEvent(new NotificationEvent(
-                    user,
-                    NotificationType.GOAL,
-                    "목표 달성 알림",
-                    message,
-                    "dashboard",
-                    account.getId()
-            ));
-
-            account.markGoalAchievedNotified();
-            accountRepository.save(account);
-        });
+        notificationService.createNotification(
+                user,
+                NotificationType.GOAL,
+                "목표 달성 알림",
+                message,
+                "goals",
+                account.getId()
+        );
     }
 }

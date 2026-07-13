@@ -23,6 +23,7 @@ import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 
 @Entity
@@ -112,11 +113,26 @@ public class Account extends BaseEntity {
         this.goalAchievedNotified = false;
     }
 
-    public void markGoalAchievedNotified() {
-        this.goalAchievedNotified = true;
-    }
-
     public void resetGoalAchievedNotified() {
         this.goalAchievedNotified = false;
+    }
+
+    public boolean isReadyForNotification() {
+        return goalAmount != null && isGoalAchieved() && !isGoalAchievedNotified();
+    }
+
+    public boolean isGoalAchieved() {
+        if (goalAmount == null || goalAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return false;
+        }
+        BigDecimal balance = currentBalance != null ? currentBalance : BigDecimal.ZERO;
+        if (balance.compareTo(goalAmount) >= 0) {
+            return true;
+        }
+        int percent = balance
+                .multiply(BigDecimal.valueOf(100))
+                .divide(goalAmount, 0, RoundingMode.HALF_UP)
+                .intValue();
+        return percent >= 100;
     }
 }

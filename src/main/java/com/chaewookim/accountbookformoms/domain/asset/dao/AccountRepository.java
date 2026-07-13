@@ -4,6 +4,7 @@ import com.chaewookim.accountbookformoms.domain.asset.entity.Account;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -33,4 +34,17 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select a from Account a where a.id = :id")
     Optional<Account> findByIdWithLock(@Param("id") Long id);
+
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+            UPDATE account
+               SET goal_achieved_notified = 1,
+                   updated_at = NOW()
+             WHERE id = :accountId
+               AND user_id = :userId
+               AND goal_achieved_notified = 0
+               AND deleted_at IS NULL
+            """, nativeQuery = true)
+    int claimGoalAchievedNotification(@Param("accountId") Long accountId,
+                                      @Param("userId") Long userId);
 }

@@ -54,4 +54,8 @@ public class UserNotificationSetting {
         if (isGoalAlertEnabled != null) this.isGoalAlertEnabled = isGoalAlertEnabled;
         if (isSystemAlertEnabled != null) this.isSystemAlertEnabled = isSystemAlertEnabled;
     }
+
+    public boolean isGoalAlertEnabledOrDefault() {
+        return !Boolean.FALSE.equals(isGoalAlertEnabled);
+    }
 }

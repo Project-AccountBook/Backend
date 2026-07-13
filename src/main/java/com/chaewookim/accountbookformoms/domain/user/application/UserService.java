@@ -67,7 +67,7 @@ public class UserService {
                 user.getPassword() != null,
                 settings.getBudgetAlertThreshold(), settings.getIsPortfolioPublic(),
                 notificationSetting.getIsBudgetAlertEnabled(), notificationSetting.getIsInterestCategoryEnabled(),
-                notificationSetting.getIsGoalAlertEnabled(), notificationSetting.getIsSystemAlertEnabled()
+                notificationSetting.isGoalAlertEnabledOrDefault(), notificationSetting.getIsSystemAlertEnabled()
         );
     }
 

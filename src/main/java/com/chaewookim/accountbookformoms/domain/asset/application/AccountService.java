@@ -20,6 +20,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -87,11 +88,14 @@ public class AccountService {
         }
 
         account.updateAccountName(accountName);
+        BigDecimal previousInitialBalance = account.getInitialBalance();
         account.updateInitialBalance(request.initialBalance());
         if (request.role() != null) {
             account.updateRole(request.role());
         }
-        eventPublisher.publishEvent(new GoalAchievedCheckEvent(userId, accountId));
+        if (previousInitialBalance.compareTo(request.initialBalance()) != 0) {
+            eventPublisher.publishEvent(new GoalAchievedCheckEvent(userId, accountId));
+        }
     }
 
     @Transactional
