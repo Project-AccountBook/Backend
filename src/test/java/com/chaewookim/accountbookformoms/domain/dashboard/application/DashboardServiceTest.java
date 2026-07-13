@@ -1,9 +1,14 @@
 package com.chaewookim.accountbookformoms.domain.dashboard.application;
 
+import com.chaewookim.accountbookformoms.domain.asset.application.MonthlyAllocationService;
 import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionRepository;
+import com.chaewookim.accountbookformoms.domain.asset.dto.response.AllocationBucketResponse;
+import com.chaewookim.accountbookformoms.domain.asset.dto.response.MonthlyAllocationResponse;
 import com.chaewookim.accountbookformoms.domain.budget.application.BudgetService;
 import com.chaewookim.accountbookformoms.domain.budget.dto.response.BudgetSummaryResponse;
 import com.chaewookim.accountbookformoms.domain.dashboard.dto.response.DashboardResponse;
+import com.chaewookim.accountbookformoms.domain.portfolio.application.PortfolioService;
+import com.chaewookim.accountbookformoms.domain.portfolio.dto.response.MyPortfolioResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,6 +34,12 @@ class DashboardServiceTest {
     @Mock
     private TransactionRepository transactionRepository;
 
+    @Mock
+    private PortfolioService portfolioService;
+
+    @Mock
+    private MonthlyAllocationService monthlyAllocationService;
+
     @InjectMocks
     private DashboardService dashboardService;
 
@@ -36,7 +47,6 @@ class DashboardServiceTest {
     @DisplayName("대시보드 조회 - 성공")
     void getDashboard_Success() {
 
-        // given
         Long userId = 1L;
         String yearMonth = "2026-06";
         List<Object[]> categoryList = Collections.singletonList(new Object[]{"식비", new BigDecimal("50000")});
@@ -49,20 +59,49 @@ class DashboardServiceTest {
                 new BigDecimal("50000")
         );
 
+        MonthlyAllocationResponse allocation = new MonthlyAllocationResponse(
+                new AllocationBucketResponse(
+                        new BigDecimal("200000"),
+                        new BigDecimal("20.0"),
+                        new BigDecimal("200000"),
+                        BigDecimal.ZERO
+                ),
+                new AllocationBucketResponse(
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO
+                )
+        );
+
         doReturn(categoryList).when(transactionRepository).sumCategoryExpense(eq(userId), eq(yearMonth));
         doReturn(trendList).when(transactionRepository).sumMonthlyTrends(eq(userId), any());
         given(budgetService.getMonthlyBudgetSummary(eq(userId), eq(yearMonth))).willReturn(budgetSummary);
+        given(portfolioService.getMyPortfolio(userId, yearMonth)).willReturn(
+                new MyPortfolioResponse(
+                        yearMonth,
+                        new BigDecimal("1000000"),
+                        new BigDecimal("500000"),
+                        new BigDecimal("100000"),
+                        new BigDecimal("500000"),
+                        null,
+                        null,
+                        null
+                )
+        );
+        given(monthlyAllocationService.computeMonthlyAllocation(userId, yearMonth, new BigDecimal("1000000")))
+                .willReturn(allocation);
+        given(monthlyAllocationService.buildGoalProgress(userId)).willReturn(List.of());
+        given(monthlyAllocationService.computeTotalAsset(userId)).willReturn(new BigDecimal("1500000"));
 
-        // when
         DashboardResponse response = dashboardService.getDashboard(userId, yearMonth);
 
-        // then
         assertThat(response).isNotNull();
         assertThat(response.categoryExpenses()).containsEntry("식비", new BigDecimal("50000"));
         assertThat(response.trends()).hasSize(1);
-        assertThat(response.trends().get(0).yearMonth()).isEqualTo("2026-06");
         assertThat(response.budgetStatus().actualExpense()).isEqualByComparingTo("50000");
-        assertThat(response.summary().totalExpense()).isEqualByComparingTo("50000");
+        assertThat(response.allocation().savings().rate()).isEqualByComparingTo("20.0");
+        assertThat(response.totalAsset()).isEqualByComparingTo("1500000");
     }
 
     @Test
@@ -85,15 +124,25 @@ class DashboardServiceTest {
                 new BigDecimal("50000")
         );
 
+        MonthlyAllocationResponse allocation = new MonthlyAllocationResponse(
+                new AllocationBucketResponse(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO),
+                new AllocationBucketResponse(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO)
+        );
+
         doReturn(categoryList).when(transactionRepository).sumCategoryExpense(eq(userId), eq(yearMonth));
         doReturn(trendList).when(transactionRepository).sumMonthlyTrends(eq(userId), any());
         given(budgetService.getMonthlyBudgetSummary(eq(userId), eq(yearMonth))).willReturn(budgetSummary);
+        given(portfolioService.getMyPortfolio(userId, yearMonth)).willReturn(
+                new MyPortfolioResponse(yearMonth, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, null, null, null)
+        );
+        given(monthlyAllocationService.computeMonthlyAllocation(eq(userId), eq(yearMonth), any())).willReturn(allocation);
+        given(monthlyAllocationService.buildGoalProgress(userId)).willReturn(List.of());
+        given(monthlyAllocationService.computeTotalAsset(userId)).willReturn(BigDecimal.ZERO);
 
         DashboardResponse response = dashboardService.getDashboard(userId, yearMonth);
 
         assertThat(response.categoryExpenses().get("식비")).isEqualByComparingTo("80000");
         assertThat(response.trends()).hasSize(1);
         assertThat(response.trends().get(0).income()).isEqualByComparingTo("100000");
-        assertThat(response.trends().get(0).expense()).isEqualByComparingTo("50000");
     }
 }

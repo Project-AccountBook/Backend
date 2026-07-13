@@ -80,6 +80,7 @@ public class SecurityConfig {
 
                                 // account 부분
                                 "/api/v1/account/**",
+                                "/api/v1/allocation/**",
 
                                 // transaction 부분
                                 "/api/v1/transactions/**",

@@ -66,7 +66,8 @@ public class UserService {
                 user.getBirthDate(), user.getAddress(),
                 user.getPassword() != null,
                 settings.getBudgetAlertThreshold(), settings.getIsPortfolioPublic(),
-                notificationSetting.getIsBudgetAlertEnabled(), notificationSetting.getIsInterestCategoryEnabled(), notificationSetting.getIsSystemAlertEnabled()
+                notificationSetting.getIsBudgetAlertEnabled(), notificationSetting.getIsInterestCategoryEnabled(),
+                notificationSetting.isGoalAlertEnabledOrDefault(), notificationSetting.getIsSystemAlertEnabled()
         );
     }
 
@@ -81,6 +82,7 @@ public class UserService {
         user.getUserNotificationSetting().updateNotificationSettings(
                 request.isBudgetAlertEnabled(),
                 request.isInterestCategoryEnabled(),
+                request.isGoalAlertEnabled(),
                 request.isSystemAlertEnabled()
         );
         user.updateLastBudgetAlertMonth(null);

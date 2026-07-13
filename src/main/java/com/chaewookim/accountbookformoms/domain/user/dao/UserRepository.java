@@ -15,4 +15,11 @@ public interface UserRepository extends JpaRepository<User,Long> {
 
     @Query(value = "SELECT * FROM user WHERE email = :email", nativeQuery = true)
     Optional<User> findByEmailIncludingDeleted(@Param("email") String email);
+
+    @Query("""
+            SELECT u FROM User u
+            LEFT JOIN FETCH u.userNotificationSetting
+            WHERE u.id = :id
+            """)
+    Optional<User> findByIdWithNotificationSetting(@Param("id") Long id);
 }

@@ -12,13 +12,19 @@ public record CategoryRequest(
         String name,
 
         @NotNull(message = "카테고리 타입은 필수입니다.")
-        TransactionType type
+        TransactionType type,
+
+        Boolean includeInSavingsRate,
+
+        Boolean includeInInvestmentRate
 ) {
     public TransactionCategory toEntity(User user) {
         return TransactionCategory.builder()
                 .user(user)
                 .name(this.name)
                 .type(this.type)
+                .includeInSavingsRate(includeInSavingsRate)
+                .includeInInvestmentRate(includeInInvestmentRate)
                 .build();
     }
 }

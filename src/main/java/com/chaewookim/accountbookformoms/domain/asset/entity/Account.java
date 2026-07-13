@@ -1,11 +1,14 @@
 package com.chaewookim.accountbookformoms.domain.asset.entity;
 
+import com.chaewookim.accountbookformoms.domain.asset.enums.AccountRole;
 import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.entity.BaseEntity;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -20,6 +23,8 @@ import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
 
 @Entity
 @Getter
@@ -45,12 +50,26 @@ public class Account extends BaseEntity {
     @Column(nullable = false)
     private BigDecimal currentBalance;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private AccountRole role = AccountRole.CHECKING;
+
+    @Column
+    private BigDecimal goalAmount;
+
+    @Column
+    private LocalDate goalDate;
+
+    @Column(nullable = false)
+    private boolean goalAchievedNotified;
+
     @Builder
-    public Account(User user, String accountName, BigDecimal initialBalance) {
+    public Account(User user, String accountName, BigDecimal initialBalance, AccountRole role) {
         this.user = user;
         this.accountName = accountName;
         this.initialBalance = initialBalance;
         this.currentBalance = initialBalance;
+        this.role = role != null ? role : AccountRole.CHECKING;
     }
 
     public void updateAccountName(String accountName) {
@@ -73,5 +92,47 @@ public class Account extends BaseEntity {
             throw new CustomException(AssetErrorCode.INSUFFICIENT_BALANCE);
         }
         this.currentBalance = this.currentBalance.add(amount);
+    }
+
+    public void updateRole(AccountRole role) {
+        this.role = role != null ? role : AccountRole.CHECKING;
+    }
+
+    public void updateGoal(BigDecimal goalAmount, LocalDate goalDate) {
+        if (goalAmount != null && goalAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new CustomException(AssetErrorCode.INVALID_GOAL_AMOUNT);
+        }
+        this.goalAmount = goalAmount;
+        this.goalDate = goalDate;
+        this.goalAchievedNotified = false;
+    }
+
+    public void clearGoal() {
+        this.goalAmount = null;
+        this.goalDate = null;
+        this.goalAchievedNotified = false;
+    }
+
+    public void resetGoalAchievedNotified() {
+        this.goalAchievedNotified = false;
+    }
+
+    public boolean isReadyForNotification() {
+        return goalAmount != null && isGoalAchieved() && !isGoalAchievedNotified();
+    }
+
+    public boolean isGoalAchieved() {
+        if (goalAmount == null || goalAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return false;
+        }
+        BigDecimal balance = currentBalance != null ? currentBalance : BigDecimal.ZERO;
+        if (balance.compareTo(goalAmount) >= 0) {
+            return true;
+        }
+        int percent = balance
+                .multiply(BigDecimal.valueOf(100))
+                .divide(goalAmount, 0, RoundingMode.HALF_UP)
+                .intValue();
+        return percent >= 100;
     }
 }

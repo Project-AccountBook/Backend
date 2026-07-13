@@ -130,4 +130,8 @@ public class User extends BaseEntity {
     public void updateLastBudgetAlertMonth(String month) {
         this.lastBudgetAlertMonth = month;
     }
+
+    public boolean isGoalAlertEnabled() {
+        return userNotificationSetting != null && userNotificationSetting.isGoalAlertEnabledOrDefault();
+    }
 }

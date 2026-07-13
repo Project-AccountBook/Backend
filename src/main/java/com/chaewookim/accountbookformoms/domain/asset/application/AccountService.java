@@ -3,19 +3,24 @@ package com.chaewookim.accountbookformoms.domain.asset.application;
 import com.chaewookim.accountbookformoms.domain.asset.dao.AccountRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dao.FixedTransactionRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionRepository;
+import com.chaewookim.accountbookformoms.domain.asset.dto.request.AccountGoalRequest;
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.AccountRequest;
 import com.chaewookim.accountbookformoms.domain.asset.dto.response.AccountResponse;
 import com.chaewookim.accountbookformoms.domain.asset.entity.Account;
+import com.chaewookim.accountbookformoms.domain.asset.enums.AccountRole;
 import com.chaewookim.accountbookformoms.domain.asset.entity.FixedTransaction;
 import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
+import com.chaewookim.accountbookformoms.domain.asset.event.GoalAchievedCheckEvent;
 import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -29,6 +34,7 @@ public class AccountService {
     private final UserRepository userRepository;
     private final FixedTransactionRepository fixedTransactionRepository;
     private final TransactionRepository transactionRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public Long createAccount(Long userId, AccountRequest request) {
@@ -43,6 +49,7 @@ public class AccountService {
             Account account = deletedAccount.get();
             account.restore();
             account.resetBalance(request.initialBalance());
+            account.updateRole(resolveRole(request));
             return accountRepository.save(account).getId();
         }
 
@@ -54,6 +61,7 @@ public class AccountService {
                 .user(user)
                 .accountName(accountName)
                 .initialBalance(request.initialBalance())
+                .role(resolveRole(request))
                 .build();
 
         return accountRepository.save(account).getId();
@@ -80,7 +88,31 @@ public class AccountService {
         }
 
         account.updateAccountName(accountName);
+        BigDecimal previousInitialBalance = account.getInitialBalance();
         account.updateInitialBalance(request.initialBalance());
+        if (request.role() != null) {
+            account.updateRole(request.role());
+        }
+        if (previousInitialBalance.compareTo(request.initialBalance()) != 0) {
+            eventPublisher.publishEvent(new GoalAchievedCheckEvent(userId, accountId));
+        }
+    }
+
+    @Transactional
+    public void updateAccountGoal(Long userId, Long accountId, AccountGoalRequest request) {
+        Account account = validateAndGet(userId, accountId);
+        account.updateGoal(request.goalAmount(), request.goalDate());
+        eventPublisher.publishEvent(new GoalAchievedCheckEvent(userId, accountId));
+    }
+
+    @Transactional
+    public void clearAccountGoal(Long userId, Long accountId) {
+        Account account = validateAndGet(userId, accountId);
+        account.clearGoal();
+    }
+
+    private AccountRole resolveRole(AccountRequest request) {
+        return request.role() != null ? request.role() : AccountRole.CHECKING;
     }
 
     @Transactional
