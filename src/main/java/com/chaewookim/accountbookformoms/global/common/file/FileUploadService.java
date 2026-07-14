@@ -1,12 +1,13 @@
 package com.chaewookim.accountbookformoms.global.common.file;
 
-import io.minio.MinioClient;
-import io.minio.PutObjectArgs;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.io.InputStream;
 import java.util.UUID;
@@ -16,13 +17,13 @@ import java.util.UUID;
 @Service
 public class FileUploadService {
 
-    private final MinioClient minioClient;
+    private final S3Client s3Client;
 
-    @Value("${minio.bucket}")
+    @Value("${aws.s3.bucket}")
     private String bucketName;
 
-    @Value("${minio.endpoint}")
-    private String endpoint;
+    @Value("${aws.s3.region}")
+    private String region;
 
     public String uploadFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
@@ -38,22 +39,19 @@ public class FileUploadService {
         String uniqueFileName = UUID.randomUUID().toString() + extension;
 
         try (InputStream inputStream = file.getInputStream()) {
-            minioClient.putObject(
-                    PutObjectArgs.builder()
-                            .bucket(bucketName)
-                            .object(uniqueFileName)
-                            .stream(inputStream, file.getSize(), -1)
-                            .contentType(file.getContentType())
-                            .build()
-            );
+            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(uniqueFileName)
+                    .contentType(file.getContentType())
+                    .build();
 
-            // 업로드된 파일의 전체를 브라우저에서 바로 볼 수 있는 주소
-            return endpoint + "/" + bucketName + "/" + uniqueFileName;
+            s3Client.putObject(putObjectRequest, RequestBody.fromInputStream(inputStream, file.getSize()));
+
+            // 업로드된 파일의 전체를 브라우저에서 바로 볼 수 있는 S3 주소
+            return "https://" + bucketName + ".s3." + region + ".amazonaws.com/" + uniqueFileName;
         } catch (Exception e) {
-            log.error("MinIO 파일 업로드 실패", e);
+            log.error("AWS S3 파일 업로드 실패", e);
             throw new RuntimeException("파일 업로드 중 오류가 발생했습니다.");
         }
-
     }
-
 }
