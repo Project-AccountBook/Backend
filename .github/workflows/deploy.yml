@@ -23,6 +23,14 @@ jobs:
           source: "build/libs/*.jar"
           target: "/home/ubuntu/app"
           strip_components: 2
+      - name: Create secret file
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo "${{ secrets.APPLICATION_SECRET }}" > /home/ubuntu/app/application-secret.yml
       - name: Run on Server
         uses: appleboy/ssh-action@master
         with:
@@ -33,4 +41,4 @@ jobs:
             pkill -f '/home/ubuntu/app/' || true
             sleep 2
             chmod +x /home/ubuntu/app/*.jar
-            nohup java -jar /home/ubuntu/app/*.jar > /home/ubuntu/app/nohup.out 2>&1 < /dev/null &
+            nohup java -jar /home/ubuntu/app/*.jar --spring.config.additional-location=file:/home/ubuntu/app/application-secret.yml > /home/ubuntu/app/nohup.out 2>&1 < /dev/null &
