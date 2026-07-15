@@ -30,7 +30,9 @@ jobs:
           username: ubuntu
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            echo "${{ secrets.APPLICATION_SECRET }}" > /home/ubuntu/app/application-secret.yml
+            cat << 'EOF' > /home/ubuntu/app/application-secret.yml
+            ${{ secrets.APPLICATION_SECRET }}
+            EOF
       - name: Run on Server
         uses: appleboy/ssh-action@master
         with:
@@ -38,7 +40,7 @@ jobs:
           username: ubuntu
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            pkill -f '/home/ubuntu/app/' || true
+            pkill -f 'java' || true
             sleep 2
             chmod +x /home/ubuntu/app/*.jar
             nohup java -jar /home/ubuntu/app/*.jar --spring.config.additional-location=file:/home/ubuntu/app/application-secret.yml > /home/ubuntu/app/nohup.out 2>&1 < /dev/null &
