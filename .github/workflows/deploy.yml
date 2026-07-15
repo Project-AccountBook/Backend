@@ -46,3 +46,15 @@ jobs:
             sleep 5 && \
             nohup java -jar AccountBookForMoms-0.0.1-SNAPSHOT.jar > nohup.out 2>&1 &
             disown
+      - name: Send Discord Notification
+        if: always()
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          title: "백엔드 CI/CD 알림"
+          description: |
+            **결과:** ${{ job.status == 'success' && '✅ 배포 성공!' || '❌ 배포 실패!' }}
+            **브랜치:** `${{ github.ref_name }}`
+            **커밋:** `${{ github.event.head_commit.message }}`
+            **수행 시간:** ${{ job.duration }}초
+            [빌드 결과 확인하기](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
