@@ -56,5 +56,5 @@ jobs:
             **결과:** ${{ job.status == 'success' && '✅ 배포 성공!' || '❌ 배포 실패!' }}
             **브랜치:** `${{ github.ref_name }}`
             **커밋:** `${{ github.event.head_commit.message }}`
-            **수행 시간:** ${{ job.duration }}초
             [빌드 결과 확인하기](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          status: none
