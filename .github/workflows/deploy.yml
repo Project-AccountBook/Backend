@@ -33,6 +33,5 @@ jobs:
             pkill -f 'java -jar' || true
             sleep 2
             chmod +x /home/ubuntu/app/*.jar
-            nohup java -jar /home/ubuntu/app/*.jar > /home/ubuntu/app/nohup.out 2>&1 &
-            sleep 3
+            setsid java -jar /home/ubuntu/app/*.jar > /home/ubuntu/app/nohup.out 2>&1 &
             exit 0
