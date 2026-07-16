@@ -1,7 +1,7 @@
 name: Deploy to OCI
 on:
   push:
-    branches: [ dev ]
+    branches: [ feat/ACC-126-ci-cd ]
 jobs:
   build:
     runs-on: ubuntu-latest
