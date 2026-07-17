@@ -1,0 +1,65 @@
+name: Deploy to OCI
+on:
+  push:
+    branches: [ dev ]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - name: Build with Gradle
+        run: ./gradlew clean build -x test
+      - name: Send to Server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "build/libs/AccountBookForMoms-0.0.1-SNAPSHOT.jar,docker-compose.yml,docker/"
+          target: "/home/ubuntu/app"
+          strip_components: 2
+      - name: Create secret file
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cat << 'EOF' > /home/ubuntu/app/application-secret.yml
+            ${{ secrets.APPLICATION_SECRET }}
+            EOF
+      - name: Run on Server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /home/ubuntu/app && \
+            sudo docker compose up -d --build && \
+            pgrep -f 'AccountBookForMoms' | xargs kill -15 || true && \
+            sleep 5 && \
+            nohup java -jar AccountBookForMoms-0.0.1-SNAPSHOT.jar > nohup.out 2>&1 &
+            disown
+      - name: Send Discord Notification
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            STATUS="✅ 배포 성공!"
+            COLOR=5763719
+          else
+            STATUS="❌ 배포 실패!"
+            COLOR=15548997
+          fi
+          TITLE="백엔드 CI/CD 알림"
+          BRANCH="${{ github.ref_name }}"
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          LOG_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          curl -H "Content-Type: application/json" \
+          -d "{\"embeds\": [{\"title\": \"$TITLE\", \"color\": $COLOR, \"description\": \"**결과:** $STATUS\n**브랜치:** \`$BRANCH\`\n**커밋:** $COMMIT_MSG\n\n[빌드 결과 확인하기]($LOG_URL)\"}]}" \
+          ${{ secrets.DISCORD_WEBHOOK }}
