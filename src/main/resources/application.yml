@@ -22,3 +22,4 @@ spring:
   config:
     import:
       - optional:file:/home/ubuntu/app/application-secret.yml
+      - optional:classpath:/application-secret.yml
