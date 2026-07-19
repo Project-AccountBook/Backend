@@ -1,7 +1,7 @@
 name: Deploy to OCI
 on:
   push:
-    branches: [ dev ]
+    branches: [ fix/ACC-128-security-preflight ]
 jobs:
   build:
     runs-on: ubuntu-latest
