@@ -8,6 +8,7 @@ services:
       - "8000:8000"
     environment:
       - SPRING_PROFILES_ACTIVE=prod
+      - ELASTICSEARCH_URIS=http://elasticsearch:9200
     volumes:
       - ./application-secret.yml:/app/application-secret.yml
     depends_on:
