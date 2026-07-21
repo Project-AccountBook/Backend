@@ -20,9 +20,8 @@ jobs:
           host: ${{ secrets.SERVER_IP }}
           username: ubuntu
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "build/libs/AccountBookForMoms-0.0.1-SNAPSHOT.jar,docker-compose.yml,docker/"
+          source: "build/libs/AccountBookForMoms-0.0.1-SNAPSHOT.jar,docker-compose.yml,docker/,Dockerfile"
           target: "/home/ubuntu/app"
-          strip_components: 2
       - name: Create secret file
         uses: appleboy/ssh-action@master
         with:
@@ -41,11 +40,9 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /home/ubuntu/app && \
-            sudo docker compose up -d --build && \
-            pgrep -f 'AccountBookForMoms' | xargs kill -15 || true && \
-            sleep 5 && \
-            nohup java -jar AccountBookForMoms-0.0.1-SNAPSHOT.jar > nohup.out 2>&1 &
-            disown
+            cp build/libs/AccountBookForMoms-0.0.1-SNAPSHOT.jar . && \
+            sudo docker compose down && \
+            sudo docker compose up -d --build
       - name: Send Discord Notification
         if: always()
         run: |
