@@ -73,6 +73,18 @@ services:
       timeout: 5s
       retries: 12
 
+  nginx:
+    image: nginx:latest
+    container_name: joint-living-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - app
+    restart: always
+
 volumes:
   mysql-data:
   redis-data:
