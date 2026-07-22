@@ -20,7 +20,7 @@ jobs:
           host: ${{ secrets.SERVER_IP }}
           username: ubuntu
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "build/libs/AccountBookForMoms-0.0.1-SNAPSHOT.jar,docker-compose.yml,docker/,Dockerfile"
+          source: "build/libs/AccountBookForMoms-0.0.1-SNAPSHOT.jar,docker-compose.yml,docker/,Dockerfile,nginx.conf"
           target: "/home/ubuntu/app"
       - name: Create secret file
         uses: appleboy/ssh-action@master
