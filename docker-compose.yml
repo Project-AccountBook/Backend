@@ -9,6 +9,7 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - ELASTICSEARCH_URIS=http://elasticsearch:9200
+      - FRONTEND_REDIRECT_URL=https://moneydiary.cloud/oauth2/redirect
     volumes:
       - ./application-secret.yml:/app/application-secret.yml
     depends_on:
@@ -72,6 +73,19 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+
+  nginx:
+    image: nginx:latest
+    container_name: joint-living-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - app
+    restart: always
 
 volumes:
   mysql-data:
