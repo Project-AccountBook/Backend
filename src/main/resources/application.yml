@@ -1,6 +1,10 @@
 server:
   port: 8000
   forward-headers-strategy: native
+  tomcat:
+    threads:
+      max: 30
+      min-spare: 5
 
 spring:
   application:
@@ -8,6 +12,8 @@ spring:
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 5
 
   jpa:
     hibernate:
