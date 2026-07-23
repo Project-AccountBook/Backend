@@ -20,6 +20,10 @@ services:
       elasticsearch:
         condition: service_started
     restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 384M
 
   mysql:
     image: mysql:8.0
@@ -42,6 +46,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   redis:
     image: redis:7-alpine
@@ -55,6 +63,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+    deploy:
+      resources:
+        limits:
+          memory: 128M
 
   elasticsearch:
     build:
@@ -73,6 +85,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   nginx:
     image: nginx:latest
@@ -86,6 +102,10 @@ services:
     depends_on:
       - app
     restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 128M
 
 volumes:
   mysql-data:
