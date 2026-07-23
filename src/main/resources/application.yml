@@ -22,6 +22,9 @@ spring:
 
   config:
     import:
-#      - optional:file:/home/ubuntu/app/application-secret.yml
       - optional:file:/app/application-secret.yml
       - optional:classpath:/application-secret.yml
+
+app:
+  oauth2:
+    authorized-redirect-uri: ${FRONTEND_REDIRECT_URL:http://localhost:5173/oauth2/redirect}
