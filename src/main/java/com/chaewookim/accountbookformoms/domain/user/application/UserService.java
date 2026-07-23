@@ -1,6 +1,7 @@
 package com.chaewookim.accountbookformoms.domain.user.application;
 
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.LocationUpdateRequest;
 import com.chaewookim.accountbookformoms.domain.user.dto.request.SignupRequest;
 import com.chaewookim.accountbookformoms.domain.user.dto.request.UpdatePasswordRequest;
 import com.chaewookim.accountbookformoms.domain.user.dto.request.UpdateProfileRequest;
@@ -14,10 +15,15 @@ import com.chaewookim.accountbookformoms.domain.user.enums.VerificationType;
 import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Objects;
+import java.util.Optional;
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -27,6 +33,8 @@ public class UserService {
     private final EmailVerificationService emailVerificationService;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final KakaoGeocodingClient kakaoGeocodingClient;
+    private final UserLocationService userLocationService;
 
     @Transactional
     public SignupResponse signUp(SignupRequest request) {
@@ -51,6 +59,7 @@ public class UserService {
                 });
 
         emailVerificationService.deleteVerification(request.email(), VerificationType.SIGNUP);
+        geocodeAndPersistLocation(response.userId(), request.address());
         return response;
     }
 
@@ -77,6 +86,10 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
+        String previousAddress = user.getAddress();
+        boolean shouldGeocode = request.address() != null
+                && (!Objects.equals(previousAddress, request.address()) || user.getLatitude() == null || user.getLongitude() == null);
+
         user.updateProfile(request.username(), request.birthDate(), request.address());
         user.getUserSetting().updateSettings(request.budgetAlertThreshold(), request.isPortfolioPublic());
         user.getUserNotificationSetting().updateNotificationSettings(
@@ -86,6 +99,33 @@ public class UserService {
                 request.isSystemAlertEnabled()
         );
         user.updateLastBudgetAlertMonth(null);
+
+        if (shouldGeocode) {
+            geocodeAndPersistLocation(userId, request.address());
+        }
+    }
+
+    /**
+     * 주소 문자열을 Kakao 지오코딩으로 위경도 변환 후 DB + Redis GEO 동기화.
+     * 지오코딩 실패는 회원가입/프로필 저장 흐름을 깨지 않도록 로그만 남기고 무시.
+     */
+    private void geocodeAndPersistLocation(Long userId, String address) {
+        if (address == null || address.isBlank()) return;
+
+        Optional<KakaoGeocodingClient.Coordinates> coords = kakaoGeocodingClient.geocode(address);
+        if (coords.isEmpty()) {
+            log.info("주소 지오코딩 실패로 위치 저장 스킵 - userId: {}, address: {}", userId, address);
+            return;
+        }
+
+        try {
+            userLocationService.updateLocation(
+                    userId,
+                    new LocationUpdateRequest(coords.get().latitude(), coords.get().longitude())
+            );
+        } catch (Exception e) {
+            log.warn("위치 저장 실패 - userId: {}, message: {}", userId, e.getMessage());
+        }
     }
 
     @Transactional
