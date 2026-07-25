@@ -34,3 +34,6 @@ spring:
 app:
   oauth2:
     authorized-redirect-uri: ${FRONTEND_REDIRECT_URL:http://localhost:5173/oauth2/redirect}
+
+kakao:
+  rest-api-key: ${KAKAO_REST_API_KEY:}

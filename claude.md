@@ -115,150 +115,216 @@
 
 ---
 
-## 후속 작업 (TODO)
+## 배포 전 보안 감사 (2026-07-10) — 요금 폭탄 방지
 
-### 운영 설정 정비 — Option B (Profile 분리 + Batch/HikariCP)
-최적화 백로그 우선순위 #4 의 안전 범위만 우선 진행. **Flyway 도입 및 OSIV 비활성화는 별도 이슈로 분리**.
+포트폴리오 배포 시 공격받으면 실비용이 발생할 수 있는 항목 감사 결과. 상세 완화 방안은 아래 "후속 작업 우선순위" 로 통합.
 
-#### 4-1. Profile 분리
-- `application.yml` 을 공통/local/prod 3분할
-- 공통: `spring.application.name`, `datasource.driver`, `spring.config.import: application-secret.yml`, `spring.profiles.active: ${SPRING_PROFILES_ACTIVE:local}`
-- `application-local.yml`: 현재 동작 그대로 보존 (`ddl-auto: update`, `show-sql: true`, `format_sql: true`)
-- `application-prod.yml`: `ddl-auto: validate`, `show-sql: false`, `format_sql: false`, Hibernate SQL log WARN
-- **Why**: prod에 `ddl-auto: update`/`show-sql: true` 가 그대로 가면 자동 ALTER로 데이터 손실 / 로그 IO 폭증 위험
+### 🔴 치명적 — 배포 전 반드시 패치
 
-#### 4-2. Prod DDL 전략 — validate
-- prod ddl-auto = `validate` 채택. 스키마 변경은 PR에 SQL 스냅샷(`docs/db/migration/`) 동봉 후 배포 전 DBA가 수동 실행
-- **Why**: Flyway 도입 전 임시 가드. drift 발견은 부팅 시점에 빠르게. Flyway 도입 시 같은 디렉터리를 `db/migration/V*.sql` 로 자연 이전 가능
+**S1. 이메일 인증 코드 발송 남용**
+- 위치: `AuthController.sendSignupCode/sendPasswordCode` (line 50, 59) → `EmailVerificationService`
+- 문제: Redis lock 1분 재발송 방지만 있고 IP/이메일별 총량 제한 없음. lock 만료 후 무제한 재발송 가능
+- 영향: Gmail SMTP는 하루 500건 계정 정지 임계값. 자동화 시 계정 정지 + 인증 흐름 마비
+- 완화: IP당·이메일당 하루 5회, 5분 lock, 캡차 도입 검토
 
-#### 4-3. HikariCP 튜닝
-- prod: `maximum-pool-size: 20`, `minimum-idle: 5`, `connection-timeout: 3000`, `idle-timeout: 300000`, `max-lifetime: 1200000`, `leak-detection-threshold: 60000`, `pool-name: jointliving-pool`
-- local: `maximum-pool-size: 5`, `leak-detection-threshold: 60000`
-- **Why**: 기본값(pool=10, connection-timeout=30s)은 트래픽 증가 시 30초 멈춤 발생. leak detection 꺼져 있어 누수 진단 불가. `max-lifetime` 은 MySQL `wait_timeout` 보다 짧게 설정해 broken pipe 방지
+**S2. Pageable 크기 제한 없음**
+- 위치: `TransactionController.getAllUserTransactions` (line 55), `BoardController.search` (line 135), 대부분의 list 엔드포인트
+- 문제: `?size=100000` override 가능. 특히 ES는 대량 검색 요청 몇 개로 노드 재시작 위험
+- 영향: 1회 요청으로 서버 OOM, ES 클러스터 재부팅 시 데이터 손실 가능
+- 완화: 모든 Pageable 파라미터에 `@Max(100)` 검증, ES query timeout 5s
 
-#### 4-4. JDBC Batch
-- `hibernate.jdbc.batch_size: 20`, `hibernate.jdbc.batch_versioned_data: true`, `hibernate.order_inserts: true`, `hibernate.order_updates: true`
-- **Why**: `saveAll(N)` 호출 시 N번 라운드트립을 1/20 로. 특히 #69 고정거래 스케줄러처럼 대량 insert 경로에 효과적
-- **⚠️ 제한**: 모든 엔티티 PK가 `GenerationType.IDENTITY` 라 Hibernate가 insert batch를 자동 비활성화. **현 batch 효과는 update/delete 한정.** Insert batch 효과까지 원하면 PK 전략 재검토 별도 이슈 필요
+**S3. AsyncConfig TaskExecutor 미구성**
+- 위치: `global/config/AsyncConfig.java`
+- 문제: `@EnableAsync` 만 있고 `ThreadPoolTaskExecutor` 빈 없음 → `SimpleAsyncTaskExecutor`(매 호출 새 스레드)
+- 영향: FCM 알림·ES 인덱싱 트리거 경로에서 스레드 폭발, 메모리 누수
+- 완화: `ThreadPoolTaskExecutor` 빈 정의 (corePoolSize=5, maxPoolSize=10, queueCapacity=100)
 
-#### 4-5. 검증
-- local profile 부팅 확인
-- prod profile + 로컬 DB 부팅 → validate 통과 확인
-- 일시적으로 show_sql 켜고 batch insert 시나리오 → 묶이는지 확인
+### 🟠 높음 — 배포 후 1주일 내
 
-#### Option B 종료 후 잔여 빚 (별도 이슈로 분리)
-- **Flyway 도입** — 스키마 변경의 코드/DB 동기 관리. Flyway 도입 시 `shedlock` 테이블 DDL 도 V*.sql 로 이전 (현재는 `Shedlock` 엔티티 + ddl-auto: update 로 자동 생성, prod validate 환경에서는 수동 적용 필요)
-- **OSIV 비활성화** (`spring.jpa.open-in-view: false`) — Lazy 노출 사냥 필요해 회귀 위험 큼
-- **IDENTITY PK → SEQUENCE/pooled-lo** 전환 검토 — batch insert 효과 회수
-- **prod 비밀 관리** — `application-secret.yml` 을 환경변수/Secrets Manager 로 이전
+**S4. FCM 토큰 등록 검증 부재**
+- 위치: `UserDeviceController` (추정)
+- 문제: 임의 토큰 등록 가능. 사용자당 기기 수 제한 없음
+- 영향: 스팸 알림 자동화로 FCM API 호출 폭증. Blaze plan 전환 시 과금
+- 완화: FCM 토큰 format 검증, 1사용자당 최대 5개 디바이스
 
-### Budget CRUD 미구현
-`BudgetService` 가 없어 Budget 엔티티 생성/수정/삭제 경로가 없음. 비교 기능은 동작하지만 사용자가 예산을 직접 등록할 API 미존재. 구현 시:
-- Budget CRUD 추가 시 `compare:budget` 캐시에 `@CacheEvict(allEntries=true)` 추가 필수
+**S5. Redis GEO 무제한 저장**
+- 위치: `UserLocationService.updateLocation`
+- 문제: 위치 갱신 debounce 없음. 자동화 요청으로 Redis 메모리 폭증
+- 완화: 최소 1시간 debounce, `user:geo` ZSET 크기 모니터링
 
-### 게시판 검색 (#26) 마무리
-초기 비동기 ES 인덱싱 구현 완료. 추가로 진행할 항목:
-- **인덱싱 실패 처리 강화**: 현재 ES 호출 실패 시 로그만 남김. Spring Retry 또는 outbox 패턴으로 영구 유실 방지
-- **초기 reindex 배치**: 기존 DB 데이터를 ES로 일괄 색인하는 admin/배치 job
-- **docker-compose 정비**: ES 8.x + nori plugin 포함 컨테이너 정의
-- **통합 테스트**: Testcontainers Elasticsearch로 실제 nori 검색 동작 검증
+**S6. Kakao Geocoding 캐싱 상태 확인 필요**
+- 문제: 매 요청마다 호출되는 경로가 있으면 Kakao 무료 할당량(30만/일) 초과 시 유료 전환
+- 완화: 주소 → 좌표 결과를 Redis에 24시간 이상 캐싱 (address hash 키)
 
-### 최적화 백로그 (잔여)
+### 🟡 중간 — 배포 후 1개월 내
 
-#### 중복 / N+1 쿼리
-- **`BudgetCompareService.compareByCategory`**: `averageCategoryBudget()`(AVG+COUNT) + `findMyCategoryBudget()` 가 같은 (year_month, category_id) 키로 두 번 왕복. 단일 쿼리로 합칠 수 있음.
-- **`Expense/IncomeCompareService.compareByCategory`**: 그룹 평균 후 본인 합계를 `sumByUserAndTypeAndCategory` 로 fixed+variable 별도 재호출(=2쿼리). 그룹 합계 결과에 본인이 포함되도록 쿼리 변경하거나 한 번에 처리.
+**S7. Transaction Export 크기 제한 없음**
+- 위치: `TransactionController.exportTransactions` (line 102-114) → `TransactionExportService.exportToCsv`
+- 문제: 3년치 전체 거래 50만 건 Excel 변환 → 메모리 1GB+
+- 완화: 월별 단위 export 강제 또는 비동기 job queue
 
-#### Redis 미적용 (의사결정 미반영)
-- **댓글 캐시**: `CommentService.list` 에 `@Cacheable`/`@CacheEvict` 전무. 의사결정 #5 와 불일치.
+**S8. Compare 위치 기반 조회 N+1**
+- 위치: `ExpenseCompareService.compareByLocation` (line 155-177)
+- 문제: GEORADIUS로 근처 사용자 100명 조회 후 각각 `sumPublicByUserIds` 호출
+- 완화: 그룹 결과 Redis 1시간 사전 계산
 
-#### 비동기 / 스케줄러
-- `global/config/AsyncConfig.java`: `@EnableAsync` 만 있고 `TaskExecutor` 빈 없음 → `SimpleAsyncTaskExecutor`(매 호출 새 스레드)로 동작. ES 인덱싱·알림 발송이 메인 풀 점유 가능. `ThreadPoolTaskExecutor` 빈 추가 필요.
-- **도입된 `@Scheduled`**: 고정거래 자동 생성(#69), Compare 캐시 warm-up(의사결정 #6), 조회수 Redis→DB 동기화 5분 주기(의사결정 #4) — 모두 ShedLock 적용.
+**S9. ES 딥 페이지네이션**
+- 문제: `page=1000, size=100` 요청 시 100,000개 건너뜀 → CPU/메모리 폭증
+- 완화: Search-After 커서 기반 pagination
 
-#### Fetch 전략
-- `User`↔`UserSetting` 가 `@OneToOne(cascade)` 인데 fetch 미지정 → 기본 EAGER. 비교 쿼리마다 setting JOIN/즉시 로딩 발생. 명시적 LAZY + 필요 시점 fetch join 권장.
+### 🟢 낮음
 
-### 게시판(Q&A / 노하우) 프론트 연동 이후 잔여 갭
-프론트(`fix/ACC-102-add-feature` 및 `feat/ACC-33-board-feature-link`)에서 Board/Comment CRUD·검색·수정·삭제·닉네임 노출까지 연동 완료. 추가로 프론트 UI가 요구하지만 백엔드에 없는 항목 및 반대 방향 항목 정리:
+**S10. 로그인 bcrypt CPU 소모 공격** — IP당 실패 5회 후 block
+**S11. 회원가입 자동화 DB row 폭증** — IP당 하루 5계정 제한
 
-#### 이번 세션에서 구현 완료
-- **게시판 카테고리 도메인** (`domain/boardcategory/`): `BoardCategory` 엔티티 + `GET /api/v1/board-categories?type=QNA|KNOWHOW`. `BoardCategorySeeder`(ApplicationRunner)로 시드 데이터 자동 삽입. 프론트 write 뷰에서 서버 카테고리 사용.
-- **좋아요 도메인** (`domain/like/`): `PostLike` 단일 테이블 + `targetType`(BOARD/COMMENT). `POST /api/v1/boards/{id}/like`, `POST /api/v1/comments/{id}/like` 토글 엔드포인트. `BoardResponse`/`CommentResponse` 에 `likeCount`, `liked` 포함.
+### 인프라 방어 체크리스트 (코드 외)
+
+- **Cloudflare 무료 플랜** 프론트/API 앞단 → L7 DDoS, 봇 자동 차단 (가성비 최고)
+- **AWS/Kakao/FCM/Gmail 각각 Budget Alert** 설정 (사고 조기 감지)
+- **외부 API 호출 카운터 로깅** (SMTP/FCM/Kakao) → 이상 감지
+- RDS slow query log, S3 egress 비용, FCM API 호출량 CloudWatch 모니터링
+
+---
+
+## 후속 작업 우선순위
+
+### P0 — 배포 전 필수 (요금 폭탄 / 데이터 손실 직결)
+
+**운영 설정 정비 (Option B)**
+- **[P0-1] Profile 분리** — `application.yml` 을 공통/local/prod 3분할. prod에 `ddl-auto: update`/`show-sql: true` 가 그대로 가면 자동 ALTER로 데이터 손실 / 로그 IO 폭증
+  - 공통: `spring.application.name`, `datasource.driver`, `spring.config.import: application-secret.yml`, `spring.profiles.active: ${SPRING_PROFILES_ACTIVE:local}`
+  - `application-local.yml`: 현재 동작 그대로 (`ddl-auto: update`, `show-sql: true`)
+  - `application-prod.yml`: `ddl-auto: validate`, `show-sql: false`, Hibernate SQL log WARN
+- **[P0-2] Prod DDL 전략 = validate** — 스키마 변경은 PR에 `docs/db/migration/` SQL 스냅샷 동봉, 배포 전 수동 실행. Flyway 도입 전 임시 가드
+- **[P0-3] 검증** — local/prod profile 부팅 확인, prod + 로컬 DB 로 validate 통과 확인
+
+**보안 (요금 폭탄 방어)**
+- **[P0-4] 이메일 인증 발송 rate limit 강화** (S1) — IP·이메일별 하루 5회, 5분 lock
+- **[P0-5] 모든 Pageable `@Max(100)` 검증** (S2) — 특히 ES 검색, Transaction list
+- **[P0-6] AsyncConfig TaskExecutor 빈 정의** (S3) — 스레드 폭발 방지 (기존 최적화 백로그 항목이기도 함)
+
+**인프라 방어**
+- **[P0-7] Cloudflare 무료 플랜 프론트/API 앞단 배치**
+- **[P0-8] AWS/Kakao/FCM/Gmail Budget Alert 설정**
+
+---
+
+### P1 — 배포 후 1주일 내
+
+**운영 설정 정비 (Option B 잔여)**
+- **[P1-1] HikariCP 튜닝** — prod: `maximum-pool-size: 20`, `minimum-idle: 5`, `connection-timeout: 3000`, `idle-timeout: 300000`, `max-lifetime: 1200000`, `leak-detection-threshold: 60000`. `max-lifetime` 은 MySQL `wait_timeout` 보다 짧게 설정해 broken pipe 방지
+- **[P1-2] JDBC Batch** — `hibernate.jdbc.batch_size: 20`, `batch_versioned_data: true`, `order_inserts/updates: true`. ⚠️ IDENTITY PK 라 insert batch 자동 비활성화, 현 효과는 update/delete 한정
+
+**보안**
+- **[P1-3] FCM 토큰 등록 검증** (S4) — format 검증, 1사용자당 최대 5기기
+- **[P1-4] Redis GEO 위치 갱신 debounce** (S5) — 최소 1시간
+- **[P1-5] Kakao Geocoding 결과 Redis 캐싱 확인/구현** (S6) — 24시간 TTL
+- **[P1-6] 외부 API 호출 카운터 로깅** — SMTP/FCM/Kakao
+
+---
+
+### P2 — 배포 후 1개월 내
+
+**보안**
+- **[P2-1] Transaction Export 크기 제한** (S7) — 월별 단위 강제 또는 비동기 처리
+- **[P2-2] Compare 위치 기반 N+1 해소** (S8) — 그룹 결과 Redis 1시간 사전 계산
+- **[P2-3] ES Search-After 커서 pagination** (S9)
+- **[P2-4] 로그인 실패 IP rate limit** (S10) — 5회 실패 후 5분 block
+- **[P2-5] 회원가입 IP 제한** (S11) — 하루 5계정
+
+**게시판 검색 (#26) 마무리**
+- **[P2-6] ES 인덱싱 실패 처리 강화** — Spring Retry 또는 outbox 패턴으로 영구 유실 방지
+- **[P2-7] docker-compose 정비** — ES 8.x + nori plugin 포함 컨테이너 정의
+- **[P2-8] ES 통합 테스트** — Testcontainers Elasticsearch로 nori 검색 동작 검증
+
+**기능 미구현**
+- **[P2-9] Budget CRUD 구현** — `BudgetService` 부재. Budget 등록 API 없음. 구현 시 `compare:budget` 캐시에 `@CacheEvict(allEntries=true)` 필수
+- **[P2-10] 이미지 S3 presigned URL 인프라** — `POST /api/v1/images/presigned-url` + 클라이언트 직접 업로드
+- **[P2-11] Follow 상대 알림** — 팔로우 시 Notification 도메인 이벤트 발행
+
+**최적화 백로그**
+- **[P2-12] 댓글 캐시 (Redis)** — `CommentService.list` 에 `@Cacheable`/`@CacheEvict` 적용. 의사결정 #5 와 현 코드 불일치
+- **[P2-13] BudgetCompareService.compareByCategory 중복 쿼리** — `averageCategoryBudget()` + `findMyCategoryBudget()` 를 단일 쿼리로 통합
+- **[P2-14] Expense/IncomeCompareService.compareByCategory 중복 쿼리** — 그룹 평균 결과에 본인 포함되도록 쿼리 변경
+- **[P2-15] User↔UserSetting fetch 전략** — 기본 EAGER 상태. 명시적 LAZY + 필요 시점 fetch join
+
+---
+
+### P3 — 기술 부채 (분기 이상)
+
+**Option B 종료 후 잔여 빚**
+- **[P3-1] Flyway 도입** — 스키마 변경의 코드/DB 동기 관리. `shedlock` 테이블 DDL 도 V*.sql 로 이전
+- **[P3-2] OSIV 비활성화** (`spring.jpa.open-in-view: false`) — Lazy 노출 사냥 필요, 회귀 위험 큼
+- **[P3-3] IDENTITY PK → SEQUENCE/pooled-lo 전환 검토** — batch insert 효과 회수
+- **[P3-4] Prod 비밀 관리** — `application-secret.yml` 을 환경변수/Secrets Manager 로 이전
+
+**아키텍처 개선**
+- **[P3-5] HOT 랭킹 실시간성** — Redis ZSET 기반 실시간 랭킹, like 이벤트마다 ZINCRBY. 현재는 5분 stale 허용
+
+---
+
+## 완료된 작업 이력 (참고용)
+
+### 게시판(Q&A / 노하우) 프론트 연동 관련
+프론트(`fix/ACC-102-add-feature` 및 `feat/ACC-33-board-feature-link`)에서 Board/Comment CRUD·검색·수정·삭제·닉네임 노출까지 연동 완료.
+
+#### 1차 구현 완료
+- **게시판 카테고리 도메인** (`domain/boardcategory/`): `BoardCategory` 엔티티 + `GET /api/v1/board-categories?type=QNA|KNOWHOW`. `BoardCategorySeeder`(ApplicationRunner)로 시드 데이터 자동 삽입.
+- **좋아요 도메인** (`domain/like/`): `PostLike` 단일 테이블 + `targetType`(BOARD/COMMENT). `POST /api/v1/boards/{id}/like`, `POST /api/v1/comments/{id}/like` 토글. `BoardResponse`/`CommentResponse` 에 `likeCount`, `liked` 포함.
 - **북마크 도메인** (`domain/bookmark/`): `Bookmark`(user_id, board_id) + `POST /api/v1/boards/{id}/bookmark`. `BoardResponse.bookmarked` 포함.
-- **Q&A 상태 필드**: `Board.isResolved`, `Board.isUrgent` 컬럼 + 작성자 전용 토글 엔드포인트 (`PATCH /api/v1/boards/{id}/resolved|urgent`). `Comment.accepted` 컬럼 + Q&A 작성자만 채택 가능(`PATCH /api/v1/comments/{id}/accept`, 채택 시 board.resolved=true 자동 전환).
-- **/users/me 응답에 id 추가**: 프론트에서 "내가 작성자인가?" 판정용. `UserProfileResponse.id`.
+- **Q&A 상태 필드**: `Board.isResolved`, `Board.isUrgent` + 작성자 전용 토글 (`PATCH /api/v1/boards/{id}/resolved|urgent`). `Comment.accepted` + Q&A 작성자만 채택 (`PATCH /api/v1/comments/{id}/accept`, 채택 시 board.resolved=true 자동 전환).
+- **/users/me 응답에 id 추가**.
 
-#### 이번 세션에서 추가 구현 완료 (2차)
-- **Tag 도메인** (`domain/tag/`): `Tag` + `BoardTag` 조인 테이블, `TagService.setTagsForBoard/tagsOfBoard/tagsByBoards/boardIdsWithTag`, `GET /api/v1/tags`. `BoardCreateRequest/BoardUpdateRequest.tags` 추가. `GET /api/v1/boards?tag=` 필터 파라미터.
-- **Image 도메인** (`domain/image/`): `Image` 통합 테이블(reference_type, reference_id, sort_order). `POST /api/v1/boards/{postId}/images`(URL 저장 방식, S3 업로드는 클라이언트 담당), `GET /api/v1/boards/{postId}/images`, `DELETE /api/v1/images/{imageId}`. `BoardResponse.imageUrls`.
-- **HOT 랭킹**: `GET /api/v1/boards/hot?type=KNOWHOW&days=7&limit=3`. Score = views + likeCount * 3, 최근 N일 이내. Redis ZSET는 추후 전환.
-- **댓글 페이지네이션**: `GET /api/v1/comments/{postId}/threads` 로 `Page<CommentThreadResponse>`(top-level 댓글 페이지 + 각 스레드의 대댓글 포함) 반환. 기존 flat `GET /comments/{postId}` 유지.
-- **Follow 도메인** (`domain/follow/`): `Follow(follower_id, following_id)`. `POST /api/v1/users/{userId}/follow` 토글, `GET /followers|following` 목록.
-- **User 프로필 통계** (`domain/userstats/`): `GET /api/v1/users/{userId}/stats` → postCount / followerCount / followingCount / following(viewer 기준).
-- **`UserProfileResponse.role`** 노출 (프론트 관리자 메뉴 판정용).
+#### 2차 구현 완료
+- **Tag 도메인** (`domain/tag/`): `Tag` + `BoardTag` 조인 테이블, `TagService.setTagsForBoard/tagsOfBoard/tagsByBoards/boardIdsWithTag`, `GET /api/v1/tags`. `BoardCreateRequest/BoardUpdateRequest.tags`. `GET /api/v1/boards?tag=` 필터.
+- **Image 도메인** (`domain/image/`): `Image` 통합 테이블(reference_type, reference_id, sort_order). `POST /api/v1/boards/{postId}/images`(URL 저장), `GET /api/v1/boards/{postId}/images`, `DELETE /api/v1/images/{imageId}`. `BoardResponse.imageUrls`.
+- **HOT 랭킹**: `GET /api/v1/boards/hot?type=KNOWHOW&days=7&limit=3`. Score = views + likeCount * 3.
+- **댓글 페이지네이션**: `GET /api/v1/comments/{postId}/threads` — `Page<CommentThreadResponse>`. 기존 flat `GET /comments/{postId}` 유지.
+- **Follow 도메인** (`domain/follow/`): `Follow(follower_id, following_id)`. `POST /api/v1/users/{userId}/follow` 토글, `GET /followers|following`.
+- **User 프로필 통계** (`domain/userstats/`): `GET /api/v1/users/{userId}/stats`.
+- **`UserProfileResponse.role`** 노출.
 - **관리자 UI 프론트**: `AdminView.tsx` + Sidebar에 role=ROLE_ADMIN 시 노출. `DELETE /api/v1/admin/boards/{id}` 연동.
-- **서버 페이지네이션 프론트**: QnaListView/KnowhowListView가 `page/totalPages/totalElements` 메타 사용해 서버 페이지 이동. 태그 필터/검색 파라미터도 서버에 전달.
+- **서버 페이지네이션 프론트**: QnaListView/KnowhowListView.
 
-#### 이번 세션에서 추가 구현 완료 (3차)
-- **Elasticsearch에 tags 포함**:
-  - `BoardDocument.tags: List<String>` (`FieldType.Keyword`) 추가
-  - `BoardDocument.from(board, tags)` 오버로드로 색인 시 태그 주입
-  - `BoardIndexEventListener` 가 UPSERT 시 `tagService.tagsOfBoard(boardId)` 로 태그 로딩 후 함께 색인
-  - `BoardSearchQueryRepository.search` 를 bool query 로 변경: `title^2 / content` (multi_match) OR `tags` (term) — should 절 minimum_should_match=1
-  - `BoardSearchResponse.tags` 필드 추가 (search API 응답도 태그 포함)
-  - 프론트 `BoardSearchResponse.tags` 반영해 검색 결과에도 태그 렌더링
+#### 3차 구현 완료 — ES 태그 통합
+- `BoardDocument.tags: List<String>` (`FieldType.Keyword`)
+- `BoardDocument.from(board, tags)` 오버로드, `BoardIndexEventListener` 색인 시 태그 주입
+- `BoardSearchQueryRepository.search` bool query: `title^2 / content` (multi_match) OR `tags` (term), minimum_should_match=1
+- `BoardSearchResponse.tags` 필드 + 프론트 렌더링
 
-#### 이번 세션에서 추가 구현 완료 (4차)
-- **ES 초기 재색인 배치**:
-  - `BoardReindexService.reindexAll()` — 200건 페이지로 Board 로드 → `tagService.tagsByBoards` 벌크 조회 → `boardSearchRepository.saveAll` 로 배치 upsert. 반환값은 색인된 문서 수.
-  - `POST /api/v1/admin/boards/reindex` 관리자 엔드포인트 (ROLE_ADMIN 필수, `/api/v1/admin/**` 시큐리티 룰 적용).
-  - `BoardReindexRunner`(ApplicationRunner) — `app.board.reindex-on-startup=true` 일 때 부팅 시 자동 재색인. 스키마 변경 배포 직후 1회 실행용 옵션.
-- **HOT 랭킹 Redis 캐싱**:
-  - `BoardService.hot(type, days, limit)` 에 `@Cacheable(cacheNames="board:hot", key="type:days:limit")` 적용.
-  - `RedisConfig.CACHE_BOARD_HOT` 상수 및 5분 TTL 캐시 설정 등록 (`hotConfig`).
-  - `BoardHotWarmupScheduler` — 4분 주기로 `(QNA/KNOWHOW, 7, 3)` 조합 미리 캐시에 적재. ShedLock 으로 다중 인스턴스 중복 실행 차단. `app.cache.warmup.board-hot.enabled=true`(기본값) 로 on/off.
-  - **참고**: 좋아요 토글/게시물 삭제 시 명시적 evict 는 없음. 5분 TTL + warm-up 주기로 stale 흡수. 실시간성이 필요하면 `@CacheEvict(cacheNames="board:hot", allEntries=true)` 를 like/delete 경로에 추가할 것.
+#### 4차 구현 완료 — ES 재색인 + HOT 캐싱
+- **ES 초기 재색인 배치**: `BoardReindexService.reindexAll()` 200건 페이지 로드 → `tagService.tagsByBoards` 벌크 → `saveAll` 배치 upsert. `POST /api/v1/admin/boards/reindex` (ROLE_ADMIN). `BoardReindexRunner` — `app.board.reindex-on-startup=true` 부팅 시 자동 재색인.
+- **HOT 랭킹 Redis 캐싱**: `BoardService.hot` 에 `@Cacheable(cacheNames="board:hot", key="type:days:limit")`. `RedisConfig.CACHE_BOARD_HOT` 5분 TTL. `BoardHotWarmupScheduler` 4분 주기 warm-up + ShedLock. `app.cache.warmup.board-hot.enabled` 로 on/off. 좋아요 토글/삭제 시 명시적 evict 없음 (5분 TTL + warm-up 로 stale 흡수).
 
-#### 이번 세션에서 추가 구현 완료 (5차)
+#### 5차 구현 완료 — 좋아요/조회수 카운터
 - **좋아요 카운터 Redis 캐싱** (Cache-aside + INCR/DECR 하이브리드):
-  - `LikeCountCacheService` — 키 포맷 `like:count:{BOARD|COMMENT}:{id}`, TTL 30분.
-    - `getCount()`: Redis GET → 미스 시 DB `countByTargetIdAndTargetType` 후 SET.
-    - `getCounts()`: MGET → 미스 ID 만 벌크 DB COUNT (`countByTargets`) → MSET.
-    - `applyDelta(±1)`: `hasKey` 로 존재 확인 후에만 INCR/DECR (없으면 다음 read 가 DB 정본으로 lazy fill). 캐시 미스 상태에서의 INCR-from-null 로 인한 counter drift 방지.
-    - `evict()`: DEL. 게시물/댓글 삭제 시 정리.
-  - `PostLikeService.count/countByTargets` 전부 캐시 경유로 전환 (BoardService.list/get, CommentService.list 의 hot path 가 Redis MGET 으로 해결).
-  - `PostLikeService.toggle` 은 DB mutation 이후 `applyDelta` 로 즉시 반영 (write-through).
-  - `BoardService.delete` / `CommentService.delete` 에서 `likeService.evictCount(...)` 호출로 카운터 잔재 제거.
-- **조회수 Redis 캐싱 완비**:
-  - 기존 `BoardViewCountService` (INCR + `board:views:dirty` set + `BoardViewSyncScheduler` 5분 주기 DB flush) 유지 — 의사결정 #4 이미 구현.
-  - `BoardViewCountService.evict(boardId)` 신설 — dirty set 에서 SREM + counter DEL. `BoardService.delete` 에서 호출해 삭제된 게시물의 delta 가 다음 sync 때 "board not found (delta lost)" 로그를 남기던 문제 해소.
+  - `LikeCountCacheService` — 키 `like:count:{BOARD|COMMENT}:{id}`, TTL 30분.
+  - `getCount`: GET → 미스 시 DB `countByTargetIdAndTargetType` 후 SET.
+  - `getCounts`: MGET → 미스 ID 벌크 DB COUNT → MSET.
+  - `applyDelta(±1)`: `hasKey` 확인 후에만 INCR/DECR. 캐시 미스 상태 INCR-from-null 로 인한 drift 방지.
+  - `evict`: DEL.
+  - `PostLikeService.count/countByTargets` 캐시 경유. `toggle` 은 DB mutation 후 `applyDelta`.
+  - `BoardService.delete` / `CommentService.delete` 에서 `likeService.evictCount(...)`.
+- **조회수 Redis 캐싱 완비**: `BoardViewCountService.evict(boardId)` 신설 (dirty set SREM + counter DEL). 삭제된 게시물의 delta 유실 로그 해소.
 
-#### 이번 세션에서 추가 구현 완료 (6차)
+#### 6차 구현 완료 — 관리자 API
 - **관리자 게시물/댓글 리스트 API**:
-  - `GET /api/v1/admin/boards?type=&includeDeleted=` — `AdminBoardResponse`(원문 무마스킹 + `adminDeleted`/`userDeleted` 플래그 + `deletedAt`). `includeDeleted=true` 이면 `Board.@SQLRestriction("deleted_at IS NULL")` 를 우회하기 위해 `AdminBoardRepository` 의 native query 사용 (created_at DESC 하드코딩, Pageable 은 LIMIT/OFFSET 만).
-  - `GET /api/v1/admin/comments?referenceType=&referenceId=` — Comment 는 `@SQLRestriction` 이 없어 `findAll(pageable)` 로 소프트 삭제 포함 조회. `AdminCommentResponse` 원문 노출.
-  - 두 엔드포인트 모두 `/api/v1/admin/**` 시큐리티 룰로 ROLE_ADMIN 강제.
+  - `GET /api/v1/admin/boards?type=&includeDeleted=` — `AdminBoardResponse`(원문 무마스킹 + `adminDeleted`/`userDeleted` + `deletedAt`). `includeDeleted=true` 시 `@SQLRestriction` 우회 위해 `AdminBoardRepository` native query (created_at DESC 하드코딩).
+  - `GET /api/v1/admin/comments?referenceType=&referenceId=` — `findAll(pageable)` 로 소프트 삭제 포함.
+  - 둘 다 `/api/v1/admin/**` ROLE_ADMIN 강제.
 - **좋아요 카운터 정합성 검증 배치**:
-  - `LikeCountReconcileService.reconcile(maxKeys)` — Redis `SCAN like:count:*` → 캐시 값 파싱 → 타입별로 `likeRepository.countByTargets` 벌크 DB COUNT → drift 시 WARN 로그 + DB 정본으로 SET. 손상된 값(NumberFormatException) 도 DEL 처리. `ReconcileReport(scanned, mismatched, corrected)` 반환.
-  - `LikeCountReconcileScheduler` — 매시 7분(`0 7 * * * *`) 실행, ShedLock 다중 인스턴스 차단, 1회 최대 500 키. `app.like.reconcile.enabled=true`(기본) on/off.
-  - `POST /api/v1/admin/likes/reconcile?limit=` 관리자 수동 트리거.
+  - `LikeCountReconcileService.reconcile(maxKeys)` — SCAN `like:count:*` → 타입별 `countByTargets` 벌크 → drift 시 WARN + DB 정본으로 SET. 손상 값 DEL. `ReconcileReport(scanned, mismatched, corrected)`.
+  - `LikeCountReconcileScheduler` — 매시 7분 (`0 7 * * * *`), ShedLock, 500 키/회. `app.like.reconcile.enabled=true`.
+  - `POST /api/v1/admin/likes/reconcile?limit=` 수동 트리거.
 
-#### 이번 세션에서 추가 구현 완료 (7차)
-- **관리자 프론트 UI 확장** (frontend `AdminView.tsx` 전면 개편):
-  - 3 탭 구조: **게시물 / 댓글 / 운영 작업**.
-  - 게시물 탭: `GET /admin/boards?type=&includeDeleted=` 사용, 원문 제목 노출, `adminDeleted`/`userDeleted`/정상 3단 배지, 관리자 삭제 표시(이미 처리된 행은 disabled).
-  - 댓글 탭: `GET /admin/comments?referenceType=&referenceId=` 사용, `parentId` 로 대댓글 여부 노출, 유저 소프트 삭제 행은 opacity 0.6 으로 dim.
-  - 운영 작업 탭: **ES 재색인 실행** (`POST /admin/boards/reindex`, 결과 문서 수 반환) + **좋아요 정합성 검증** (`POST /admin/likes/reconcile?limit=500`, `ReconcileReport` 표시).
-  - 프론트 `boardApi.ts` 에 `adminListBoards`, `adminListComments`, `adminReindexBoards`, `adminReconcileLikes` + 대응 응답 타입(`AdminBoardResponse`, `AdminCommentResponse`, `LikeReconcileReport`) 추가.
-  - Sidebar 는 이전 세션에서 이미 `role=ROLE_ADMIN` 시 관리자 메뉴 노출하도록 되어 있어 그대로 연결.
+#### 7차 구현 완료 — 관리자 프론트
+- **관리자 프론트 UI 확장** (`AdminView.tsx`): 3 탭 (게시물/댓글/운영 작업).
+  - 게시물 탭: `GET /admin/boards?type=&includeDeleted=`, `adminDeleted`/`userDeleted`/정상 3단 배지.
+  - 댓글 탭: `GET /admin/comments?referenceType=&referenceId=`, `parentId` 대댓글 표시, 유저 소프트 삭제 dim.
+  - 운영 작업 탭: ES 재색인 (`POST /admin/boards/reindex`) + 좋아요 정합성 (`POST /admin/likes/reconcile?limit=500`).
+  - 프론트 `boardApi.ts` 에 `adminListBoards`, `adminListComments`, `adminReindexBoards`, `adminReconcileLikes` + 타입.
 
-#### 남은 갭 (미해결)
-- **이미지 실제 업로드 인프라**: 현재 URL만 받아 저장. S3 presigned URL 발급 API (`POST /api/v1/images/presigned-url`) + 클라이언트 직접 업로드 파이프라인 필요.
-- **Follow 상대 알림**: 팔로우 시 Notification 도메인 이벤트 미발행.
-- **HOT 랭킹 실시간성**: Redis ZSET 기반 실시간 랭킹으로 전환하면 like 이벤트마다 ZINCRBY 로 즉시 반영 가능. 현재는 5분 stale 허용.
-
-#### 결정 사항 (이전 세션에서 마감)
-- `GET /api/v1/boards?type=QNA|KNOWHOW` 필터 파라미터 추가 (BoardRepository.findByType)
-- `BoardResponse` / `CommentResponse` 에 `authorNickname` 포함, list 경로에서 `UserRepository.findAllById` 일괄 조회로 N+1 방지
-- 게시물/댓글 수정(PATCH) 을 프론트 상세 화면 인라인 편집으로 연결
+### 이전 세션 결정 사항
+- `GET /api/v1/boards?type=QNA|KNOWHOW` 필터 (BoardRepository.findByType)
+- `BoardResponse` / `CommentResponse` 에 `authorNickname` 포함, list 경로 `UserRepository.findAllById` 일괄 조회로 N+1 방지
+- 게시물/댓글 수정(PATCH) 프론트 상세 화면 인라인 편집 연결
