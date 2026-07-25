@@ -48,6 +48,9 @@ public abstract class ControllerTestSupport {
     protected GroupPurchaseService groupPurchaseService;
 
     @MockBean
+    protected GroupPurchaseLockFacade groupPurchaseLockFacade;
+
+    @MockBean
     protected GroupPurchaseApplicationService groupPurchaseApplicationService;
 
     @MockBean

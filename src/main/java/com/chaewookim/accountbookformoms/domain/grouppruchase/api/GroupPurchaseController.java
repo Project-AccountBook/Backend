@@ -1,6 +1,7 @@
 package com.chaewookim.accountbookformoms.domain.grouppruchase.api;
 
 import com.chaewookim.accountbookformoms.domain.grouppruchase.application.GroupPurchaseService;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.application.GroupPurchaseLockFacade;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseCreateRequest;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseUpdateRequest;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseResponse;
@@ -28,6 +29,7 @@ import java.util.List;
 public class GroupPurchaseController {
 
     private final GroupPurchaseService groupPurchaseService;
+    private final GroupPurchaseLockFacade groupPurchaseLockFacade;
 
     @Operation(summary = "공동구매 개설", description = "새로운 공동구매 글을 등록합니다.")
     @PostMapping
@@ -109,7 +111,7 @@ public class GroupPurchaseController {
             @PathVariable Long id,
             @AuthenticationPrincipal UserPrincipal userPrincipal
     ) {
-        GroupPurchaseJoinResponse response = groupPurchaseService.joinGroupPurchase(userPrincipal.getUserId(), id);
+        GroupPurchaseJoinResponse response = groupPurchaseLockFacade.joinGroupPurchase(userPrincipal.getUserId(), id);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -119,7 +121,7 @@ public class GroupPurchaseController {
             @PathVariable Long id,
             @AuthenticationPrincipal UserPrincipal userPrincipal
     ) {
-        GroupPurchaseResponse response = groupPurchaseService.leaveGroupPurchase(userPrincipal.getUserId(), id);
+        GroupPurchaseResponse response = groupPurchaseLockFacade.leaveGroupPurchase(userPrincipal.getUserId(), id);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
