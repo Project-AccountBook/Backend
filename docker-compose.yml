@@ -12,6 +12,7 @@ services:
       - FRONTEND_REDIRECT_URL=https://moneydiary.cloud/oauth2/redirect
     volumes:
       - ./application-secret.yml:/app/application-secret.yml
+      - /home/ubuntu/app/firebase-service-account.json:/app/firebase-service-account.json
     depends_on:
       mysql:
         condition: service_healthy
