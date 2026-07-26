@@ -23,7 +23,7 @@ public class AsyncVerificationEmailSender {
     private final JavaMailSender mailSender;
     private final RedisTemplate<String, String> redisTemplate;
 
-    @Value("${spring.mail.username}")
+    @Value("${app.mail.from}")
     private String mailFrom;
 
     @Async
@@ -43,7 +43,7 @@ public class AsyncVerificationEmailSender {
         } catch (MailException | MessagingException | UnsupportedEncodingException e) {
             redisTemplate.delete("VERIFY:" + type + ":" + email);
             redisTemplate.delete("LOCK:" + type + ":" + email);
-            log.error("인증 메일 발송 실패 - email: {}, type: {} (Redis 롤백 완료)", email, type, e);
+            log.error("인증 메일 발송 실패 - email: {}, type: {}, from: {}, reason: {} (Redis 롤백 완료)", email, type, mailFrom, e.getMessage(), e);
         }
     }
 }

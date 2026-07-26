@@ -6,6 +6,7 @@ import com.chaewookim.accountbookformoms.global.error.CustomException;
 import com.chaewookim.accountbookformoms.global.mail.AsyncVerificationEmailSender;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -19,6 +20,9 @@ public class EmailVerificationService {
     private final RedisTemplate<String, String> redisTemplate;
     private final AsyncVerificationEmailSender asyncVerificationEmailSender;
 
+    @Value("${app.mail.dev-log-code:false}")
+    private boolean devLogCode;
+
     // 인증 번호 발송
     public void sendVerificationCode(String email, VerificationType type) {
 
@@ -30,6 +34,10 @@ public class EmailVerificationService {
         String code = generateRandomCode();
         redisTemplate.opsForValue().set("VERIFY:" + type + ":" + email, code, Duration.ofMinutes(3));
         redisTemplate.opsForValue().set(lockKey, "locked", Duration.ofMinutes(1));
+
+        if (devLogCode) {
+            log.warn("[DEV] 인증번호 - email: {}, type: {}, code: {}", email, type, code);
+        }
 
         asyncVerificationEmailSender.send(email, code, type);
         log.info("인증 메일 발송 요청 - email: {}, type: {}", email, type);
