@@ -26,6 +26,9 @@ class UserCommonServiceTest {
     private UserRepository userRepository;
 
     @Mock
+    private InterestCategoryService interestCategoryService;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
@@ -72,6 +75,7 @@ class UserCommonServiceTest {
         // given
         User user = User.builder().email("test@email.com").build();
         user.delete();
+        given(userRepository.findByEmailIncludingDeleted("test@email.com")).willReturn(java.util.Optional.of(user));
         given(userRepository.save(any(User.class))).willReturn(user);
 
         // when
@@ -81,6 +85,7 @@ class UserCommonServiceTest {
         assertThat(result.getDeletedAt()).isNull();
         assertThat(result.getUsername()).isEqualTo("newNickname");
         assertThat(result.getPassword()).isNull();
+        verify(interestCategoryService).deleteAllByUserId(any());
         verify(userRepository).save(any(User.class));
         verify(eventPublisher).publishEvent(any(UserSignedUpEvent.class));
     }
