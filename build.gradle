@@ -50,6 +50,7 @@ dependencies {
 
     // 7. Redis
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'org.redisson:redisson-spring-boot-starter:3.27.1'
 
     // 8. OAuth2 Client (소셜 로그인)
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
