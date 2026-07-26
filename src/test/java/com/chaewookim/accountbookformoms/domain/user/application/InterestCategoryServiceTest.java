@@ -128,4 +128,20 @@ class InterestCategoryServiceTest {
         // then
         verify(repository, times(1)).delete(interest);
     }
+
+    @Test
+    @DisplayName("사용자 관심 카테고리 전체 삭제 - 성공")
+    void deleteAllByUserId_Success() {
+
+        // given
+        Long userId = 1L;
+        InterestCategory interest = mock(InterestCategory.class);
+        given(repository.findByUserId(userId)).willReturn(List.of(interest));
+
+        // when
+        interestCategoryService.deleteAllByUserId(userId);
+
+        // then
+        verify(repository).deleteAll(List.of(interest));
+    }
 }

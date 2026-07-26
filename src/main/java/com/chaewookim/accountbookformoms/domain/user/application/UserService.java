@@ -30,6 +30,7 @@ import java.util.Optional;
 public class UserService {
 
     private final UserCommonService userCommonService;
+    private final InterestCategoryService interestCategoryService;
     private final EmailVerificationService emailVerificationService;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -151,6 +152,7 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
+        interestCategoryService.deleteAllByUserId(userId);
         userRepository.delete(user);
     }
 }

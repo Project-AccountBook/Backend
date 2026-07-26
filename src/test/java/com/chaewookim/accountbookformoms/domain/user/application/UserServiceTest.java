@@ -41,6 +41,9 @@ class UserServiceTest {
     private UserCommonService userCommonService;
 
     @Mock
+    private InterestCategoryService interestCategoryService;
+
+    @Mock
     private EmailVerificationService emailVerificationService;
 
     @Mock
@@ -213,5 +216,6 @@ class UserServiceTest {
 
         // then
         verify(userRepository).delete(user);
+        verify(interestCategoryService).deleteAllByUserId(1L);
     }
 }
