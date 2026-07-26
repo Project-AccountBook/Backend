@@ -68,6 +68,8 @@ public class UserCommonService {
                     UserSetting.builder().user(managedUser).build(),
                     UserNotificationSetting.builder().user(managedUser).build()
             );
+        } else if (managedUser.getUserNotificationSetting() != null) {
+            managedUser.getUserNotificationSetting().resetToDefaults();
         }
 
         eventPublisher.publishEvent(new UserSignedUpEvent(managedUser.getId()));

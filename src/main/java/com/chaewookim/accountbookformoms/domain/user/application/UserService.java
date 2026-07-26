@@ -1,5 +1,7 @@
 package com.chaewookim.accountbookformoms.domain.user.application;
 
+import com.chaewookim.accountbookformoms.domain.notification.application.NotificationService;
+import com.chaewookim.accountbookformoms.domain.notification.application.UserDeviceService;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.dto.request.LocationUpdateRequest;
 import com.chaewookim.accountbookformoms.domain.user.dto.request.SignupRequest;
@@ -36,6 +38,8 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final KakaoGeocodingClient kakaoGeocodingClient;
     private final UserLocationService userLocationService;
+    private final NotificationService notificationService;
+    private final UserDeviceService userDeviceService;
 
     @Transactional
     public SignupResponse signUp(SignupRequest request) {
@@ -152,6 +156,9 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
+        notificationService.deleteAllByUserId(userId);
+        user.getUserNotificationSetting().resetToDefaults();
+        userDeviceService.removeToken(user);
         interestCategoryService.deleteAllByUserId(userId);
         userRepository.delete(user);
     }

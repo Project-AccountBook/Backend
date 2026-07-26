@@ -58,4 +58,11 @@ public class UserNotificationSetting {
     public boolean isGoalAlertEnabledOrDefault() {
         return !Boolean.FALSE.equals(isGoalAlertEnabled);
     }
+
+    public void resetToDefaults() {
+        this.isBudgetAlertEnabled = true;
+        this.isInterestCategoryEnabled = true;
+        this.isGoalAlertEnabled = true;
+        this.isSystemAlertEnabled = true;
+    }
 }
