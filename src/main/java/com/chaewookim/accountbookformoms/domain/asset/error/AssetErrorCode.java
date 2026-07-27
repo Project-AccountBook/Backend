@@ -19,6 +19,8 @@ public enum AssetErrorCode implements BaseErrorCode {
     TRANSACTION_NOT_FOUND(HttpStatus.NOT_FOUND, "거래 내역을 찾을 수 없습니다."),
     TRANSACTION_FORBIDDEN(HttpStatus.FORBIDDEN, "본인의 거래 내역만 접근할 수 있습니다."),
     TRANSFER_TO_SELF_FORBIDDEN(HttpStatus.BAD_REQUEST, "자기 자신에게는 이체할 수 없습니다."),
+    INVALID_EXPORT_DATE_RANGE(HttpStatus.BAD_REQUEST, "내보내기 종료일은 시작일 이후여야 합니다."),
+    EXPORT_PERIOD_TOO_LONG(HttpStatus.BAD_REQUEST, "거래 내역 내보내기는 최대 12개월까지 가능합니다."),
 
     // FixedTransaction
     INVALID_REPEAT_DAY(HttpStatus.BAD_REQUEST, "반복일 값이 올바르지 않습니다. (매주: 1~7, 매월/매년: 1~31)"),
