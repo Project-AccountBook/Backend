@@ -32,6 +32,16 @@ jobs:
             cat << 'EOF' > /home/ubuntu/app/application-secret.yml
             ${{ secrets.APPLICATION_SECRET }}
             EOF
+      - name: Create FCM secret JSON file
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cat << 'EOF' > /home/ubuntu/app/firebase-service-account.json
+            ${{ secrets.FCM_JSON_CONFIG }}
+            EOF
       - name: Run on Server
         uses: appleboy/ssh-action@master
         with:

@@ -65,4 +65,9 @@ public class InterestCategoryService {
                 .orElseThrow(() -> new CustomException(ErrorCode.CATEGORY_NOT_FOUND));
         repository.delete(category);
     }
+
+    @Transactional
+    public void deleteAllByUserId(Long userId) {
+        repository.deleteAll(repository.findByUserId(userId));
+    }
 }

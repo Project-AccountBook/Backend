@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -30,6 +31,15 @@ public class UserDeviceController {
             @RequestBody @Valid UserDeviceRequest request
     ) {
         userDeviceService.registerToken(principal.getUser(), request.fcmToken());
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @Operation(summary = "FCM 토큰 삭제", description = "로그인한 사용자의 FCM 기기 토큰을 삭제합니다")
+    @DeleteMapping("/device-token")
+    public ResponseEntity<ApiResponse<Void>> unregisterToken(
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        userDeviceService.removeToken(principal.getUser());
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

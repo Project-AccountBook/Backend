@@ -4,21 +4,21 @@ import com.chaewookim.accountbookformoms.domain.user.enums.VerificationType;
 
 public final class VerificationEmailTemplate {
 
-    public static final String SENDER_NAME = "Joint Living";
+    public static final String SENDER_NAME = "MODI";
 
     private VerificationEmailTemplate() {
     }
 
     public static String getSubject(VerificationType type) {
         return type == VerificationType.SIGNUP
-                ? "[Joint Living] 회원가입 인증번호"
-                : "[Joint Living] 비밀번호 재설정 인증번호";
+                ? "[MODI] 회원가입 인증번호"
+                : "[MODI] 비밀번호 재설정 인증번호";
     }
 
     public static String buildPlainText(String code, VerificationType type) {
         String title = type == VerificationType.SIGNUP ? "회원가입" : "비밀번호 재설정";
         return """
-                Joint Living %s 인증번호
+                MODI %s 인증번호
 
                 인증번호: %s
 
@@ -49,8 +49,8 @@ public final class VerificationEmailTemplate {
                         <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" style="max-width:480px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(15,23,42,0.08);">
                           <tr>
                             <td style="background:#0f172a;padding:32px 24px;text-align:center;">
-                              <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:800;letter-spacing:-0.5px;">Joint Living</h1>
-                              <p style="margin:8px 0 0;color:rgba(255,255,255,0.6);font-size:14px;font-weight:500;">함께하는 생활, 스마트한 가계부</p>
+                              <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:800;letter-spacing:-0.5px;">MODI</h1>
+                              <p style="margin:8px 0 0;color:rgba(255,255,255,0.6);font-size:14px;font-weight:500;">함께하면 즐겁고 가벼워지는 공동생활 가계부</p>
                             </td>
                           </tr>
                           <tr>
@@ -69,7 +69,7 @@ public final class VerificationEmailTemplate {
                           </tr>
                           <tr>
                             <td style="background:#f8fafc;padding:20px 24px;text-align:center;border-top:1px solid #e2e8f0;">
-                              <p style="margin:0;color:#94a3b8;font-size:11px;">&copy; Joint Living. All rights reserved.</p>
+                              <p style="margin:0;color:#94a3b8;font-size:11px;">&copy; MODI. All rights reserved.</p>
                             </td>
                           </tr>
                         </table>
