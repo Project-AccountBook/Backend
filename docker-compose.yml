@@ -7,9 +7,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - SPRING_PROFILES_ACTIVE=prod
-      - ELASTICSEARCH_URIS=http://elasticsearch:9200
-      - FRONTEND_REDIRECT_URL=https://moneydiary.cloud/oauth2/redirect
+      SPRING_PROFILES_ACTIVE: prod
+      ELASTICSEARCH_URIS: http://10.0.0.197:9200
+      FRONTEND_REDIRECT_URL: https://moneydiary.cloud/oauth2/redirect
     volumes:
       - ./application-secret.yml:/app/application-secret.yml
     depends_on:
@@ -17,8 +17,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      elasticsearch:
-        condition: service_started
     restart: always
 
   mysql:
@@ -56,24 +54,6 @@ services:
       timeout: 5s
       retries: 12
 
-  elasticsearch:
-    build:
-      context: ./docker/elasticsearch
-    container_name: joint-living-es
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - ES_JAVA_OPTS=-Xms128m -Xmx128m
-    ports:
-      - "9200:9200"
-    volumes:
-      - es-data:/usr/share/elasticsearch/data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsSL http://localhost:9200/_cluster/health | grep -vq '\"status\":\"red\"'"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-
   nginx:
     image: nginx:latest
     container_name: joint-living-nginx
@@ -90,4 +70,3 @@ services:
 volumes:
   mysql-data:
   redis-data:
-  es-data:

@@ -1,7 +1,7 @@
 name: Deploy to OCI
 on:
   push:
-    branches: [ dev ]
+    branches: [ perf/ACC-139-infra-tuning ]
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,7 +20,7 @@ jobs:
           host: ${{ secrets.SERVER_IP }}
           username: ubuntu
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "build/libs/AccountBookForMoms-0.0.1-SNAPSHOT.jar,docker-compose.yml,docker/,Dockerfile,nginx.conf"
+          source: "build/libs/AccountBookForMoms-0.0.1-SNAPSHOT.jar,docker-compose.yml,Dockerfile,nginx.conf"
           target: "/home/ubuntu/app"
       - name: Create secret file
         uses: appleboy/ssh-action@master
@@ -41,8 +41,7 @@ jobs:
           script: |
             cd /home/ubuntu/app && \
             cp build/libs/AccountBookForMoms-0.0.1-SNAPSHOT.jar . && \
-            sudo docker compose down && \
-            sudo docker compose up -d --build
+            sudo docker compose up -d --no-deps --build app --remove-orphans
       - name: Send Discord Notification
         if: always()
         run: |
