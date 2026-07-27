@@ -10,8 +10,10 @@ services:
       - SPRING_PROFILES_ACTIVE=prod
       - ELASTICSEARCH_URIS=http://elasticsearch:9200
       - FRONTEND_REDIRECT_URL=https://moneydiary.cloud/oauth2/redirect
+      - MAIL_FROM=noreply@moneydiary.cloud
     volumes:
       - ./application-secret.yml:/app/application-secret.yml
+      - /home/ubuntu/app/firebase-service-account.json:/app/firebase-service-account.json
     depends_on:
       mysql:
         condition: service_healthy

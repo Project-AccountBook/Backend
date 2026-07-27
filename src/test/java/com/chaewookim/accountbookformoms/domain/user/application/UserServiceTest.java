@@ -1,5 +1,7 @@
 package com.chaewookim.accountbookformoms.domain.user.application;
 
+import com.chaewookim.accountbookformoms.domain.notification.application.NotificationService;
+import com.chaewookim.accountbookformoms.domain.notification.application.UserDeviceService;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.dto.request.SignupRequest;
 import com.chaewookim.accountbookformoms.domain.user.dto.request.UpdatePasswordRequest;
@@ -41,6 +43,9 @@ class UserServiceTest {
     private UserCommonService userCommonService;
 
     @Mock
+    private InterestCategoryService interestCategoryService;
+
+    @Mock
     private EmailVerificationService emailVerificationService;
 
     @Mock
@@ -48,6 +53,12 @@ class UserServiceTest {
 
     @Mock
     private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private NotificationService notificationService;
+
+    @Mock
+    private UserDeviceService userDeviceService;
 
     @InjectMocks
     private UserService userService;
@@ -206,12 +217,18 @@ class UserServiceTest {
 
         // given
         User user = mock(User.class);
+        UserNotificationSetting notificationSetting = mock(UserNotificationSetting.class);
         given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        given(user.getUserNotificationSetting()).willReturn(notificationSetting);
 
         // when
         userService.withdraw(1L);
 
         // then
+        verify(notificationService).deleteAllByUserId(1L);
+        verify(notificationSetting).resetToDefaults();
+        verify(userDeviceService).removeToken(user);
         verify(userRepository).delete(user);
+        verify(interestCategoryService).deleteAllByUserId(1L);
     }
 }

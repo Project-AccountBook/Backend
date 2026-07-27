@@ -22,4 +22,9 @@ public class UserDeviceService {
                         () -> userDeviceRepository.save(new UserDevice(user, fcmToken))
                 );
     }
+
+    @Transactional
+    public void removeToken(User user) {
+        userDeviceRepository.findByUser(user).ifPresent(userDeviceRepository::delete);
+    }
 }

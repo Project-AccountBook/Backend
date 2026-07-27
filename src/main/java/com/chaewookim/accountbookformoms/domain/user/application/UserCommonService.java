@@ -5,7 +5,9 @@ import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.domain.user.entity.UserNotificationSetting;
 import com.chaewookim.accountbookformoms.domain.user.entity.UserSetting;
 import com.chaewookim.accountbookformoms.domain.user.enums.SocialProvider;
+import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
 import com.chaewookim.accountbookformoms.domain.user.event.UserSignedUpEvent;
+import com.chaewookim.accountbookformoms.global.error.CustomException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -19,6 +21,7 @@ import java.time.LocalDate;
 public class UserCommonService {
 
     private final UserRepository userRepository;
+    private final InterestCategoryService interestCategoryService;
     private final ApplicationEventPublisher eventPublisher;
 
     // 회원 저장
@@ -54,17 +57,22 @@ public class UserCommonService {
 
     // 탈퇴 후 재가입
     public User restoreUser(User user, String username, String password, LocalDate birthDate, String address) {
+        User managedUser = userRepository.findByEmailIncludingDeleted(user.getEmail())
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
-        user.restore(username, password, birthDate, address);
+        managedUser.restore(username, password, birthDate, address);
+        interestCategoryService.deleteAllByUserId(managedUser.getId());
 
-        if (user.getUserSetting() == null) {
-            user.setSettings(
-                    UserSetting.builder().user(user).build(),
-                    UserNotificationSetting.builder().user(user).build()
+        if (managedUser.getUserSetting() == null) {
+            managedUser.setSettings(
+                    UserSetting.builder().user(managedUser).build(),
+                    UserNotificationSetting.builder().user(managedUser).build()
             );
+        } else if (managedUser.getUserNotificationSetting() != null) {
+            managedUser.getUserNotificationSetting().resetToDefaults();
         }
 
-        eventPublisher.publishEvent(new UserSignedUpEvent(user.getId()));
-        return userRepository.save(user);
+        eventPublisher.publishEvent(new UserSignedUpEvent(managedUser.getId()));
+        return userRepository.save(managedUser);
     }
 }
