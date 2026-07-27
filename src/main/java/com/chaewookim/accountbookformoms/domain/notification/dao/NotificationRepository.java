@@ -1,7 +1,6 @@
 package com.chaewookim.accountbookformoms.domain.notification.dao;
 
 import com.chaewookim.accountbookformoms.domain.notification.entity.Notification;
-import com.chaewookim.accountbookformoms.domain.notification.enums.NotificationType;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

@@ -1,5 +1,6 @@
 package com.chaewookim.accountbookformoms.global.config;
 
+import com.chaewookim.accountbookformoms.domain.dashboard.dto.response.DashboardResponse;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
@@ -15,6 +16,7 @@ import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
@@ -89,8 +91,17 @@ public class RedisConfig {
         // Board HOT 랭킹: 좋아요/조회수 변동 대비 5분 TTL
         RedisCacheConfiguration hotConfig = defaultConfig.entryTtl(Duration.ofMinutes(5));
 
-        // 대시보드: 거래 변경 시 evict, TTL 5분
-        RedisCacheConfiguration dashboardConfig = defaultConfig.entryTtl(Duration.ofMinutes(5));
+        // 대시보드: record DTO는 default typing과 호환되지 않아 타입 고정 직렬화 사용
+        ObjectMapper dashboardMapper = new ObjectMapper()
+                .registerModule(new JavaTimeModule())
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        Jackson2JsonRedisSerializer<DashboardResponse> dashboardSerializer =
+                new Jackson2JsonRedisSerializer<>(dashboardMapper, DashboardResponse.class);
+        RedisCacheConfiguration dashboardConfig = RedisCacheConfiguration.defaultCacheConfig()
+                .entryTtl(Duration.ofMinutes(5))
+                .disableCachingNullValues()
+                .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
+                .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(dashboardSerializer));
 
         List<String> groupCacheNames = List.of(
                 CACHE_GROUP_BUDGET_AGE, CACHE_GROUP_BUDGET_AMOUNT, CACHE_GROUP_BUDGET_CATEGORY,
