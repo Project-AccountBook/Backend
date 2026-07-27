@@ -47,6 +47,14 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
         String targetUrl = redirectUri.orElse(defaultRedirectUri);
 
+        if ("ROLE_ADMIN".equals(role)) {
+            if (targetUrl.contains("localhost")) {
+                targetUrl = "http://localhost:5174/oauth2/redirect";
+            } else {
+                targetUrl = "https://admin-frontend-rho-five.vercel.app/oauth2/redirect";
+            }
+        }
+
         targetUrl = UriComponentsBuilder.fromUriString(targetUrl)
                 .queryParam("accessToken", accessToken)
                 .queryParam("refreshToken", refreshToken)
