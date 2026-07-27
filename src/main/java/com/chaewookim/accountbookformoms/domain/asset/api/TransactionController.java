@@ -52,7 +52,7 @@ public class TransactionController {
             @AuthenticationPrincipal UserPrincipal userPrincipal,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            @PageableDefault(size = 500, sort = "transactionDate", direction = Sort.Direction.DESC) Pageable pageable
+            @PageableDefault(size = 100, sort = "transactionDate", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         Page<TransactionResponse> responses = transactionService.getAllUserTransactions(
                 userPrincipal.getUserId(), startDate, endDate, pageable);

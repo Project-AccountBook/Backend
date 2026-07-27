@@ -4,4 +4,4 @@ WORKDIR /app
 
 COPY *.jar app.jar
 
-ENTRYPOINT ["java", "-Dserver.address=0.0.0.0", "-Xms64m", "-Xmx128m", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-Dserver.address=0.0.0.0", "-Xms256m", "-Xmx512m", "-jar", "app.jar"]
