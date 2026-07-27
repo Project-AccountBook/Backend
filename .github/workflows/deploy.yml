@@ -2,6 +2,11 @@ name: Deploy to OCI
 on:
   push:
     branches: [ perf/ACC-139-infra-tuning ]
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -51,7 +56,8 @@ jobs:
           script: |
             cd /home/ubuntu/app && \
             cp build/libs/AccountBookForMoms-0.0.1-SNAPSHOT.jar . && \
-            sudo docker compose up -d --no-deps --build app --remove-orphans
+            sudo docker compose up -d --no-deps --build app --remove-orphans && \
+            sudo docker compose restart nginx
       - name: Send Discord Notification
         if: always()
         run: |
