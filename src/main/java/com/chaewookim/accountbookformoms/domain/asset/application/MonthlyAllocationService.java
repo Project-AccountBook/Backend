@@ -75,16 +75,25 @@ public class MonthlyAllocationService {
                 continue;
             }
 
-            AccountRole sourceRole = roleMap.getOrDefault(tx.getAccount().getId(), AccountRole.CHECKING);
-            AccountRole targetRole = tx.getTargetAccount() != null
-                    ? roleMap.getOrDefault(tx.getTargetAccount().getId(), AccountRole.CHECKING)
+            Long sourceAccountId = resolveAccountId(tx.getAccount(), tx.getSnapshotAccountId());
+            if (sourceAccountId == null) {
+                continue;
+            }
+
+            AccountRole sourceRole = roleMap.getOrDefault(sourceAccountId, AccountRole.CHECKING);
+
+            Long targetAccountId = resolveAccountId(tx.getTargetAccount(), tx.getSnapshotTargetAccountId());
+            AccountRole targetRole = targetAccountId != null
+                    ? roleMap.getOrDefault(targetAccountId, AccountRole.CHECKING)
                     : AccountRole.CHECKING;
 
-            Long categoryId = tx.getTransactionCategory().getId();
-            CategoryAllocationFlags flags = categoryFlags.getOrDefault(
-                    categoryId,
-                    new CategoryAllocationFlags(false, false)
-            );
+            CategoryAllocationFlags flags = new CategoryAllocationFlags(false, false);
+            if (tx.getTransactionCategory() != null) {
+                flags = categoryFlags.getOrDefault(
+                        tx.getTransactionCategory().getId(),
+                        flags
+                );
+            }
 
             if (targetRole == AccountRole.SAVINGS) {
                 savingsInflow = savingsInflow.add(amount);
@@ -195,6 +204,13 @@ public class MonthlyAllocationService {
         }
 
         return new AllocationBucketResponse(net, rate, inflow, outflow);
+    }
+
+    private Long resolveAccountId(Account account, Long snapshotAccountId) {
+        if (account != null) {
+            return account.getId();
+        }
+        return snapshotAccountId;
     }
 
     private record CategoryAllocationFlags(boolean includeInSavingsRate, boolean includeInInvestmentRate) {

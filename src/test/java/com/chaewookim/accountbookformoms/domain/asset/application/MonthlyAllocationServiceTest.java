@@ -85,6 +85,42 @@ class MonthlyAllocationServiceTest {
     }
 
     @Test
+    @DisplayName("월별 저축·투자 집계 - 삭제된 계좌 이체는 snapshotAccountId로 처리")
+    void computeMonthlyAllocation_archivedAccountTransfer() {
+        Long userId = 1L;
+        User user = User.builder().build();
+        ReflectionTestUtils.setField(user, "id", userId);
+
+        Account savings = account(user, 2L, "비상금", AccountRole.SAVINGS, "500000");
+        TransactionCategory savingsCategory = category(10L, "비상금", true, false);
+
+        Transaction transfer = transfer(
+                user,
+                null,
+                savings,
+                savingsCategory,
+                new BigDecimal("100000"),
+                LocalDate.of(2026, 7, 10)
+        );
+        ReflectionTestUtils.setField(transfer, "snapshotAccountId", 99L);
+        ReflectionTestUtils.setField(transfer, "snapshotAccountName", "삭제된 통장");
+        ReflectionTestUtils.setField(transfer, "accountArchived", true);
+
+        given(accountRepository.findByUserId(userId)).willReturn(List.of(savings));
+        given(categoryRepository.findAllByUserOrSystem(userId)).willReturn(List.of(savingsCategory));
+        given(transactionRepository.findByUserIdAndDateBetween(eq(userId), any(), any()))
+                .willReturn(List.of(transfer));
+
+        MonthlyAllocationResponse response = monthlyAllocationService.computeMonthlyAllocation(
+                userId,
+                "2026-07",
+                new BigDecimal("1000000")
+        );
+
+        assertThat(response.savings().inflow()).isEqualByComparingTo("100000");
+    }
+
+    @Test
     @DisplayName("월별 저축·투자 집계 API - 월 수입 포함 응답")
     void getMonthlyAllocationSummary_success() {
         Long userId = 1L;
@@ -178,6 +214,7 @@ class MonthlyAllocationServiceTest {
                 .type(TransactionType.TRANSFER)
                 .amount(amount)
                 .transactionDate(date)
+                .description("test")
                 .build();
     }
 }
