@@ -90,6 +90,10 @@ public class User extends BaseEntity {
         return this;
     }
 
+    public void updateRole(UserRole role) {
+        this.role = role;
+    }
+
     public void updateProfile(String username, LocalDate birthDate, String address) {
         this.username = username;
         this.birthDate = birthDate;

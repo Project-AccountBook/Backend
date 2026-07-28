@@ -22,6 +22,9 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
     private final UserRepository userRepository;
     private final UserCommonService userCommonService;
 
+    @org.springframework.beans.factory.annotation.Value("${app.admin.email:modi091321@gmail.com}")
+    private String adminEmail;
+
     @Override
     @Transactional
     public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
@@ -48,6 +51,11 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                         userInfo.getName(),
                         SocialProvider.from(userInfo.getProvider())
                 ));
+
+        if (adminEmail.equals(userInfo.getEmail())) {
+            user.updateRole(com.chaewookim.accountbookformoms.domain.user.enums.UserRole.ROLE_ADMIN);
+            userRepository.save(user);
+        }
 
         return UserPrincipal.create(user, oAuth2User.getAttributes());
     }
