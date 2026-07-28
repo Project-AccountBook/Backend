@@ -21,6 +21,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     @Query("""
             SELECT t FROM Transaction t
             JOIN FETCH t.transactionCategory
+            LEFT JOIN FETCH t.account
+            LEFT JOIN FETCH t.targetAccount
             WHERE t.user.id = :userId
               AND t.transactionDate BETWEEN :startDate AND :endDate
             ORDER BY t.transactionDate DESC

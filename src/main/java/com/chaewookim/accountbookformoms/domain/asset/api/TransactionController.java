@@ -52,7 +52,7 @@ public class TransactionController {
             @AuthenticationPrincipal UserPrincipal userPrincipal,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            @PageableDefault(size = 500, sort = "transactionDate", direction = Sort.Direction.DESC) Pageable pageable
+            @PageableDefault(size = 100, sort = "transactionDate", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         Page<TransactionResponse> responses = transactionService.getAllUserTransactions(
                 userPrincipal.getUserId(), startDate, endDate, pageable);
@@ -98,7 +98,7 @@ public class TransactionController {
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
-    @Operation(summary = "거래 내역 내보내기", description = "특정 기간 거래 내역 CSV 다운로드")
+    @Operation(summary = "거래 내역 내보내기", description = "특정 기간(최대 12개월) 거래 내역 엑셀 다운로드")
     @GetMapping("/export")
     public ResponseEntity<Resource> exportTransactions(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
@@ -106,7 +106,7 @@ public class TransactionController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
     ) {
         Resource resource = transactionExportService.exportToCsv(userPrincipal.getUserId(), startDate, endDate);
-        String fileName = String.format("account_book_%s_to_%s.xlsx", startDate, endDate);
+        String fileName = TransactionExportService.buildFileName(startDate, endDate);
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")

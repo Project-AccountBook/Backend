@@ -1,5 +1,6 @@
 package com.chaewookim.accountbookformoms.global.config;
 
+import com.chaewookim.accountbookformoms.domain.dashboard.dto.response.DashboardResponse;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
@@ -15,6 +16,7 @@ import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
@@ -28,6 +30,9 @@ public class RedisConfig {
 
     // Board HOT 랭킹 캐시 (type + days + limit 키, cross-user hit)
     public static final String CACHE_BOARD_HOT = "board:hot";
+
+    // 대시보드 (userId + yearMonth 키, 거래 수정 시 CacheEvict)
+    public static final String CACHE_DASHBOARD = "dashboard";
 
     // Phase 2: 그룹 평균 캐시 (userId 미포함 키 → cross-user hit)
     public static final String CACHE_GROUP_BUDGET_AGE = "group:budget:age";
@@ -86,6 +91,18 @@ public class RedisConfig {
         // Board HOT 랭킹: 좋아요/조회수 변동 대비 5분 TTL
         RedisCacheConfiguration hotConfig = defaultConfig.entryTtl(Duration.ofMinutes(5));
 
+        // 대시보드: record DTO는 default typing과 호환되지 않아 타입 고정 직렬화 사용
+        ObjectMapper dashboardMapper = new ObjectMapper()
+                .registerModule(new JavaTimeModule())
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        Jackson2JsonRedisSerializer<DashboardResponse> dashboardSerializer =
+                new Jackson2JsonRedisSerializer<>(dashboardMapper, DashboardResponse.class);
+        RedisCacheConfiguration dashboardConfig = RedisCacheConfiguration.defaultCacheConfig()
+                .entryTtl(Duration.ofMinutes(5))
+                .disableCachingNullValues()
+                .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
+                .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(dashboardSerializer));
+
         List<String> groupCacheNames = List.of(
                 CACHE_GROUP_BUDGET_AGE, CACHE_GROUP_BUDGET_AMOUNT, CACHE_GROUP_BUDGET_CATEGORY,
                 CACHE_GROUP_EXPENSE_AGE_FIXED, CACHE_GROUP_EXPENSE_AGE_VARIABLE,
@@ -98,6 +115,7 @@ public class RedisConfig {
         Map<String, RedisCacheConfiguration> perCacheConfig = new java.util.HashMap<>();
         groupCacheNames.forEach(name -> perCacheConfig.put(name, groupConfig));
         perCacheConfig.put(CACHE_BOARD_HOT, hotConfig);
+        perCacheConfig.put(CACHE_DASHBOARD, dashboardConfig);
 
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)

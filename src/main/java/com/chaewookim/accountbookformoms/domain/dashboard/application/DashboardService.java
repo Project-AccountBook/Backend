@@ -3,12 +3,14 @@ package com.chaewookim.accountbookformoms.domain.dashboard.application;
 import com.chaewookim.accountbookformoms.domain.asset.application.MonthlyAllocationService;
 import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionRepository;
 import com.chaewookim.accountbookformoms.domain.budget.application.BudgetService;
+import com.chaewookim.accountbookformoms.global.config.RedisConfig;
 import com.chaewookim.accountbookformoms.domain.dashboard.dto.response.BudgetStatusResponse;
 import com.chaewookim.accountbookformoms.domain.dashboard.dto.response.DashboardResponse;
 import com.chaewookim.accountbookformoms.domain.dashboard.dto.response.MonthlyTrendResponse;
 import com.chaewookim.accountbookformoms.domain.dashboard.dto.response.SummaryResponse;
 import com.chaewookim.accountbookformoms.domain.portfolio.application.PortfolioService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +30,7 @@ public class DashboardService {
     private final PortfolioService portfolioService;
     private final MonthlyAllocationService monthlyAllocationService;
 
+    @Cacheable(value = RedisConfig.CACHE_DASHBOARD, key = "#userId + ':' + #yearMonth")
     public DashboardResponse getDashboard(Long userId, String yearMonth) {
 
         Map<String, BigDecimal> categoryExpenses = transactionRepository.sumCategoryExpense(userId, yearMonth)
