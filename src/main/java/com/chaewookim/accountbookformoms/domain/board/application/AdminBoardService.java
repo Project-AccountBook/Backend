@@ -35,6 +35,15 @@ public class AdminBoardService {
         return board.getId();
     }
 
+    public List<Long> deleteBulkByAdmin(List<Long> postIds) {
+        List<Board> boards = boardRepository.findAllById(postIds);
+        for (Board board : boards) {
+            board.markAsAdminDeleted();
+            eventPublisher.publishEvent(BoardChangedEvent.delete(board.getId()));
+        }
+        return boards.stream().map(Board::getId).toList();
+    }
+
     /**
      * 관리자 게시물 목록 조회.
      *

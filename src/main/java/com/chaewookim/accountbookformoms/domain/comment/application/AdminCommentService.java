@@ -26,6 +26,15 @@ public class AdminCommentService {
         return comment.getId();
     }
 
+    public java.util.List<Long> deleteBulkByAdmin(java.util.List<Long> commentIds) {
+        java.util.List<Comment> comments = commentRepository.findAllById(commentIds);
+        for (Comment comment : comments) {
+            comment.markAsAdminDeleted();
+        }
+        return comments.stream().map(Comment::getId).toList();
+    }
+
+
     /**
      * 관리자 댓글 목록 조회.
      * <p>Comment 엔티티에는 {@code @SQLRestriction} 이 없어 소프트 삭제된 댓글도 findAll 로 함께 조회된다.

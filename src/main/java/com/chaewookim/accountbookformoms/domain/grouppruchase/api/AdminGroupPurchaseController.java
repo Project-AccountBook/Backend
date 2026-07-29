@@ -59,4 +59,12 @@ public class AdminGroupPurchaseController {
         groupPurchaseService.deleteGroupPurchaseByAdmin(id);
         return ResponseEntity.ok(ApiResponse.success("공동구매가 성공적으로 삭제되었습니다."));
     }
+    @Operation(summary = "공동구매 글 일괄 삭제 (관리자용)", description = "관리자 권한으로 다수의 공동구매 글을 일괄 삭제합니다.")
+    @DeleteMapping("/bulk")
+    public ResponseEntity<ApiResponse<String>> deleteBulkByAdmin(
+            @RequestBody java.util.List<Long> ids
+    ) {
+        groupPurchaseService.deleteGroupPurchasesByAdmin(ids);
+        return ResponseEntity.ok(ApiResponse.success(ids.size() + "개의 공동구매가 성공적으로 삭제되었습니다."));
+    }
 }

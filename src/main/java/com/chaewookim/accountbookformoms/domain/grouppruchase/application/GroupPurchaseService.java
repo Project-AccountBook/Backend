@@ -290,6 +290,12 @@ public class GroupPurchaseService {
     }
 
     @Transactional
+    public void deleteGroupPurchasesByAdmin(List<Long> ids) {
+        List<GroupPurchase> groupPurchases = groupPurchaseRepository.findAllById(ids);
+        groupPurchaseRepository.deleteAllInBatch(groupPurchases);
+    }
+
+    @Transactional
     public boolean toggleWish(Long userId, Long groupPurchaseId) {
         if (!groupPurchaseRepository.existsById(groupPurchaseId)) {
             throw new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND);

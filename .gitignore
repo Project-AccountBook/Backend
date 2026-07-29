@@ -44,3 +44,5 @@ src/main/resources/application-secret.yml
 
 ### FCM Secret Key ###
 src/main/resources/jointliving-notification.json
+*.jar
+frontend/node_modules/
