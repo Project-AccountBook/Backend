@@ -70,7 +70,7 @@ jobs:
           fi
           TITLE="백엔드 CI/CD 알림"
           BRANCH="${{ github.ref_name }}"
-          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -n 1 | sed 's/"/\\"/g')
           LOG_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           curl -H "Content-Type: application/json" \
           -d "{\"embeds\": [{\"title\": \"$TITLE\", \"color\": $COLOR, \"description\": \"**결과:** $STATUS\n**브랜치:** \`$BRANCH\`\n**커밋:** $COMMIT_MSG\n\n[빌드 결과 확인하기]($LOG_URL)\"}]}" \
