@@ -19,7 +19,8 @@ public interface UserRepository extends JpaRepository<User,Long> {
     @Query("""
             SELECT u FROM User u
             LEFT JOIN FETCH u.userNotificationSetting
+            LEFT JOIN FETCH u.userSetting
             WHERE u.id = :id
             """)
-    Optional<User> findByIdWithNotificationSetting(@Param("id") Long id);
+    Optional<User> findByIdWithNotificationAndSettings(@Param("id") Long id);
 }

@@ -42,7 +42,7 @@ public class GoalEventListener {
             return;
         }
 
-        User user = userRepository.findByIdWithNotificationSetting(event.userId())
+        User user = userRepository.findByIdWithNotificationAndSettings(event.userId())
                 .filter(User::isGoalAlertEnabled)
                 .orElse(null);
         if (user == null) {
