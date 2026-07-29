@@ -133,12 +133,14 @@ public class TransactionService {
             transaction.markAsFixedTransactionGenerated();
         }
 
+        Long savedId = transactionRepository.save(transaction).getId();
+
         if (request.type() == TransactionType.EXPENSE) {
             String yearMonth = request.transactionDate().format(DateTimeFormatter.ofPattern("yyyy-MM"));
             eventPublisher.publishEvent(new BudgetExceededCheckEvent(userAccount.getUser().getId(), yearMonth, request.categoryId()));
         }
 
-        return transactionRepository.save(transaction).getId();
+        return savedId;
     }
 
     private Long saveTransferTransaction(Account source, Account target, TransactionRequest request) {

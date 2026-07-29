@@ -9,6 +9,7 @@ import com.chaewookim.accountbookformoms.domain.notification.error.NotificationE
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -38,14 +40,20 @@ public class NotificationService {
                 .build();
 
         notificationRepository.save(notification);
+        sendPushSafely(user, title, message, redirectUrl, referenceId);
+    }
 
-        // FCM 발송
+    private void sendPushSafely(User user, String title, String message, String redirectUrl, Long referenceId) {
         userDeviceRepository.findByUser(user).ifPresent(device -> {
-            Map<String, String> data = Map.of(
-                    "redirectUrl", redirectUrl != null ? redirectUrl : "",
-                    "referenceId", String.valueOf(referenceId)
-            );
-            fcmService.sendNotification(device.getFcmToken(), title, message, data);
+            try {
+                Map<String, String> data = Map.of(
+                        "redirectUrl", redirectUrl != null ? redirectUrl : "",
+                        "referenceId", String.valueOf(referenceId != null ? referenceId : "")
+                );
+                fcmService.sendNotification(device.getFcmToken(), title, message, data);
+            } catch (RuntimeException e) {
+                log.warn("FCM 발송 실패 — DB 알림은 유지됩니다. userId={}, title={}", user.getId(), title, e);
+            }
         });
     }
 

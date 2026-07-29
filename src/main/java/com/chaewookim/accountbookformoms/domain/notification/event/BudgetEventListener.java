@@ -7,14 +7,18 @@ import com.chaewookim.accountbookformoms.domain.budget.event.BudgetExceededCheck
 import com.chaewookim.accountbookformoms.domain.notification.enums.NotificationType;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.math.BigDecimal;
 
-
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class BudgetEventListener {
@@ -25,17 +29,26 @@ public class BudgetEventListener {
     private final ApplicationEventPublisher eventPublisher;
 
     @Async
-    @EventListener
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleBudgetCheckEvent(BudgetExceededCheckEvent event) {
-
-        userRepository.findById(event.userId()).ifPresent(user -> {
-            if (user.getUserNotificationSetting() != null && user.getUserNotificationSetting().getIsBudgetAlertEnabled()) {
+        try {
+            userRepository.findByIdWithNotificationAndSettings(event.userId()).ifPresent(user -> {
+                if (user.getUserNotificationSetting() == null
+                        || !Boolean.TRUE.equals(user.getUserNotificationSetting().getIsBudgetAlertEnabled())) {
+                    return;
+                }
 
                 if (event.yearMonth().equals(user.getLastBudgetAlertMonth())) {
                     return;
                 }
 
-                BigDecimal progress = budgetService.getCategoryProgress(event.userId(), event.yearMonth(), event.categoryId());
+                if (user.getUserSetting() == null) {
+                    return;
+                }
+
+                BigDecimal progress = budgetService.getCategoryProgress(
+                        event.userId(), event.yearMonth(), event.categoryId());
                 int alertThreshold = user.getUserSetting().getBudgetAlertThreshold();
 
                 if (progress.compareTo(new BigDecimal(alertThreshold)) >= 0) {
@@ -57,7 +70,9 @@ public class BudgetEventListener {
                     user.updateLastBudgetAlertMonth(event.yearMonth());
                     userRepository.save(user);
                 }
-            }
-        });
+            });
+        } catch (RuntimeException e) {
+            log.error("예산 알림 처리 실패 userId={}, categoryId={}", event.userId(), event.categoryId(), e);
+        }
     }
 }

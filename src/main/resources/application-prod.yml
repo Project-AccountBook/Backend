@@ -1,3 +1,6 @@
+firebase:
+  credentials-path: file:/app/firebase-service-account.json
+
 spring:
   datasource:
     hikari:
