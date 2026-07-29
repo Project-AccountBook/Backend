@@ -33,6 +33,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -71,6 +72,33 @@ public class BoardService {
                     : boardRepository.findByType(type, pageable);
         }
         return enrichPage(page, viewerId);
+    }
+
+    public List<BoardResponse> listByIds(List<Long> ids, Long viewerId) {
+        if (ids == null || ids.isEmpty()) return List.of();
+        List<Board> boards = boardRepository.findAllById(ids);
+        Map<Long, Board> byId = boards.stream()
+                .collect(Collectors.toMap(Board::getId, b -> b, (a, b) -> a));
+        List<Long> orderedIds = ids.stream().filter(byId::containsKey).toList();
+        List<Board> ordered = orderedIds.stream().map(byId::get).toList();
+        Map<Long, Long> pending = viewCountService.getPendingDeltas(orderedIds);
+        Map<Long, String> nicknames = loadNicknames(ordered.stream().map(Board::getUserId).toList());
+        Map<Long, Long> likeCounts = likeService.countByTargets(LikeTargetType.BOARD, orderedIds);
+        Set<Long> liked = likeService.likedTargets(LikeTargetType.BOARD, orderedIds, viewerId);
+        Set<Long> bookmarked = bookmarkService.bookmarkedBoards(orderedIds, viewerId);
+        Map<Long, List<String>> tagsByBoard = tagService.tagsByBoards(orderedIds);
+        Map<Long, List<String>> imagesByBoard = imageService.urlsByBoards(orderedIds);
+        return ordered.stream()
+                .map(b -> BoardResponse.from(
+                        b,
+                        pending.getOrDefault(b.getId(), 0L),
+                        nicknames.get(b.getUserId()),
+                        likeCounts.getOrDefault(b.getId(), 0L),
+                        liked.contains(b.getId()),
+                        bookmarked.contains(b.getId()),
+                        tagsByBoard.getOrDefault(b.getId(), List.of()),
+                        imagesByBoard.getOrDefault(b.getId(), List.of())))
+                .toList();
     }
 
     private Page<BoardResponse> enrichPage(Page<Board> page, Long viewerId) {
@@ -174,11 +202,11 @@ public class BoardService {
         List<Board> recent = boardRepository.findRecentByType(type, since);
         List<Long> ids = recent.stream().map(Board::getId).toList();
         Map<Long, Long> likeCounts = likeService.countByTargets(LikeTargetType.BOARD, ids);
-        return recent.stream()
+        return new ArrayList<>(recent.stream()
                 .map(b -> BoardHotResponse.from(b, likeCounts.getOrDefault(b.getId(), 0L)))
                 .sorted((a, b) -> Long.compare(b.score(), a.score()))
                 .limit(limit)
-                .toList();
+                .toList());
     }
 
     public Page<BoardSearchResponse> search(String keyword, Pageable pageable) {

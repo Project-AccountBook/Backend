@@ -49,24 +49,55 @@ public interface BudgetRepository extends JpaRepository<Budget, Long> {
                                                   @Param("yearMonth") String yearMonth);
 
     /**
-     * 공개 설정한 사용자들의 (user, year_month)별 총 예산 목록.
-     * (필요한 필드만 Object[] 로 반환 — 컬럼 순서: userId, username, yearMonth, totalSum)
+     * 특정 월에 포트폴리오 활동(고정/변동 수입·지출, 예산)이 하나라도 있는
+     * 공개 사용자들의 월 총 예산 목록. 예산이 없는 사용자는 totalBudget = 0.
+     * 종합 비교 페이지의 사용자 집합과 일치하도록 UNION 기반 EXISTS 로 판정.
+     * 컬럼 순서: userId, username, yearMonth, totalBudget
      */
-    @Query("""
-            SELECT b.user.id, b.user.username, b.yearMonth, SUM(b.totalBudget)
-              FROM Budget b
-              JOIN b.user u
-              JOIN u.userSetting s
-             WHERE s.isPortfolioPublic = true
-               AND (:yearMonthFrom IS NULL OR b.yearMonth >= :yearMonthFrom)
-               AND (:yearMonthTo   IS NULL OR b.yearMonth <= :yearMonthTo)
-             GROUP BY b.user.id, b.user.username, b.yearMonth
-            HAVING (:minAmount IS NULL OR SUM(b.totalBudget) >= :minAmount)
-               AND (:maxAmount IS NULL OR SUM(b.totalBudget) <= :maxAmount)
-             ORDER BY b.yearMonth DESC, SUM(b.totalBudget) DESC
-            """)
-    List<Object[]> findPublicMonthlyTotals(@Param("yearMonthFrom") String yearMonthFrom,
-                                           @Param("yearMonthTo") String yearMonthTo,
+    @Query(value = """
+            SELECT u.id                                                AS user_id,
+                   u.username                                          AS username,
+                   :yearMonth                                          AS year_month,
+                   COALESCE(SUM(b.total_budget), 0)                    AS total_budget
+              FROM `user` u
+              JOIN user_setting s ON s.user_id = u.id AND s.is_portfolio_public = TRUE
+              LEFT JOIN budget b
+                     ON b.user_id = u.id
+                    AND b.`year_month` = :yearMonth
+                    AND b.deleted_at IS NULL
+             WHERE u.deleted_at IS NULL
+               AND (
+                    EXISTS (SELECT 1 FROM fixed_transaction ft
+                             WHERE ft.user_id = u.id
+                               AND ft.type = 'INCOME'
+                               AND ft.is_active = TRUE
+                               AND ft.deleted_at IS NULL
+                               AND ft.start_date <= :endDate
+                               AND (ft.end_date IS NULL OR ft.end_date >= :startDate))
+                 OR EXISTS (SELECT 1 FROM fixed_transaction ft
+                             WHERE ft.user_id = u.id
+                               AND ft.type = 'EXPENSE'
+                               AND ft.is_active = TRUE
+                               AND ft.deleted_at IS NULL
+                               AND ft.start_date <= :endDate
+                               AND (ft.end_date IS NULL OR ft.end_date >= :startDate))
+                 OR EXISTS (SELECT 1 FROM `transaction` t
+                             WHERE t.user_id = u.id
+                               AND t.deleted_at IS NULL
+                               AND t.transaction_date BETWEEN :startDate AND :endDate)
+                 OR EXISTS (SELECT 1 FROM budget b2
+                             WHERE b2.user_id = u.id
+                               AND b2.`year_month` = :yearMonth
+                               AND b2.deleted_at IS NULL)
+               )
+             GROUP BY u.id, u.username
+            HAVING (:minAmount IS NULL OR COALESCE(SUM(b.total_budget), 0) >= :minAmount)
+               AND (:maxAmount IS NULL OR COALESCE(SUM(b.total_budget), 0) <= :maxAmount)
+             ORDER BY total_budget DESC
+            """, nativeQuery = true)
+    List<Object[]> findPublicMonthlyTotals(@Param("yearMonth") String yearMonth,
+                                           @Param("startDate") LocalDate startDate,
+                                           @Param("endDate") LocalDate endDate,
                                            @Param("minAmount") BigDecimal minAmount,
                                            @Param("maxAmount") BigDecimal maxAmount);
 

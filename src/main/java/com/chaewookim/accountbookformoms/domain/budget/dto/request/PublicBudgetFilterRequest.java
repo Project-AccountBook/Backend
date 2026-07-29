@@ -8,16 +8,10 @@ import java.math.BigDecimal;
 public record PublicBudgetFilterRequest(
 
         @Min(1900) @Max(2100)
-        Integer yearFrom,
-
-        @Min(1900) @Max(2100)
-        Integer yearTo,
+        Integer year,
 
         @Min(1) @Max(12)
-        Integer monthFrom,
-
-        @Min(1) @Max(12)
-        Integer monthTo,
+        Integer month,
 
         BigDecimal minAmount,
         BigDecimal maxAmount
