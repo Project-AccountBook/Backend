@@ -55,6 +55,10 @@ public class BoardService {
     private final ApplicationEventPublisher eventPublisher;
 
     public Page<BoardResponse> list(BOARD_TYPE type, String tag, Pageable pageable, Long viewerId) {
+        return list(type, tag, null, pageable, viewerId);
+    }
+
+    public Page<BoardResponse> list(BOARD_TYPE type, String tag, Long authorId, Pageable pageable, Long viewerId) {
         Page<Board> page;
         if (tag != null && !tag.isBlank()) {
             List<Long> ids = tagService.boardIdsWithTag(tag);
@@ -65,7 +69,14 @@ public class BoardService {
             if (type != null) {
                 boards = boards.stream().filter(b -> b.getType() == type).toList();
             }
+            if (authorId != null) {
+                boards = boards.stream().filter(b -> authorId.equals(b.getUserId())).toList();
+            }
             page = new PageImpl<>(boards, pageable, boards.size());
+        } else if (authorId != null) {
+            page = (type == null)
+                    ? boardRepository.findByUserId(authorId, pageable)
+                    : boardRepository.findByUserIdAndType(authorId, type, pageable);
         } else {
             page = (type == null)
                     ? boardRepository.findAll(pageable)
