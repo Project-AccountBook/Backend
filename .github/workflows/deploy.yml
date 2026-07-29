@@ -1,7 +1,7 @@
 name: Deploy to OCI
 on:
   push:
-    branches: [ fix/ACC-145-prod-notification ]
+    branches: [ dev ]
 
 concurrency:
   group: deploy-${{ github.ref }}
