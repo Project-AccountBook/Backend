@@ -107,14 +107,17 @@ class BudgetCompareServiceTest {
 
         // given
         PublicBudgetFilterRequest filter = new PublicBudgetFilterRequest(
-                2026, 2026, 1, 6,
+                2026, 6,
                 new BigDecimal("100000"), new BigDecimal("1000000"));
 
         given(budgetRepository.findPublicMonthlyTotals(
-                eq("2026-01"), eq("2026-06"), any(BigDecimal.class), any(BigDecimal.class)))
+                eq("2026-06"),
+                eq(LocalDate.of(2026, 6, 1)),
+                eq(LocalDate.of(2026, 6, 30)),
+                any(BigDecimal.class), any(BigDecimal.class)))
                 .willReturn(List.of(
                         new Object[]{10L, "alice", "2026-06", new BigDecimal("500000")},
-                        new Object[]{20L, "bob", "2026-05", new BigDecimal("300000")}
+                        new Object[]{20L, "bob", "2026-06", new BigDecimal("0")}
                 ));
 
         // when
@@ -124,6 +127,8 @@ class BudgetCompareServiceTest {
         assertThat(result).hasSize(2);
         assertThat(result.get(0).username()).isEqualTo("alice");
         assertThat(result.get(0).totalBudget()).isEqualByComparingTo("500000");
+        assertThat(result.get(1).username()).isEqualTo("bob");
+        assertThat(result.get(1).totalBudget()).isEqualByComparingTo("0");
     }
 
     @Test
@@ -132,13 +137,27 @@ class BudgetCompareServiceTest {
 
         // given
         PublicBudgetFilterRequest filter = new PublicBudgetFilterRequest(
-                null, null, null, null,
+                2026, 6,
                 new BigDecimal("1000000"), new BigDecimal("500000"));
 
         // when & then
         assertThatThrownBy(() -> budgetCompareService.getPublicMonthlyBudgets(filter))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", BudgetErrorCode.INVALID_AMOUNT_RANGE);
+    }
+
+    @Test
+    @DisplayName("공개 사용자 목록 - year/month 누락 시 예외")
+    void getPublicMonthlyBudgets_missing_year_month() {
+
+        // given
+        PublicBudgetFilterRequest filter = new PublicBudgetFilterRequest(
+                null, null, null, null);
+
+        // when & then
+        assertThatThrownBy(() -> budgetCompareService.getPublicMonthlyBudgets(filter))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", BudgetErrorCode.INVALID_YEAR_MONTH);
     }
 
     @Test

@@ -65,17 +65,24 @@ public class BudgetCompareService {
 
         validateAmountRange(filter.minAmount(), filter.maxAmount());
 
-        String yearMonthFrom = buildBoundary(filter.yearFrom(), filter.monthFrom(), true);
-        String yearMonthTo = buildBoundary(filter.yearTo(), filter.monthTo(), false);
+        if (filter.year() == null || filter.month() == null) {
+            throw new CustomException(BudgetErrorCode.INVALID_YEAR_MONTH);
+        }
+
+        String yearMonth = String.format("%04d-%02d", filter.year(), filter.month());
+        YearMonth ym = YearMonth.parse(yearMonth);
+        LocalDate startDate = ym.atDay(1);
+        LocalDate endDate = ym.atEndOfMonth();
 
         return budgetRepository.findPublicMonthlyTotals(
-                        yearMonthFrom,
-                        yearMonthTo,
+                        yearMonth,
+                        startDate,
+                        endDate,
                         filter.minAmount(),
                         filter.maxAmount())
                 .stream()
                 .map(row -> new PublicMonthlyBudgetResponse(
-                        (Long) row[0],
+                        ((Number) row[0]).longValue(),
                         (String) row[1],
                         (String) row[2],
                         toBigDecimal(row[3])))
@@ -307,16 +314,6 @@ public class BudgetCompareService {
         if (minAmount != null && maxAmount != null && minAmount.compareTo(maxAmount) > 0) {
             throw new CustomException(BudgetErrorCode.INVALID_AMOUNT_RANGE);
         }
-    }
-
-    private String buildBoundary(Integer year, Integer month, boolean lower) {
-        if (year == null && month == null) {
-            return null;
-        }
-        if (year == null || month == null) {
-            throw new CustomException(BudgetErrorCode.INVALID_YEAR_MONTH);
-        }
-        return String.format("%04d-%02d", year, month);
     }
 
     private BigDecimal toBigDecimal(Object value) {
