@@ -52,4 +52,12 @@ public class AdminCommentController {
     ) {
         return ResponseEntity.ok(ApiResponse.success(adminCommentService.deleteByAdmin(commentId)));
     }
+
+    @Operation(summary = "관리자 댓글 일괄 삭제", description = "관리자 권한으로 여러 댓글을 일괄 삭제 표시합니다.")
+    @DeleteMapping("/bulk")
+    public ResponseEntity<ApiResponse<java.util.List<Long>>> deleteBulk(
+            @org.springframework.web.bind.annotation.RequestBody java.util.List<Long> commentIds
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(adminCommentService.deleteBulkByAdmin(commentIds)));
+    }
 }

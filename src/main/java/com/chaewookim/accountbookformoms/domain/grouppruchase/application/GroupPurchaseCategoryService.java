@@ -26,6 +26,7 @@ public class GroupPurchaseCategoryService {
         Category category = Category.builder()
                 .name(request.name())
                 .sortOrder(request.sortOrder())
+                .description(request.description())
                 .build();
 
         Category saved = categoryRepository.save(category);
@@ -49,7 +50,7 @@ public class GroupPurchaseCategoryService {
         Category category = categoryRepository.findById(id)
                 .orElseThrow(() -> new CustomException(ErrorCode.CATEGORY_NOT_FOUND));
 
-        category.update(request.name(), request.sortOrder());
+        category.update(request.name(), request.sortOrder(), request.description());
         return GroupPurchaseCategoryResponse.from(category);
     }
 

@@ -8,6 +8,8 @@ public record GroupPurchaseCategoryUpdateRequest(
         String name,
 
         @NotNull(message = "정렬 순서는 필수 입력값입니다.")
-        Integer sortOrder
+        Integer sortOrder,
+
+        String description
 ) {
 }

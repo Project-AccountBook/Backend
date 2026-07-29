@@ -27,15 +27,20 @@ public class Category extends BaseEntity {
     @Column(nullable = false)
     private int sortOrder;     // 정렬 순서
 
+    @Column(columnDefinition = "TEXT")
+    private String description; // 카테고리 설명
+
     @Builder
-    public Category(Long id, String name, int sortOrder) {
+    public Category(Long id, String name, int sortOrder, String description) {
         this.id = id;
         this.name = name;
         this.sortOrder = sortOrder;
+        this.description = description;
     }
 
-    public void update(String name, int sortOrder) {
+    public void update(String name, int sortOrder, String description) {
         this.name = name;
         this.sortOrder = sortOrder;
+        this.description = description;
     }
 }

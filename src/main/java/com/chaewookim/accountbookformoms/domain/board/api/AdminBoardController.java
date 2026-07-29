@@ -54,6 +54,14 @@ public class AdminBoardController {
         return ResponseEntity.ok(ApiResponse.success(adminBoardService.deleteByAdmin(postId)));
     }
 
+    @Operation(summary = "관리자 게시물 일괄 삭제", description = "관리자 권한으로 여러 게시물을 일괄 삭제 표시합니다.")
+    @DeleteMapping("/bulk")
+    public ResponseEntity<ApiResponse<java.util.List<Long>>> deleteBulk(
+            @org.springframework.web.bind.annotation.RequestBody java.util.List<Long> postIds
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(adminBoardService.deleteBulkByAdmin(postIds)));
+    }
+
     @Operation(summary = "게시물 ES 전체 재색인",
             description = "모든 게시물을 태그와 함께 Elasticsearch 에 다시 색인합니다. " +
                     "BoardDocument 스키마 변경(예: tags 추가) 이후 최초 1회 실행하세요.")
