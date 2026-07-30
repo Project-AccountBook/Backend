@@ -1,5 +1,6 @@
 package com.chaewookim.accountbookformoms.domain.budget.application;
 
+import com.chaewookim.accountbookformoms.domain.asset.dao.FixedTransactionRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionCategoryRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionRepository;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
@@ -22,6 +23,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +38,7 @@ public class BudgetService {
 
     private final BudgetRepository budgetRepository;
     private final TransactionRepository transactionRepository;
+    private final FixedTransactionRepository fixedTransactionRepository;
     private final TransactionCategoryRepository categoryRepository;
     private final UserRepository userRepository;
 
@@ -66,57 +69,40 @@ public class BudgetService {
     }
 
     public List<BudgetResponse> getMonthlyBudgetStatus(Long userId, String yearMonth) {
-
-        List<Budget> budgets = budgetRepository.findByUserIdAndYearMonth(userId, yearMonth);
-        List<Object[]> results = transactionRepository.sumAmountByUserIdGroupByCategoryId(userId, yearMonth);
-        Map<Long, BigDecimal> expenseMap = results.stream()
-                .collect(Collectors.toMap(
-                        row -> (Long) row[0],
-                        row -> (BigDecimal) row[1]
-                ));
-
-        return budgets.stream().map(budget -> {
-
-            Long categoryId = resolveCategoryId(budget);
-            String categoryName = resolveCategoryName(budget);
-
-            BigDecimal totalPlannedBudget = budget.getTotalBudget().add(budget.getExpectedExpense());
-            BigDecimal actualExpense = expenseMap.getOrDefault(categoryId, BigDecimal.ZERO);
-            BigDecimal remaining = totalPlannedBudget.subtract(actualExpense);
-            BigDecimal progress = calculateProgress(totalPlannedBudget, actualExpense);
-
-            return new BudgetResponse(
-                    budget.getId(),
-                    categoryId,
-                    categoryName,
-                    budget.isCategoryArchived(),
-                    budget.getTotalBudget(),
-                    budget.getExpectedExpense(),
-                    totalPlannedBudget,
-                    actualExpense,
-                    remaining,
-                    progress
-            );
-        }).toList();
+        return buildBudgetViewContexts(userId, yearMonth).stream()
+                .map(this::toBudgetResponse)
+                .toList();
     }
 
     public BudgetSummaryResponse getMonthlyBudgetSummary(Long userId, String yearMonth) {
 
-        List<Budget> budgets = budgetRepository.findByUserIdAndYearMonth(userId, yearMonth);
+        List<BudgetViewContext> contexts = buildBudgetViewContexts(userId, yearMonth);
 
-        BigDecimal totalPlannedBudgetSum = budgets.stream()
-                .map(budget -> budget.getTotalBudget().add(budget.getExpectedExpense()))
+        BigDecimal totalPlannedBudgetSum = contexts.stream()
+                .map(BudgetViewContext::totalPlannedBudget)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        LocalDate startDate = LocalDate.parse(yearMonth + "-01");
-        LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
-
-        BigDecimal totalActualExpenseSum = transactionRepository.sumByUserAndType(userId, TransactionType.EXPENSE, startDate, endDate);
-        if (totalActualExpenseSum == null) totalActualExpenseSum = BigDecimal.ZERO;
+        LocalDate[] monthRange = monthDateRange(yearMonth);
+        BigDecimal totalActualExpenseSum = transactionRepository.sumByUserAndType(
+                userId, TransactionType.EXPENSE, monthRange[0], monthRange[1]);
+        if (totalActualExpenseSum == null) {
+            totalActualExpenseSum = BigDecimal.ZERO;
+        }
 
         BigDecimal totalRemainingBudget = totalPlannedBudgetSum.subtract(totalActualExpenseSum);
 
         return new BudgetSummaryResponse(yearMonth, totalPlannedBudgetSum, totalActualExpenseSum, totalRemainingBudget);
+    }
+
+    private boolean isUserConfiguredBudget(Budget budget) {
+        return budget.getTotalBudget().compareTo(BigDecimal.ZERO) > 0
+                || budget.getExpectedExpense().compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    private void removePlaceholderBudgets(Long userId, String yearMonth) {
+        budgetRepository.findByUserIdAndYearMonth(userId, yearMonth).stream()
+                .filter(budget -> !isUserConfiguredBudget(budget))
+                .forEach(budgetRepository::delete);
     }
 
     @Transactional
@@ -141,7 +127,7 @@ public class BudgetService {
 
     public BudgetCopyResponse previewCopyFromLatest(Long userId, String targetYearMonth) {
 
-        validateTargetMonthEmpty(userId, targetYearMonth);
+        validateTargetMonthCanCopyFromLatest(userId, targetYearMonth);
         CopyPlan plan = buildCopyPlan(userId, targetYearMonth);
 
         if (plan.sourceBudgets.isEmpty()) {
@@ -154,7 +140,8 @@ public class BudgetService {
     @Transactional
     public BudgetCopyResponse copyFromLatest(Long userId, String targetYearMonth) {
 
-        validateTargetMonthEmpty(userId, targetYearMonth);
+        validateTargetMonthCanCopyFromLatest(userId, targetYearMonth);
+        removePlaceholderBudgets(userId, targetYearMonth);
         CopyPlan plan = buildCopyPlan(userId, targetYearMonth);
 
         if (plan.sourceBudgets.isEmpty()) {
@@ -210,8 +197,10 @@ public class BudgetService {
         return new BudgetCopyResponse(plan.sourceYearMonth, targetYearMonth, items, copiedCount);
     }
 
-    private void validateTargetMonthEmpty(Long userId, String targetYearMonth) {
-        if (!budgetRepository.findByUserIdAndYearMonth(userId, targetYearMonth).isEmpty()) {
+    private void validateTargetMonthCanCopyFromLatest(Long userId, String targetYearMonth) {
+        boolean hasUserConfiguredBudget = budgetRepository.findByUserIdAndYearMonth(userId, targetYearMonth).stream()
+                .anyMatch(this::isUserConfiguredBudget);
+        if (hasUserConfiguredBudget) {
             throw new CustomException(BudgetErrorCode.TARGET_MONTH_NOT_EMPTY);
         }
     }
@@ -228,6 +217,7 @@ public class BudgetService {
                 .map(TransactionCategory::getId)
                 .collect(Collectors.toSet());
         Set<Long> existingTargetCategoryIds = budgetRepository.findByUserIdAndYearMonth(userId, targetYearMonth).stream()
+                .filter(this::isUserConfiguredBudget)
                 .map(budget -> budget.getTransactionCategory().getId())
                 .collect(Collectors.toCollection(HashSet::new));
 
@@ -319,18 +309,155 @@ public class BudgetService {
     // 카테고리별 예산 알림 생성 시 필요
     public BigDecimal getCategoryProgress(Long userId, String yearMonth, Long categoryId) {
 
+        LocalDate[] monthRange = monthDateRange(yearMonth);
+        BigDecimal actualExpense = transactionRepository.sumAmountByUserIdAndCategoryId(
+                userId, categoryId, monthRange[0], monthRange[1]);
+        if (actualExpense == null) {
+            actualExpense = BigDecimal.ZERO;
+        }
+
+        Optional<Budget> budget = budgetRepository.findByUserIdAndYearMonthAndTransactionCategoryId(
+                userId, yearMonth, categoryId);
+        BigDecimal fixedExpenseAmount = calculateFixedExpenseForCategory(userId, categoryId, yearMonth);
+        BigDecimal totalBudget = budget.map(Budget::getTotalBudget).orElse(BigDecimal.ZERO);
+        BigDecimal expectedExpense = budget.map(Budget::getExpectedExpense).orElse(BigDecimal.ZERO);
+        BigDecimal totalPlanned = totalBudget.add(fixedExpenseAmount).add(expectedExpense);
+
+        if (totalPlanned.compareTo(BigDecimal.ZERO) == 0) {
+            return BigDecimal.ZERO;
+        }
+
+        return calculateProgress(totalPlanned, actualExpense);
+    }
+
+    private List<BudgetViewContext> buildBudgetViewContexts(Long userId, String yearMonth) {
+
+        List<Budget> budgets = budgetRepository.findByUserIdAndYearMonth(userId, yearMonth);
+        LocalDate[] monthRange = monthDateRange(yearMonth);
+        FixedExpenseSnapshot fixedSnapshot = buildFixedExpenseSnapshot(userId, monthRange[0], monthRange[1]);
+
+        Map<Long, BigDecimal> expenseMap = transactionRepository.sumAmountByUserIdGroupByCategoryId(userId, yearMonth)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> (BigDecimal) row[1]
+                ));
+
+        List<BudgetViewContext> contexts = budgets.stream()
+                .map(budget -> {
+                    Long categoryId = resolveCategoryId(budget);
+                    BigDecimal fixedExpenseAmount = fixedSnapshot.amountByCategory()
+                            .getOrDefault(categoryId, BigDecimal.ZERO);
+                    return new BudgetViewContext(
+                            budget.getId(),
+                            categoryId,
+                            resolveCategoryName(budget),
+                            budget.isCategoryArchived(),
+                            budget.getTotalBudget(),
+                            fixedExpenseAmount,
+                            budget.getExpectedExpense(),
+                            expenseMap.getOrDefault(categoryId, BigDecimal.ZERO)
+                    );
+                })
+                .collect(Collectors.toCollection(ArrayList::new));
+
+        Set<Long> coveredCategoryIds = budgets.stream()
+                .map(this::resolveCategoryId)
+                .collect(Collectors.toSet());
+
+        fixedSnapshot.amountByCategory().forEach((categoryId, fixedAmount) -> {
+            if (coveredCategoryIds.contains(categoryId) || fixedAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                return;
+            }
+            contexts.add(new BudgetViewContext(
+                    null,
+                    categoryId,
+                    fixedSnapshot.nameByCategory().getOrDefault(categoryId, "카테고리"),
+                    false,
+                    BigDecimal.ZERO,
+                    fixedAmount,
+                    BigDecimal.ZERO,
+                    expenseMap.getOrDefault(categoryId, BigDecimal.ZERO)
+            ));
+        });
+
+        return contexts;
+    }
+
+    private BudgetResponse toBudgetResponse(BudgetViewContext context) {
+        BigDecimal totalPlannedBudget = context.totalPlannedBudget();
+        BigDecimal remaining = totalPlannedBudget.subtract(context.actualExpense());
+        BigDecimal progress = calculateProgress(totalPlannedBudget, context.actualExpense());
+
+        return new BudgetResponse(
+                context.id(),
+                context.categoryId(),
+                context.categoryName(),
+                context.categoryArchived(),
+                context.totalBudget(),
+                context.fixedExpenseAmount(),
+                context.expectedExpense(),
+                totalPlannedBudget,
+                context.actualExpense(),
+                remaining,
+                progress
+        );
+    }
+
+    private FixedExpenseSnapshot buildFixedExpenseSnapshot(Long userId, LocalDate startDate, LocalDate endDate) {
+
+        Map<Long, BigDecimal> amountByCategory = new HashMap<>();
+        Map<Long, String> nameByCategory = new HashMap<>();
+
+        for (Object[] row : fixedTransactionRepository.sumByUserCategory(
+                userId, TransactionType.EXPENSE, startDate, endDate)) {
+            Long categoryId = (Long) row[0];
+            String categoryName = (String) row[1];
+            BigDecimal amount = (BigDecimal) row[2];
+            amountByCategory.put(categoryId, amount);
+            nameByCategory.put(categoryId, categoryName);
+        }
+
+        return new FixedExpenseSnapshot(amountByCategory, nameByCategory);
+    }
+
+    private BigDecimal calculateFixedExpenseForCategory(Long userId, Long categoryId, String yearMonth) {
+
+        LocalDate[] monthRange = monthDateRange(yearMonth);
+        BigDecimal fixedAmount = fixedTransactionRepository.sumByUserAndTypeAndCategory(
+                userId,
+                TransactionType.EXPENSE,
+                categoryId,
+                monthRange[0],
+                monthRange[1]
+        );
+        return fixedAmount != null ? fixedAmount : BigDecimal.ZERO;
+    }
+
+    private LocalDate[] monthDateRange(String yearMonth) {
         LocalDate startDate = LocalDate.parse(yearMonth + "-01");
         LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
+        return new LocalDate[]{startDate, endDate};
+    }
 
-        return budgetRepository.findByUserIdAndYearMonthAndTransactionCategoryId(userId, yearMonth, categoryId)
-                .map(budget -> {
-                    BigDecimal actualExpense = transactionRepository.sumAmountByUserIdAndCategoryId(userId, categoryId, startDate, endDate);
+    private record FixedExpenseSnapshot(
+            Map<Long, BigDecimal> amountByCategory,
+            Map<Long, String> nameByCategory
+    ) {
+    }
 
-                    if (actualExpense == null) actualExpense = BigDecimal.ZERO;
-
-                    BigDecimal totalPlanned = budget.getTotalBudget().add(budget.getExpectedExpense());
-                    return calculateProgress(totalPlanned, actualExpense);
-                })
-                .orElse(BigDecimal.ZERO);
+    private record BudgetViewContext(
+            Long id,
+            Long categoryId,
+            String categoryName,
+            boolean categoryArchived,
+            BigDecimal totalBudget,
+            BigDecimal fixedExpenseAmount,
+            BigDecimal expectedExpense,
+            BigDecimal actualExpense
+    ) {
+        BigDecimal totalPlannedBudget() {
+            return totalBudget.add(fixedExpenseAmount).add(expectedExpense);
+        }
     }
 }

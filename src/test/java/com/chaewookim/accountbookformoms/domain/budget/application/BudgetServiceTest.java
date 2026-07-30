@@ -1,5 +1,6 @@
 package com.chaewookim.accountbookformoms.domain.budget.application;
 
+import com.chaewookim.accountbookformoms.domain.asset.dao.FixedTransactionRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionCategoryRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionRepository;
 import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory;
@@ -44,6 +45,9 @@ class BudgetServiceTest {
 
     @Mock
     private TransactionCategoryRepository categoryRepository;
+
+    @Mock
+    private FixedTransactionRepository fixedTransactionRepository;
 
     @InjectMocks
     private BudgetService budgetService;
@@ -110,6 +114,10 @@ class BudgetServiceTest {
         Long userId = 1L;
         String yearMonth = "2026-06";
 
+        given(budgetRepository.findByUserIdAndYearMonth(userId, yearMonth)).willReturn(List.of());
+        given(fixedTransactionRepository.sumByUserCategory(any(), any(), any(), any())).willReturn(List.of());
+        given(transactionRepository.sumAmountByUserIdGroupByCategoryId(userId, yearMonth)).willReturn(List.of());
+
         // when
         List<BudgetResponse> responses = budgetService.getMonthlyBudgetStatus(userId, yearMonth);
 
@@ -126,6 +134,7 @@ class BudgetServiceTest {
         String yearMonth = "2026-06";
 
         given(budgetRepository.findByUserIdAndYearMonth(userId, yearMonth)).willReturn(List.of());
+        given(fixedTransactionRepository.sumByUserCategory(any(), any(), any(), any())).willReturn(List.of());
         given(transactionRepository.sumByUserAndType(any(), eq(TransactionType.EXPENSE), any(), any())).willReturn(BigDecimal.ZERO);
 
         // when
@@ -228,16 +237,70 @@ class BudgetServiceTest {
     }
 
     @Test
-    @DisplayName("최근 예산 불러오기 - 대상 월에 예산이 있으면 실패")
+    @DisplayName("최근 예산 불러오기 - 사용자가 설정한 예산이 있으면 실패")
     void copyFromLatest_targetMonthNotEmpty() {
         Long userId = 1L;
         String targetYearMonth = "2026-07";
 
+        Budget configuredBudget = Budget.builder()
+                .yearMonth(targetYearMonth)
+                .totalBudget(new BigDecimal("1000"))
+                .expectedExpense(BigDecimal.ZERO)
+                .build();
+
         given(budgetRepository.findByUserIdAndYearMonth(userId, targetYearMonth))
-                .willReturn(List.of(mock(Budget.class)));
+                .willReturn(List.of(configuredBudget));
 
         assertThatThrownBy(() -> budgetService.copyFromLatest(userId, targetYearMonth))
                 .isInstanceOf(CustomException.class);
+    }
+
+    @Test
+    @DisplayName("최근 예산 불러오기 - 고정 지출용 placeholder만 있으면 허용")
+    void copyFromLatest_allowsWhenOnlyPlaceholderBudgets() {
+        Long userId = 1L;
+        String targetYearMonth = "2026-08";
+        String sourceYearMonth = "2026-06";
+
+        Budget placeholderBudget = Budget.builder()
+                .yearMonth(targetYearMonth)
+                .totalBudget(BigDecimal.ZERO)
+                .expectedExpense(BigDecimal.ZERO)
+                .build();
+
+        TransactionCategory category = mock(TransactionCategory.class);
+        given(category.getId()).willReturn(1L);
+        given(category.getType()).willReturn(TransactionType.EXPENSE);
+        given(category.getName()).willReturn("식비");
+
+        Budget sourceBudget = Budget.builder()
+                .yearMonth(sourceYearMonth)
+                .totalBudget(new BigDecimal("1000"))
+                .expectedExpense(new BigDecimal("200"))
+                .build();
+        given(sourceBudget.getTransactionCategory()).willReturn(category);
+
+        User user = mock(User.class);
+
+        given(budgetRepository.findByUserIdAndYearMonth(userId, targetYearMonth))
+                .willReturn(List.of(placeholderBudget));
+        given(budgetRepository.findLatestBudgetYearMonthBefore(userId, targetYearMonth))
+                .willReturn(Optional.of(sourceYearMonth));
+        given(budgetRepository.findByUserIdAndYearMonth(userId, sourceYearMonth)).willReturn(List.of(sourceBudget));
+        given(categoryRepository.findAllByUserOrSystem(userId)).willReturn(List.of(category));
+        given(budgetRepository.findByUserIdAndYearMonthAndTransactionCategoryId(userId, targetYearMonth, 1L))
+                .willReturn(Optional.empty());
+        given(budgetRepository.findByUserIdAndYearMonthAndCategoryIdIncludingDeleted(userId, targetYearMonth, 1L))
+                .willReturn(Optional.empty());
+        given(userRepository.getReferenceById(userId)).willReturn(user);
+        given(categoryRepository.getReferenceById(1L)).willReturn(category);
+        given(budgetRepository.save(any())).willReturn(Budget.builder().build());
+        given(userRepository.findById(userId)).willReturn(Optional.of(user));
+
+        BudgetCopyResponse response = budgetService.copyFromLatest(userId, targetYearMonth);
+
+        assertThat(response.copyCount()).isEqualTo(1);
+        verify(budgetRepository).delete(placeholderBudget);
     }
 
     @Test
