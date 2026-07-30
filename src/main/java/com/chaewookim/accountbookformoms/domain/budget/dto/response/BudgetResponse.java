@@ -7,6 +7,7 @@ public record BudgetResponse(
         Long id,
         Long categoryId,
         String categoryName,
+        boolean categoryArchived,
         BigDecimal totalBudget,
         BigDecimal expectedExpense,
         BigDecimal totalPlannedBudget,

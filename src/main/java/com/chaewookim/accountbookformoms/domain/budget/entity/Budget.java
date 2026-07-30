@@ -60,6 +60,15 @@ public class Budget extends BaseEntity {
     @Column(nullable = false)
     private BigDecimal expectedExpense;
 
+    @Column(name = "snapshot_category_id")
+    private Long snapshotCategoryId;
+
+    @Column(name = "snapshot_category_name")
+    private String snapshotCategoryName;
+
+    @Column(nullable = false)
+    private boolean categoryArchived = false;
+
     @Builder
     public Budget(User user, TransactionCategory transactionCategory, String yearMonth, BigDecimal totalBudget, BigDecimal expectedExpense) {
         this.user = user;
@@ -67,10 +76,19 @@ public class Budget extends BaseEntity {
         this.yearMonth = yearMonth;
         this.totalBudget = totalBudget;
         this.expectedExpense = expectedExpense;
+        syncCategorySnapshot();
     }
 
     public void update(BigDecimal totalBudget, BigDecimal expectedExpense) {
         this.totalBudget = totalBudget;
         this.expectedExpense = expectedExpense;
+    }
+
+    public void syncCategorySnapshot() {
+        if (this.transactionCategory != null) {
+            this.snapshotCategoryId = this.transactionCategory.getId();
+            this.snapshotCategoryName = this.transactionCategory.getName();
+            this.categoryArchived = false;
+        }
     }
 }

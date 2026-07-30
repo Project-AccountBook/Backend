@@ -5,10 +5,12 @@ import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionRepository;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.budget.dao.BudgetRepository;
 import com.chaewookim.accountbookformoms.domain.budget.dto.request.BudgetRequest;
+import com.chaewookim.accountbookformoms.domain.budget.dto.response.BudgetCopyResponse;
 import com.chaewookim.accountbookformoms.domain.budget.dto.response.BudgetResponse;
 import com.chaewookim.accountbookformoms.domain.budget.dto.response.BudgetSummaryResponse;
 import com.chaewookim.accountbookformoms.domain.budget.entity.Budget;
 import com.chaewookim.accountbookformoms.domain.budget.error.BudgetErrorCode;
+import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
@@ -19,9 +21,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -72,7 +77,8 @@ public class BudgetService {
 
         return budgets.stream().map(budget -> {
 
-            Long categoryId = budget.getTransactionCategory().getId();
+            Long categoryId = resolveCategoryId(budget);
+            String categoryName = resolveCategoryName(budget);
 
             BigDecimal totalPlannedBudget = budget.getTotalBudget().add(budget.getExpectedExpense());
             BigDecimal actualExpense = expenseMap.getOrDefault(categoryId, BigDecimal.ZERO);
@@ -82,7 +88,8 @@ public class BudgetService {
             return new BudgetResponse(
                     budget.getId(),
                     categoryId,
-                    budget.getTransactionCategory().getName(),
+                    categoryName,
+                    budget.isCategoryArchived(),
                     budget.getTotalBudget(),
                     budget.getExpectedExpense(),
                     totalPlannedBudget,
@@ -132,6 +139,148 @@ public class BudgetService {
         userRepository.save(user);
     }
 
+    public BudgetCopyResponse previewCopyFromLatest(Long userId, String targetYearMonth) {
+
+        validateTargetMonthEmpty(userId, targetYearMonth);
+        CopyPlan plan = buildCopyPlan(userId, targetYearMonth);
+
+        if (plan.sourceBudgets.isEmpty()) {
+            throw new CustomException(BudgetErrorCode.NO_SOURCE_BUDGET);
+        }
+
+        return toCopyResponse(plan);
+    }
+
+    @Transactional
+    public BudgetCopyResponse copyFromLatest(Long userId, String targetYearMonth) {
+
+        validateTargetMonthEmpty(userId, targetYearMonth);
+        CopyPlan plan = buildCopyPlan(userId, targetYearMonth);
+
+        if (plan.sourceBudgets.isEmpty()) {
+            throw new CustomException(BudgetErrorCode.NO_SOURCE_BUDGET);
+        }
+
+        List<BudgetCopyResponse.Item> items = new ArrayList<>();
+        int copiedCount = 0;
+
+        for (Budget source : plan.sourceBudgets) {
+            Long categoryId = resolveCategoryId(source);
+            String categoryName = resolveCategoryName(source);
+            String skipReason = resolveSkipReason(plan, categoryId);
+
+            if (skipReason != null) {
+                items.add(new BudgetCopyResponse.Item(
+                        categoryId,
+                        categoryName,
+                        source.getTotalBudget(),
+                        source.getExpectedExpense(),
+                        false,
+                        skipReason
+                ));
+                continue;
+            }
+
+            BudgetRequest request = new BudgetRequest(
+                    categoryId,
+                    targetYearMonth,
+                    source.getTotalBudget(),
+                    source.getExpectedExpense()
+            );
+            createBudget(userId, request);
+            plan.existingTargetCategoryIds.add(categoryId);
+            copiedCount++;
+
+            items.add(new BudgetCopyResponse.Item(
+                    categoryId,
+                    categoryName,
+                    source.getTotalBudget(),
+                    source.getExpectedExpense(),
+                    true,
+                    null
+            ));
+        }
+
+        if (copiedCount > 0) {
+            User user = userRepository.findById(userId).orElseThrow();
+            user.updateLastBudgetAlertMonth(null);
+            userRepository.save(user);
+        }
+
+        return new BudgetCopyResponse(plan.sourceYearMonth, targetYearMonth, items, copiedCount);
+    }
+
+    private void validateTargetMonthEmpty(Long userId, String targetYearMonth) {
+        if (!budgetRepository.findByUserIdAndYearMonth(userId, targetYearMonth).isEmpty()) {
+            throw new CustomException(BudgetErrorCode.TARGET_MONTH_NOT_EMPTY);
+        }
+    }
+
+    private CopyPlan buildCopyPlan(Long userId, String targetYearMonth) {
+
+        String sourceYearMonth = budgetRepository.findLatestBudgetYearMonthBefore(userId, targetYearMonth)
+                .orElse(null);
+        List<Budget> sourceBudgets = sourceYearMonth == null
+                ? List.of()
+                : budgetRepository.findByUserIdAndYearMonth(userId, sourceYearMonth);
+        Set<Long> activeExpenseCategoryIds = categoryRepository.findAllByUserOrSystem(userId).stream()
+                .filter(category -> category.getType() == TransactionType.EXPENSE)
+                .map(TransactionCategory::getId)
+                .collect(Collectors.toSet());
+        Set<Long> existingTargetCategoryIds = budgetRepository.findByUserIdAndYearMonth(userId, targetYearMonth).stream()
+                .map(budget -> budget.getTransactionCategory().getId())
+                .collect(Collectors.toCollection(HashSet::new));
+
+        return new CopyPlan(sourceYearMonth, targetYearMonth, sourceBudgets, activeExpenseCategoryIds, existingTargetCategoryIds);
+    }
+
+    private BudgetCopyResponse toCopyResponse(CopyPlan plan) {
+
+        List<BudgetCopyResponse.Item> items = new ArrayList<>();
+        int copyCount = 0;
+
+        for (Budget source : plan.sourceBudgets) {
+            Long categoryId = resolveCategoryId(source);
+            String categoryName = resolveCategoryName(source);
+            String skipReason = resolveSkipReason(plan, categoryId);
+            boolean selected = skipReason == null;
+
+            if (selected) {
+                copyCount++;
+            }
+
+            items.add(new BudgetCopyResponse.Item(
+                    categoryId,
+                    categoryName,
+                    source.getTotalBudget(),
+                    source.getExpectedExpense(),
+                    selected,
+                    skipReason
+            ));
+        }
+
+        return new BudgetCopyResponse(plan.sourceYearMonth, plan.targetYearMonth, items, copyCount);
+    }
+
+    private String resolveSkipReason(CopyPlan plan, Long categoryId) {
+        if (!plan.activeExpenseCategoryIds.contains(categoryId)) {
+            return "DELETED_CATEGORY";
+        }
+        if (plan.existingTargetCategoryIds.contains(categoryId)) {
+            return "ALREADY_EXISTS";
+        }
+        return null;
+    }
+
+    private record CopyPlan(
+            String sourceYearMonth,
+            String targetYearMonth,
+            List<Budget> sourceBudgets,
+            Set<Long> activeExpenseCategoryIds,
+            Set<Long> existingTargetCategoryIds
+    ) {
+    }
+
     // 공통 검증 로직 분리
     private Budget validateAndGet(Long userId, Long budgetId) {
 
@@ -142,6 +291,23 @@ public class BudgetService {
             throw new CustomException(BudgetErrorCode.BUDGET_FORBIDDEN);
         }
         return budget;
+    }
+
+    private Long resolveCategoryId(Budget budget) {
+        if (budget.getTransactionCategory() != null) {
+            return budget.getTransactionCategory().getId();
+        }
+        return budget.getSnapshotCategoryId();
+    }
+
+    private String resolveCategoryName(Budget budget) {
+        if (budget.getTransactionCategory() != null) {
+            return budget.getTransactionCategory().getName();
+        }
+        if (budget.getSnapshotCategoryName() != null) {
+            return budget.getSnapshotCategoryName();
+        }
+        return "삭제된 카테고리";
     }
 
     // 예산 대비 실제 지출의 사용률 계산
