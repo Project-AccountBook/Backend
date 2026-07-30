@@ -148,7 +148,9 @@ public class SecurityConfig {
                 "http://localhost:5174",
                 "https://frontend-sand-nu-34.vercel.app",
                 "https://moneydiary.cloud",
-                "https://admin-frontend-rho-five.vercel.app"
+                "https://admin-frontend-rho-five.vercel.app",
+                "capacitor://localhost",
+                "http://localhost"
         ));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
