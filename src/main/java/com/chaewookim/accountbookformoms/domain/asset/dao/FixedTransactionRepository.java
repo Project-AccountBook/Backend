@@ -13,9 +13,10 @@ import java.util.List;
 
 public interface FixedTransactionRepository extends JpaRepository<FixedTransaction, Long> {
 
-    boolean existsByTransactionCategoryId(Long categoryId);
-
     List<FixedTransaction> findAllByUserId(Long userId);
+
+    @Query("SELECT f FROM FixedTransaction f WHERE f.transactionCategory.id = :categoryId")
+    List<FixedTransaction> findAllByTransactionCategoryId(@Param("categoryId") Long categoryId);
 
     @Query("SELECT f FROM FixedTransaction f WHERE f.account.id = :accountId")
     List<FixedTransaction> findAllByAccountId(@Param("accountId") Long accountId);

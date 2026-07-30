@@ -16,6 +16,7 @@ public record TransactionResponse(
         boolean targetAccountArchived,
         Long categoryId,
         String categoryName,
+        boolean categoryArchived,
         TransactionType type,
         BigDecimal amount,
         LocalDate transactionDate,
@@ -37,6 +38,13 @@ public record TransactionResponse(
                 ? transaction.getSnapshotTargetAccountName()
                 : (transaction.getTargetAccount() != null ? transaction.getTargetAccount().getAccountName() : null);
 
+        Long categoryId = transaction.getSnapshotCategoryId() != null
+                ? transaction.getSnapshotCategoryId()
+                : (transaction.getTransactionCategory() != null ? transaction.getTransactionCategory().getId() : null);
+        String categoryName = transaction.getSnapshotCategoryName() != null
+                ? transaction.getSnapshotCategoryName()
+                : (transaction.getTransactionCategory() != null ? transaction.getTransactionCategory().getName() : "삭제된 카테고리");
+
         return new TransactionResponse(
                 transaction.getId(),
                 accountId,
@@ -45,8 +53,9 @@ public record TransactionResponse(
                 targetAccountId,
                 targetAccountName,
                 transaction.isTargetAccountArchived(),
-                transaction.getTransactionCategory().getId(),
-                transaction.getTransactionCategory().getName(),
+                categoryId,
+                categoryName,
+                transaction.isCategoryArchived(),
                 transaction.getType(),
                 transaction.getAmount(),
                 transaction.getTransactionDate(),
