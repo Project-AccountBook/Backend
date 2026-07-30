@@ -49,12 +49,14 @@ public class BoardController {
     public ResponseEntity<ApiResponse<Page<BoardResponse>>> list(
             @RequestParam(required = false) BOARD_TYPE type,
             @RequestParam(required = false) String tag,
+            @RequestParam(required = false, defaultValue = "false") boolean mine,
             @Parameter(hidden = true)
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
             @AuthenticationPrincipal UserPrincipal principal
     ) {
         Long viewerId = principal == null ? null : principal.getUserId();
-        return ResponseEntity.ok(ApiResponse.success(boardService.list(type, tag, pageable, viewerId)));
+        Long authorId = (mine && principal != null) ? principal.getUserId() : null;
+        return ResponseEntity.ok(ApiResponse.success(boardService.list(type, tag, authorId, pageable, viewerId)));
     }
 
     @Operation(summary = "게시물 추가", description = "일반 사용자의 게시물 생성")

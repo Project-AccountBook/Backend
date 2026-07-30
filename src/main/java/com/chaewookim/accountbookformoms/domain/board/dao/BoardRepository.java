@@ -21,6 +21,10 @@ public interface BoardRepository extends JpaRepository<Board, Long> {
 
     Page<Board> findByType(BOARD_TYPE type, Pageable pageable);
 
+    Page<Board> findByUserId(Long userId, Pageable pageable);
+
+    Page<Board> findByUserIdAndType(Long userId, BOARD_TYPE type, Pageable pageable);
+
     long countByUserId(Long userId);
 
     @Query("SELECT b FROM Board b WHERE b.type = :type AND b.createdAt >= :since")
