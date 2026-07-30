@@ -16,22 +16,24 @@ public class UserPrincipal implements UserDetails, OAuth2User {
 
     private final User user;
     private Map<String, Object> attributes;
+    private final boolean newSocialSignup;
 
-    private UserPrincipal(User user) {
-        this.user = user;
-    }
-
-    private UserPrincipal(User user, Map<String, Object> attributes) {
+    private UserPrincipal(User user, Map<String, Object> attributes, boolean newSocialSignup) {
         this.user = user;
         this.attributes = attributes;
+        this.newSocialSignup = newSocialSignup;
     }
 
     public static UserPrincipal create(User user) {
-        return new UserPrincipal(user);
+        return new UserPrincipal(user, null, false);
     }
 
     public static UserPrincipal create(User user, Map<String, Object> attributes) {
-        return new UserPrincipal(user, attributes);
+        return new UserPrincipal(user, attributes, false);
+    }
+
+    public static UserPrincipal create(User user, Map<String, Object> attributes, boolean newSocialSignup) {
+        return new UserPrincipal(user, attributes, newSocialSignup);
     }
 
     public Long getUserId() {

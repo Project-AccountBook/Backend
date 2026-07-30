@@ -39,24 +39,33 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
             default -> throw new CustomException(UserErrorCode.UNSUPPORTED_SOCIAL_TYPE);
         };
 
-        User user = userRepository.findByEmailIncludingDeleted(userInfo.getEmail())
-                .map(entity -> {
-                    if (entity.getDeletedAt() != null) {
-                        return userCommonService.restoreUser(entity, userInfo.getName(), null, null, null);
-                    }
-                    return entity.update(userInfo.getName());
-                })
-                .orElseGet(() -> userCommonService.saveSocialUser(
-                        userInfo.getEmail(),
-                        userInfo.getName(),
-                        SocialProvider.from(userInfo.getProvider())
-                ));
+        var existingUser = userRepository.findByEmailIncludingDeleted(userInfo.getEmail());
+        boolean newSocialSignup;
+        User user;
+
+        if (existingUser.isPresent()) {
+            User entity = existingUser.get();
+            if (entity.getDeletedAt() != null) {
+                user = userCommonService.restoreUser(entity, userInfo.getName(), null, null, null);
+                newSocialSignup = true;
+            } else {
+                user = entity.update(userInfo.getName());
+                newSocialSignup = false;
+            }
+        } else {
+            user = userCommonService.saveSocialUser(
+                    userInfo.getEmail(),
+                    userInfo.getName(),
+                    SocialProvider.from(userInfo.getProvider())
+            );
+            newSocialSignup = true;
+        }
 
         if (adminEmail.equals(userInfo.getEmail())) {
             user.updateRole(com.chaewookim.accountbookformoms.domain.user.enums.UserRole.ROLE_ADMIN);
             userRepository.save(user);
         }
 
-        return UserPrincipal.create(user, oAuth2User.getAttributes());
+        return UserPrincipal.create(user, oAuth2User.getAttributes(), newSocialSignup);
     }
 }
