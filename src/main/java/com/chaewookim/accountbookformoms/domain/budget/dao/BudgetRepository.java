@@ -2,6 +2,7 @@ package com.chaewookim.accountbookformoms.domain.budget.dao;
 
 import com.chaewookim.accountbookformoms.domain.budget.entity.Budget;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -38,6 +39,33 @@ public interface BudgetRepository extends JpaRepository<Budget, Long> {
             """)
     List<Budget> findByUserIdAndYearMonth(@Param("userId") Long userId,
                                           @Param("yearMonth") String yearMonth);
+
+    @Modifying(clearAutomatically = true)
+    @Query("""
+            UPDATE Budget b
+               SET b.snapshotCategoryId = :categoryId,
+                   b.snapshotCategoryName = :categoryName
+             WHERE b.transactionCategory.id = :categoryId
+               AND b.snapshotCategoryName IS NULL
+            """)
+    void backfillCategorySnapshot(@Param("categoryId") Long categoryId, @Param("categoryName") String categoryName);
+
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE Budget b SET b.categoryArchived = true WHERE b.snapshotCategoryId = :categoryId")
+    void markCategoryArchived(@Param("categoryId") Long categoryId);
+
+    @Query(value = """
+            SELECT b.`year_month`
+              FROM budget b
+             WHERE b.user_id = :userId
+               AND b.`year_month` < :targetYearMonth
+               AND b.deleted_at IS NULL
+             GROUP BY b.`year_month`
+             ORDER BY b.`year_month` DESC
+             LIMIT 1
+            """, nativeQuery = true)
+    Optional<String> findLatestBudgetYearMonthBefore(@Param("userId") Long userId,
+                                                     @Param("targetYearMonth") String targetYearMonth);
 
     @Query("""
             SELECT COALESCE(SUM(b.totalBudget), 0)

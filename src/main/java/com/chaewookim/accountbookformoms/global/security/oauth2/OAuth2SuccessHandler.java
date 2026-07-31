@@ -55,10 +55,15 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             }
         }
 
-        targetUrl = UriComponentsBuilder.fromUriString(targetUrl)
+        UriComponentsBuilder redirectBuilder = UriComponentsBuilder.fromUriString(targetUrl)
                 .queryParam("accessToken", accessToken)
-                .queryParam("refreshToken", refreshToken)
-                .build().toUriString();
+                .queryParam("refreshToken", refreshToken);
+
+        if (principal.isNewSocialSignup()) {
+            redirectBuilder.queryParam("isNewUser", "true");
+        }
+
+        targetUrl = redirectBuilder.build().toUriString();
 
         clearAuthenticationAttributes(request, response);
         getRedirectStrategy().sendRedirect(request, response, targetUrl);

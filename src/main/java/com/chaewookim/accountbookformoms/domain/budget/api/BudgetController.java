@@ -2,6 +2,7 @@ package com.chaewookim.accountbookformoms.domain.budget.api;
 
 import com.chaewookim.accountbookformoms.domain.budget.application.BudgetService;
 import com.chaewookim.accountbookformoms.domain.budget.dto.request.BudgetRequest;
+import com.chaewookim.accountbookformoms.domain.budget.dto.response.BudgetCopyResponse;
 import com.chaewookim.accountbookformoms.domain.budget.dto.response.BudgetResponse;
 import com.chaewookim.accountbookformoms.domain.budget.dto.response.BudgetSummaryResponse;
 import com.chaewookim.accountbookformoms.global.common.ApiResponse;
@@ -70,5 +71,27 @@ public class BudgetController {
     ) {
         budgetService.deleteBudget(user.getUserId(), budgetId);
         return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @Operation(summary = "최근 예산 불러오기 미리보기", description = "가장 최근에 등록한 예산 월을 기준으로 복사 미리보기")
+    @GetMapping("/{targetYearMonth}/copy-from-latest/preview")
+    public ResponseEntity<ApiResponse<BudgetCopyResponse>> previewCopyFromLatest(
+            @AuthenticationPrincipal UserPrincipal user,
+            @PathVariable String targetYearMonth
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                budgetService.previewCopyFromLatest(user.getUserId(), targetYearMonth)
+        ));
+    }
+
+    @Operation(summary = "최근 예산 불러오기", description = "가장 최근에 등록한 예산 월 설정을 복사")
+    @PostMapping("/{targetYearMonth}/copy-from-latest")
+    public ResponseEntity<ApiResponse<BudgetCopyResponse>> copyFromLatest(
+            @AuthenticationPrincipal UserPrincipal user,
+            @PathVariable String targetYearMonth
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                budgetService.copyFromLatest(user.getUserId(), targetYearMonth)
+        ));
     }
 }

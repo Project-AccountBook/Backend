@@ -20,7 +20,9 @@ public enum BudgetErrorCode implements BaseErrorCode {
     TARGET_NOT_PUBLIC(HttpStatus.FORBIDDEN, "비공개 사용자의 예산은 조회할 수 없습니다."),
     BUDGET_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 해당 월/카테고리에 설정된 예산이 존재합니다."),
     BUDGET_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 예산을 찾을 수 없습니다."),
-    BUDGET_FORBIDDEN(HttpStatus.FORBIDDEN, "해당 예산에 대한 수정/삭제 권한이 없습니다.");
+    BUDGET_FORBIDDEN(HttpStatus.FORBIDDEN, "해당 예산에 대한 수정/삭제 권한이 없습니다."),
+    NO_SOURCE_BUDGET(HttpStatus.BAD_REQUEST, "복사할 예산이 있는 이전 월이 없습니다."),
+    TARGET_MONTH_NOT_EMPTY(HttpStatus.CONFLICT, "이미 이번 달에 등록된 예산이 있어 불러올 수 없습니다.");
 
     private final HttpStatus status;
     private final String message;

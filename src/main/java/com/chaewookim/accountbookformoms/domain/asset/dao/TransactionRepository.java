@@ -20,7 +20,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
 
     @Query("""
             SELECT t FROM Transaction t
-            JOIN FETCH t.transactionCategory
+            LEFT JOIN FETCH t.transactionCategory
             LEFT JOIN FETCH t.account
             LEFT JOIN FETCH t.targetAccount
             WHERE t.user.id = :userId
@@ -68,11 +68,11 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
                                               @Param("endDate") LocalDate endDate);
 
     @Query("""
-    SELECT t.transactionCategory.id, SUM(ABS(t.amount))
+    SELECT COALESCE(t.snapshotCategoryId, t.transactionCategory.id), SUM(ABS(t.amount))
     FROM Transaction t
     WHERE t.user.id = :userId
       AND FUNCTION('DATE_FORMAT', t.transactionDate, '%Y-%m') = :yearMonth
-    GROUP BY t.transactionCategory.id
+    GROUP BY COALESCE(t.snapshotCategoryId, t.transactionCategory.id)
     """)
     List<Object[]> sumAmountByUserIdGroupByCategoryId(@Param("userId") Long userId,
                                                       @Param("yearMonth") String yearMonth);
@@ -238,6 +238,20 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     @Modifying(clearAutomatically = true)
     @Query("UPDATE Transaction t SET t.targetAccountArchived = true WHERE t.snapshotTargetAccountId = :accountId")
     void markTargetAccountArchived(@Param("accountId") Long accountId);
+
+    @Modifying(clearAutomatically = true)
+    @Query("""
+            UPDATE Transaction t
+               SET t.snapshotCategoryId = :categoryId,
+                   t.snapshotCategoryName = :categoryName
+             WHERE t.transactionCategory.id = :categoryId
+               AND t.snapshotCategoryName IS NULL
+            """)
+    void backfillCategorySnapshot(@Param("categoryId") Long categoryId, @Param("categoryName") String categoryName);
+
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE Transaction t SET t.categoryArchived = true WHERE t.snapshotCategoryId = :categoryId")
+    void markCategoryArchived(@Param("categoryId") Long categoryId);
 
     /**
      * 지정 userId 집합(공개 사용자만) 의 월 합계(사용자 단위). 위치 기반 비교용.

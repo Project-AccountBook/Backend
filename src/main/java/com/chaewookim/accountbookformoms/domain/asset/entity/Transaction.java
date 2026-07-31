@@ -90,6 +90,15 @@ public class Transaction extends BaseEntity {
     @Column(nullable = false)
     private boolean targetAccountArchived = false;
 
+    @Column(name = "snapshot_category_id")
+    private Long snapshotCategoryId;
+
+    @Column(name = "snapshot_category_name")
+    private String snapshotCategoryName;
+
+    @Column(nullable = false)
+    private boolean categoryArchived = false;
+
     @Builder
     public Transaction(User user, Account account, Account targetAccount, TransactionCategory transactionCategory,
                        TransactionType type, BigDecimal amount, LocalDate transactionDate, String description) {
@@ -102,6 +111,7 @@ public class Transaction extends BaseEntity {
         this.transactionDate = transactionDate;
         this.description = description;
         syncAccountSnapshots();
+        syncCategorySnapshot();
     }
 
     public void markAsFixedTransactionGenerated() {
@@ -117,6 +127,7 @@ public class Transaction extends BaseEntity {
         this.description = request.description();
         this.targetAccount = request.type() == TransactionType.TRANSFER ? targetAccount : null;
         syncAccountSnapshots();
+        syncCategorySnapshot();
     }
 
     public void syncAccountSnapshots() {
@@ -133,6 +144,14 @@ public class Transaction extends BaseEntity {
             this.snapshotTargetAccountId = null;
             this.snapshotTargetAccountName = null;
             this.targetAccountArchived = false;
+        }
+    }
+
+    public void syncCategorySnapshot() {
+        if (this.transactionCategory != null) {
+            this.snapshotCategoryId = this.transactionCategory.getId();
+            this.snapshotCategoryName = this.transactionCategory.getName();
+            this.categoryArchived = false;
         }
     }
 
