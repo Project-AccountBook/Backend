@@ -109,9 +109,10 @@ public class GroupPurchaseController {
     @PostMapping("/{id}/join")
     public ResponseEntity<ApiResponse<GroupPurchaseJoinResponse>> join(
             @PathVariable Long id,
-            @AuthenticationPrincipal UserPrincipal userPrincipal
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @RequestBody @Valid com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseJoinRequest request
     ) {
-        GroupPurchaseJoinResponse response = groupPurchaseLockFacade.joinGroupPurchase(userPrincipal.getUserId(), id);
+        GroupPurchaseJoinResponse response = groupPurchaseLockFacade.joinGroupPurchase(userPrincipal.getUserId(), id, request);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

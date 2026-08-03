@@ -29,4 +29,5 @@ public class GroupPurchaseDataInitializer implements CommandLineRunner {
             log.info("공동구매 기본 카테고리 등록 완료");
         }
     }
+
 }

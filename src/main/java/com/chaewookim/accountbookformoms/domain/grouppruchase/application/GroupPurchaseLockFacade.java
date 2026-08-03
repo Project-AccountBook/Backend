@@ -20,7 +20,7 @@ public class GroupPurchaseLockFacade {
     private final RedissonClient redissonClient;
     private final GroupPurchaseService groupPurchaseService;
 
-    public GroupPurchaseJoinResponse joinGroupPurchase(Long userId, Long groupPurchaseId) {
+    public GroupPurchaseJoinResponse joinGroupPurchase(Long userId, Long groupPurchaseId, com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseJoinRequest request) {
         String lockKey = "group_purchase_lock:" + groupPurchaseId;
         RLock lock = redissonClient.getLock(lockKey);
 
@@ -30,7 +30,7 @@ public class GroupPurchaseLockFacade {
                 log.warn("공동구매 참여 락 획득 실패 (lockKey={})", lockKey);
                 throw new CustomException(ErrorCode.LOCK_ACQUISITION_FAILED);
             }
-            return groupPurchaseService.joinGroupPurchase(userId, groupPurchaseId);
+            return groupPurchaseService.joinGroupPurchase(userId, groupPurchaseId, request);
         } catch (InterruptedException e) {
             log.error("공동구매 참여 락 대기 중 인터럽트 발생", e);
             Thread.currentThread().interrupt();
