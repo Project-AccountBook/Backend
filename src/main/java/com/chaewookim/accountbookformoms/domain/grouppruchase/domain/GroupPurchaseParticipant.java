@@ -32,11 +32,15 @@ public class GroupPurchaseParticipant extends BaseEntity {
     @Enumerated(EnumType.STRING)
     private ParticipantStatus participantStatus; // 참여 상태
 
+    @Column(name = "account_id", nullable = false)
+    private Long accountId;                      // 결제 계좌 ID
+
     @Builder
-    public GroupPurchaseParticipant(Long id, Long groupPurchaseId, Long userId, ParticipantStatus participantStatus) {
+    public GroupPurchaseParticipant(Long id, Long groupPurchaseId, Long userId, Long accountId, ParticipantStatus participantStatus) {
         this.id = id;
         this.groupPurchaseId = groupPurchaseId;
         this.userId = userId;
+        this.accountId = accountId;
         this.participantStatus = participantStatus != null ? participantStatus : ParticipantStatus.JOINED;
     }
 

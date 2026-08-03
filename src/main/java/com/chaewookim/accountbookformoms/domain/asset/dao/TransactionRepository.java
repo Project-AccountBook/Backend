@@ -271,4 +271,5 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
                                       @Param("startDate") LocalDate startDate,
                                       @Param("endDate") LocalDate endDate,
                                       @Param("userIds") Collection<Long> userIds);
+    List<Transaction> findByAccountIdAndDescriptionAndType(Long accountId, String description, TransactionType type);
 }

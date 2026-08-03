@@ -32,6 +32,9 @@ public record GroupPurchaseCreateRequest(
         @NotBlank(message = "수령 장소는 필수 입력값입니다.")
         String pickupLocation,
 
-        String imageUrl
+        String imageUrl,
+
+        @NotNull(message = "결제 계좌 ID는 필수입니다.")
+        Long accountId
 ) {
 }
