@@ -1,13 +1,11 @@
 package com.chaewookim.accountbookformoms.global.security.oauth2;
 
-import com.chaewookim.accountbookformoms.domain.user.dao.RefreshTokenRepository;
-import com.chaewookim.accountbookformoms.domain.user.entity.RefreshToken;
-import com.chaewookim.accountbookformoms.global.security.jwt.JwtTokenProvider;
+import com.chaewookim.accountbookformoms.domain.user.application.AuthService;
+import com.chaewookim.accountbookformoms.domain.user.dto.response.TokenResponse;
 import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
@@ -17,18 +15,14 @@ import com.chaewookim.accountbookformoms.global.util.CookieUtils;
 import jakarta.servlet.http.Cookie;
 
 import java.io.IOException;
-import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
 public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
 
-    private final JwtTokenProvider jwtTokenProvider;
-    private final RefreshTokenRepository refreshTokenRepository;
+    private final AuthService authService;
     private final HttpCookieOAuth2AuthorizationRequestRepository httpCookieOAuth2AuthorizationRequestRepository;
-
-    @Value("${app.oauth2.authorized-redirect-uri:http://localhost:5173/oauth2/redirect}")
-    private String defaultRedirectUri;
+    private final OAuth2RedirectUriValidator redirectUriValidator;
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException {
@@ -37,15 +31,13 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         String email = principal.getUsername();
         String role = principal.getAuthorities().iterator().next().getAuthority();
 
-        String accessToken = jwtTokenProvider.createAccessToken(email, role);
-        String refreshToken = jwtTokenProvider.createRefreshToken(email);
+        TokenResponse tokens = authService.issueTokens(email, role);
 
-        refreshTokenRepository.save(new RefreshToken(email, refreshToken));
+        String candidateUri = CookieUtils.getCookie(request, HttpCookieOAuth2AuthorizationRequestRepository.REDIRECT_URI_PARAM_COOKIE_NAME)
+                .map(Cookie::getValue)
+                .orElse(null);
 
-        Optional<String> redirectUri = CookieUtils.getCookie(request, HttpCookieOAuth2AuthorizationRequestRepository.REDIRECT_URI_PARAM_COOKIE_NAME)
-                .map(Cookie::getValue);
-
-        String targetUrl = redirectUri.orElse(defaultRedirectUri);
+        String targetUrl = redirectUriValidator.resolve(candidateUri);
 
         if ("ROLE_ADMIN".equals(role)) {
             if (targetUrl.contains("localhost")) {
@@ -56,8 +48,8 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         }
 
         UriComponentsBuilder redirectBuilder = UriComponentsBuilder.fromUriString(targetUrl)
-                .queryParam("accessToken", accessToken)
-                .queryParam("refreshToken", refreshToken);
+                .queryParam("accessToken", tokens.accessToken())
+                .queryParam("refreshToken", tokens.refreshToken());
 
         if (principal.isNewSocialSignup()) {
             redirectBuilder.queryParam("isNewUser", "true");
