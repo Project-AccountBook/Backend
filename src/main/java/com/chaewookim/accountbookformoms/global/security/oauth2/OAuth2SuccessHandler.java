@@ -1,7 +1,8 @@
 package com.chaewookim.accountbookformoms.global.security.oauth2;
 
-import com.chaewookim.accountbookformoms.domain.user.application.AuthService;
-import com.chaewookim.accountbookformoms.domain.user.dto.response.TokenResponse;
+import com.chaewookim.accountbookformoms.domain.user.dao.RefreshTokenRepository;
+import com.chaewookim.accountbookformoms.domain.user.entity.RefreshToken;
+import com.chaewookim.accountbookformoms.global.security.jwt.JwtTokenProvider;
 import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -20,7 +21,8 @@ import java.io.IOException;
 @RequiredArgsConstructor
 public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
 
-    private final AuthService authService;
+    private final JwtTokenProvider jwtTokenProvider;
+    private final RefreshTokenRepository refreshTokenRepository;
     private final HttpCookieOAuth2AuthorizationRequestRepository httpCookieOAuth2AuthorizationRequestRepository;
     private final OAuth2RedirectUriValidator redirectUriValidator;
 
@@ -31,7 +33,9 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         String email = principal.getUsername();
         String role = principal.getAuthorities().iterator().next().getAuthority();
 
-        TokenResponse tokens = authService.issueTokens(email, role);
+        String accessToken = jwtTokenProvider.createAccessToken(email, role);
+        String refreshToken = jwtTokenProvider.createRefreshToken(email);
+        refreshTokenRepository.save(new RefreshToken(email, refreshToken));
 
         String candidateUri = CookieUtils.getCookie(request, HttpCookieOAuth2AuthorizationRequestRepository.REDIRECT_URI_PARAM_COOKIE_NAME)
                 .map(Cookie::getValue)
@@ -48,8 +52,8 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         }
 
         UriComponentsBuilder redirectBuilder = UriComponentsBuilder.fromUriString(targetUrl)
-                .queryParam("accessToken", tokens.accessToken())
-                .queryParam("refreshToken", tokens.refreshToken());
+                .queryParam("accessToken", accessToken)
+                .queryParam("refreshToken", refreshToken);
 
         if (principal.isNewSocialSignup()) {
             redirectBuilder.queryParam("isNewUser", "true");
