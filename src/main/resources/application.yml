@@ -27,6 +27,12 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        jdbc:
+          batch_size: 20
+          batch_versioned_data: true
+        order_inserts: true
+        order_updates: true
+        default_batch_fetch_size: 100
 
   elasticsearch:
     uris: ${ELASTICSEARCH_URIS:http://localhost:9200}
