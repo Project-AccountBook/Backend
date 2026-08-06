@@ -120,10 +120,10 @@ class AuthServiceTest {
         given(userRepository.findByEmail(email)).willReturn(Optional.of(user));
 
         // when
-        authService.requestPasswordReset(email);
+        authService.requestPasswordReset(email, "127.0.0.1");
 
         // then
-        verify(emailVerificationService).sendVerificationCode(email, VerificationType.RESET);
+        verify(emailVerificationService).sendVerificationCode(email, VerificationType.RESET, "127.0.0.1");
     }
 
     @Test
