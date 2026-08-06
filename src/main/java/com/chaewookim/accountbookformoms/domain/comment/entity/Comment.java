@@ -21,10 +21,16 @@ import org.hibernate.annotations.SQLDelete;
 @Getter
 @Table(
         name = "comment",
-        indexes = @Index(
-                name = "idx_comment_reference",
-                columnList = "reference_id, reference_type"
-        )
+        indexes = {
+                @Index(
+                        name = "idx_comment_reference",
+                        columnList = "reference_id, reference_type"
+                ),
+                @Index(
+                        name = "idx_comment_user",
+                        columnList = "user_id, created_at"
+                )
+        }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @SQLDelete(sql = "UPDATE comment SET deleted_at = NOW() WHERE id = ?")

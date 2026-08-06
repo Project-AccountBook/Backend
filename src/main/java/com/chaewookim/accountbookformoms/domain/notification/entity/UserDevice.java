@@ -7,8 +7,10 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -16,6 +18,8 @@ import lombok.NoArgsConstructor;
 
 @Entity
 @Getter
+@Table(name = "user_device",
+        indexes = @Index(name = "idx_userdevice_user", columnList = "user_id"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class UserDevice {
 

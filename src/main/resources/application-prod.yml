@@ -19,3 +19,11 @@ spring:
 logging:
   level:
     org.hibernate.SQL: warn
+
+app:
+  cors:
+    allowed-origins:
+      - "https://frontend-sand-nu-34.vercel.app"
+      - "https://moneydiary.cloud"
+      - "https://admin-frontend-rho-five.vercel.app"
+      - "capacitor://localhost"
