@@ -48,8 +48,9 @@ class NotificationServiceTest {
 
         // given
         User user = mock(User.class);
+        when(user.getId()).thenReturn(1L);
         UserDevice device = UserDevice.builder().fcmToken("token").build();
-        when(userDeviceRepository.findByUser(user)).thenReturn(Optional.of(device));
+        when(userDeviceRepository.findByUserId(1L)).thenReturn(Optional.of(device));
 
         // when
         notificationService.createNotification(user, NotificationType.SYSTEM, "제목", "본문", "/url", 1L);
@@ -63,8 +64,9 @@ class NotificationServiceTest {
     @DisplayName("알림 생성 - FCM 실패해도 DB 저장은 유지")
     void createNotification_persistsWhenFcmFails() {
         User user = mock(User.class);
+        when(user.getId()).thenReturn(1L);
         UserDevice device = UserDevice.builder().fcmToken("token").build();
-        when(userDeviceRepository.findByUser(user)).thenReturn(Optional.of(device));
+        when(userDeviceRepository.findByUserId(1L)).thenReturn(Optional.of(device));
         doThrow(new IllegalStateException("Firebase not initialized")).when(fcmService)
                 .sendNotification(eq("token"), anyString(), anyString(), any(Map.class));
 

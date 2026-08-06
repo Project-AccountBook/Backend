@@ -23,7 +23,8 @@ import org.hibernate.annotations.SQLRestriction;
 @Table(name = "board",
         indexes = {
                 @Index(name = "idx_board_created_at", columnList = "created_at"),
-                @Index(name = "idx_board_type", columnList = "type")
+                @Index(name = "idx_board_type", columnList = "type"),
+                @Index(name = "idx_board_user_type", columnList = "user_id, type")
         })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @SQLDelete(sql = "UPDATE board SET deleted_at = NOW() WHERE id = ?")
