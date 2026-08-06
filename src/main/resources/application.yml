@@ -64,6 +64,15 @@ spring:
           writetimeout: 5000
 
 app:
+  cors:
+    allowed-origins:
+      - "http://localhost:5173"
+      - "http://localhost:5174"
+      - "https://frontend-sand-nu-34.vercel.app"
+      - "https://moneydiary.cloud"
+      - "https://admin-frontend-rho-five.vercel.app"
+      - "capacitor://localhost"
+      - "http://localhost"
   mail:
     from: ${MAIL_FROM:noreply@moneydiary.cloud}
     dev-log-code: ${MAIL_DEV_LOG_CODE:false}

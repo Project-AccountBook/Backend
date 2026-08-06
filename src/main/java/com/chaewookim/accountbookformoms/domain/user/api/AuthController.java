@@ -14,8 +14,14 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import com.chaewookim.accountbookformoms.global.error.CustomException;
+import com.chaewookim.accountbookformoms.global.error.ErrorCode;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -30,20 +36,41 @@ public class AuthController {
     private final AuthService authService;
     private final EmailVerificationService emailVerificationService;
 
+    private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
+        ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken)
+                .httpOnly(true)
+                .secure(true)
+                .path("/")
+                .maxAge(14 * 24 * 60 * 60)
+                .sameSite("None")
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
     @Operation(summary = "로그인", description = "이메일과 비밀번호로 로그인하고 토큰 발급")
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<TokenResponse>> login(
-            @RequestBody @Valid LoginRequest request
+            @RequestBody @Valid LoginRequest request,
+            HttpServletResponse response
     ) {
-        return ResponseEntity.ok(ApiResponse.success(authService.login(request)));
+        TokenResponse tokenResponse = authService.login(request);
+        setRefreshTokenCookie(response, tokenResponse.refreshToken());
+        return ResponseEntity.ok(ApiResponse.success(tokenResponse));
     }
 
     @Operation(summary = "토큰 재발급", description = "RefreshToken을 이용해 AccessToken 재발급")
     @PostMapping("/reissue")
     public ResponseEntity<ApiResponse<TokenResponse>> refreshToken(
-            @RequestBody @Valid ReissueRequest request
+            @CookieValue(name = "refreshToken", required = false) String refreshToken,
+            HttpServletResponse response
     ) {
-        return ResponseEntity.ok(ApiResponse.success(authService.reissue(request)));
+        if (refreshToken == null) {
+            throw new CustomException(ErrorCode.INVALID_TOKEN);
+        }
+        ReissueRequest request = new ReissueRequest(refreshToken);
+        TokenResponse tokenResponse = authService.reissue(request);
+        setRefreshTokenCookie(response, tokenResponse.refreshToken());
+        return ResponseEntity.ok(ApiResponse.success(tokenResponse));
     }
 
     @Operation(summary = "회원가입용 인증번호 발송", description = "회원가입을 위한 이메일 인증")
@@ -85,9 +112,18 @@ public class AuthController {
     @Operation(summary = "로그아웃", description = "토큰 삭제 후 로그아웃")
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(
-            @AuthenticationPrincipal UserPrincipal principal
+            @AuthenticationPrincipal UserPrincipal principal,
+            HttpServletResponse response
     ) {
         authService.logout(principal.getUsername());
+        ResponseCookie cookie = ResponseCookie.from("refreshToken", "")
+                .httpOnly(true)
+                .secure(true)
+                .path("/")
+                .maxAge(0)
+                .sameSite("None")
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 }
