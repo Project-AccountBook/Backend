@@ -3,6 +3,7 @@ package com.chaewookim.accountbookformoms.benchmark;
 import com.chaewookim.accountbookformoms.domain.board.dao.BoardRepository;
 import com.chaewookim.accountbookformoms.domain.comment.dao.CommentRepository;
 import com.chaewookim.accountbookformoms.domain.comment.entity.Comment;
+import com.chaewookim.accountbookformoms.domain.notification.dao.NotificationRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.PersistenceContext;
@@ -97,6 +98,7 @@ class DbIoBenchmark {
 
     @Autowired BoardRepository boardRepository;
     @Autowired CommentRepository commentRepository;
+    @Autowired NotificationRepository notificationRepository;
     @Autowired PlatformTransactionManager txManager;
     @PersistenceContext EntityManager em;
     @PersistenceUnit EntityManagerFactory emf;
@@ -120,6 +122,18 @@ class DbIoBenchmark {
     static final int COMMENT_COUNT = 100_000;
     static final int USER_COUNT = 100;
 
+    // R3~R5, U2 시드 규모
+    static final int NOTIF_USER_COUNT = 100;
+    static final int NOTIF_PER_USER = 200;                 // R3: 100 * 200 = 20,000
+    static final int USER_DEVICE_COUNT = 10_000;           // R4: user_id 는 1..10000 랜덤(FK 없음)
+    static final int ACCOUNT_USER_COUNT = 100;
+    static final int ACCOUNT_PER_USER = 30;                // R5: 100 * 30 = 3,000
+    static final int U2_USER_COUNT = 200;                  // U2: 200 유저 각 200 알림 = 40,000
+    static final int U2_NOTIF_PER_USER = 200;
+    // U2 유저는 R3 시드 범위 이후로 배정 (충돌 방지)
+    static final long U2_USER_ID_BASE = 1000L;             // 1000 ~ 1199
+    // R3 별도 알림 시드에서 사용할 user_id 범위: 1..100 (Board 시드와 겹쳐도 무관, FK 없음)
+
     static final Path CSV_PATH =
             Paths.get("docs/benchmark/results/2026-08-05_db_io.csv");
 
@@ -140,20 +154,210 @@ class DbIoBenchmark {
         }
 
         long t0 = System.currentTimeMillis();
+        seedUsers();
+        long tU = System.currentTimeMillis();
+        System.out.println("=== [BENCH] User seed done: " + (tU - t0) + " ms");
+
         seedBoards();
         long t1 = System.currentTimeMillis();
-        System.out.println("=== [BENCH] Board seed done: " + (t1 - t0) + " ms");
+        System.out.println("=== [BENCH] Board seed done: " + (t1 - tU) + " ms");
 
         seedComments();
         long t2 = System.currentTimeMillis();
         System.out.println("=== [BENCH] Comment seed done: " + (t2 - t1) + " ms");
 
+        seedNotifications();
+        long t3 = System.currentTimeMillis();
+        System.out.println("=== [BENCH] Notification seed done: " + (t3 - t2) + " ms");
+
+        seedUserDevices();
+        long t4 = System.currentTimeMillis();
+        System.out.println("=== [BENCH] UserDevice seed done: " + (t4 - t3) + " ms");
+
+        seedAccounts();
+        long t5 = System.currentTimeMillis();
+        System.out.println("=== [BENCH] Account seed done: " + (t5 - t4) + " ms");
+
+        seedU2Notifications();
+        long t6 = System.currentTimeMillis();
+        System.out.println("=== [BENCH] U2 Notification seed done: " + (t6 - t5) + " ms");
+
         // ANALYZE
         runInTx(() -> {
             em.createNativeQuery("ANALYZE TABLE board").getResultList();
             em.createNativeQuery("ANALYZE TABLE comment").getResultList();
+            em.createNativeQuery("ANALYZE TABLE notification").getResultList();
+            em.createNativeQuery("ANALYZE TABLE user_device").getResultList();
+            em.createNativeQuery("ANALYZE TABLE account").getResultList();
         });
         System.out.println("=== [BENCH] ANALYZE done");
+    }
+
+    // User 필수 컬럼: email (unique, notnull), username (notnull), role (notnull enum),
+    //                provider (notnull enum), created_at, updated_at (BaseEntity, notnull)
+    // U2 유저까지 포함해 넉넉히 시드 (id 1..1300 커버). identity PK 라 AUTO_INCREMENT 로 순차 배정됨.
+    private void seedUsers() {
+        DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+        def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        TransactionStatus tx = txManager.getTransaction(def);
+        try {
+            // 필요한 최대 user_id = max(NOTIF_USER_COUNT, ACCOUNT_USER_COUNT, U2_USER_ID_BASE + U2_USER_COUNT)
+            int maxNeeded = (int) Math.max(
+                    Math.max(NOTIF_USER_COUNT, ACCOUNT_USER_COUNT),
+                    U2_USER_ID_BASE + U2_USER_COUNT);
+            // Board 시드와 겹치지만 FK 없어 무관. UserDevice 는 raw user_id 1..10000 랜덤이라 굳이 다 만들 필요 X.
+            for (int i = 1; i <= maxNeeded; i++) {
+                em.createNativeQuery(
+                        "INSERT INTO user (email, password, username, role, provider, created_at, updated_at) "
+                      + "VALUES (?, ?, ?, 'ROLE_USER', 'LOCAL', NOW(), NOW())")
+                        .setParameter(1, "bench-" + i + "@example.com")
+                        .setParameter(2, "pw")
+                        .setParameter(3, "user-" + i)
+                        .executeUpdate();
+                if (i % 500 == 0) {
+                    em.flush();
+                    em.clear();
+                    System.out.println("  ... users inserted " + i);
+                }
+            }
+            em.flush();
+            em.clear();
+            txManager.commit(tx);
+        } catch (RuntimeException ex) {
+            txManager.rollback(tx);
+            throw ex;
+        }
+    }
+
+    private void seedNotifications() {
+        DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+        def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        TransactionStatus tx = txManager.getTransaction(def);
+        try {
+            int total = 0;
+            for (long uid = 1; uid <= NOTIF_USER_COUNT; uid++) {
+                for (int k = 0; k < NOTIF_PER_USER; k++) {
+                    em.createNativeQuery(
+                            "INSERT INTO notification (user_id, type, title, message, is_read, created_at, updated_at) "
+                          + "VALUES (?, 'SYSTEM', ?, ?, false, NOW(), NOW())")
+                            .setParameter(1, uid)
+                            .setParameter(2, "n-title-" + uid + "-" + k)
+                            .setParameter(3, "n-msg-" + uid + "-" + k)
+                            .executeUpdate();
+                    total++;
+                    if (total % 5000 == 0) {
+                        em.flush();
+                        em.clear();
+                        System.out.println("  ... notifications inserted " + total);
+                    }
+                }
+            }
+            em.flush();
+            em.clear();
+            txManager.commit(tx);
+        } catch (RuntimeException ex) {
+            txManager.rollback(tx);
+            throw ex;
+        }
+    }
+
+    private void seedUserDevices() {
+        // NOTE: user_device.user_id 에 실제 JPA FK (FK_user_device_user) 가 생성되므로
+        // 시드된 user 범위 (1..seedUsers 최대값) 내에서 랜덤 배정한다.
+        int maxUserId = (int) Math.max(
+                Math.max(NOTIF_USER_COUNT, ACCOUNT_USER_COUNT),
+                U2_USER_ID_BASE + U2_USER_COUNT);
+        DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+        def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        TransactionStatus tx = txManager.getTransaction(def);
+        try {
+            Random rnd = new Random(1337);
+            for (int i = 1; i <= USER_DEVICE_COUNT; i++) {
+                long uid = rnd.nextInt(maxUserId) + 1;
+                em.createNativeQuery(
+                        "INSERT INTO user_device (user_id, fcm_token) VALUES (?, ?)")
+                        .setParameter(1, uid)
+                        .setParameter(2, "fcm-token-" + i)
+                        .executeUpdate();
+                if (i % 2000 == 0) {
+                    em.flush();
+                    em.clear();
+                    System.out.println("  ... user_devices inserted " + i);
+                }
+            }
+            em.flush();
+            em.clear();
+            txManager.commit(tx);
+        } catch (RuntimeException ex) {
+            txManager.rollback(tx);
+            throw ex;
+        }
+    }
+
+    private void seedAccounts() {
+        DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+        def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        TransactionStatus tx = txManager.getTransaction(def);
+        try {
+            int total = 0;
+            for (long uid = 1; uid <= ACCOUNT_USER_COUNT; uid++) {
+                for (int k = 0; k < ACCOUNT_PER_USER; k++) {
+                    em.createNativeQuery(
+                            "INSERT INTO account (user_id, account_name, initial_balance, current_balance, role, "
+                          + "goal_achieved_notified, created_at, updated_at) "
+                          + "VALUES (?, ?, 0, 0, 'CHECKING', false, NOW(), NOW())")
+                            .setParameter(1, uid)
+                            .setParameter(2, "acc-" + uid + "-" + k)
+                            .executeUpdate();
+                    total++;
+                    if (total % 1000 == 0) {
+                        em.flush();
+                        em.clear();
+                        System.out.println("  ... accounts inserted " + total);
+                    }
+                }
+            }
+            em.flush();
+            em.clear();
+            txManager.commit(tx);
+        } catch (RuntimeException ex) {
+            txManager.rollback(tx);
+            throw ex;
+        }
+    }
+
+    // U2 전용: user_id 1000..1199 각 사용자당 200 알림
+    private void seedU2Notifications() {
+        DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+        def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        TransactionStatus tx = txManager.getTransaction(def);
+        try {
+            int total = 0;
+            for (int u = 0; u < U2_USER_COUNT; u++) {
+                long uid = U2_USER_ID_BASE + u;
+                for (int k = 0; k < U2_NOTIF_PER_USER; k++) {
+                    em.createNativeQuery(
+                            "INSERT INTO notification (user_id, type, title, message, is_read, created_at, updated_at) "
+                          + "VALUES (?, 'SYSTEM', ?, ?, false, NOW(), NOW())")
+                            .setParameter(1, uid)
+                            .setParameter(2, "u2-title-" + uid + "-" + k)
+                            .setParameter(3, "u2-msg-" + uid + "-" + k)
+                            .executeUpdate();
+                    total++;
+                    if (total % 5000 == 0) {
+                        em.flush();
+                        em.clear();
+                        System.out.println("  ... u2_notifications inserted " + total);
+                    }
+                }
+            }
+            em.flush();
+            em.clear();
+            txManager.commit(tx);
+        } catch (RuntimeException ex) {
+            txManager.rollback(tx);
+            throw ex;
+        }
     }
 
     private void seedBoards() {
@@ -248,7 +452,7 @@ class DbIoBenchmark {
     @Test
     @Order(1)
     void r1_boardIndex() throws IOException {
-        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,U1");
+        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,U1,U2");
         if (!scenarios.contains("R1")) {
             System.out.println("=== [BENCH] R1 skipped");
             return;
@@ -312,7 +516,7 @@ class DbIoBenchmark {
     @Test
     @Order(2)
     void r2_commentIndex() throws IOException {
-        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,U1");
+        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,U1,U2");
         if (!scenarios.contains("R2")) {
             System.out.println("=== [BENCH] R2 skipped");
             return;
@@ -365,7 +569,7 @@ class DbIoBenchmark {
     @Test
     @Order(3)
     void u1_jdbcBatch() throws IOException {
-        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,U1");
+        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,U1,U2");
         if (!scenarios.contains("U1")) {
             System.out.println("=== [BENCH] U1 skipped");
             return;
@@ -399,6 +603,233 @@ class DbIoBenchmark {
             for (int j = 0; j < comments.size(); j++) {
                 comments.get(j).update("bench-" + seed + "-" + j);
             }
+            em.flush();
+            txManager.commit(tx);
+        } catch (RuntimeException ex) {
+            txManager.rollback(tx);
+            throw ex;
+        }
+    }
+
+    // ============================================================
+    // R3: Notification (user_id) 인덱스
+    // ============================================================
+    @Test
+    @Order(4)
+    void r3_notificationIndex() throws IOException {
+        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,U1,U2");
+        if (!scenarios.contains("R3")) {
+            System.out.println("=== [BENCH] R3 skipped");
+            return;
+        }
+        System.out.println("\n=== [BENCH] R3 Notification index effect ===");
+
+        runInTx(() -> {
+            System.out.println("[R3] EXPLAIN index_used:");
+            explain("EXPLAIN SELECT * FROM notification WHERE user_id=1 ORDER BY id DESC LIMIT 20");
+            System.out.println("[R3] EXPLAIN full_scan:");
+            explain("EXPLAIN SELECT * FROM notification IGNORE INDEX (idx_notification_user) "
+                  + "WHERE user_id=1 ORDER BY id DESC LIMIT 20");
+        });
+
+        Random rnd = new Random(303);
+        Result idxRes = benchSimpleUserQuery(
+                "SELECT * FROM notification WHERE user_id=?1 ORDER BY id DESC LIMIT 20",
+                rnd, 20, 100, NOTIF_USER_COUNT);
+        Result scanRes = benchSimpleUserQuery(
+                "SELECT * FROM notification IGNORE INDEX (idx_notification_user) "
+              + "WHERE user_id=?1 ORDER BY id DESC LIMIT 20",
+                new Random(303), 20, 100, NOTIF_USER_COUNT);
+
+        appendCsv("R3", "index_used", "-", idxRes);
+        appendCsv("R3", "full_scan", "-", scanRes);
+        printResult("R3 index_used", idxRes);
+        printResult("R3 full_scan", scanRes);
+    }
+
+    // ============================================================
+    // R4: UserDevice (user_id) 인덱스
+    // ============================================================
+    @Test
+    @Order(5)
+    void r4_userDeviceIndex() throws IOException {
+        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,U1,U2");
+        if (!scenarios.contains("R4")) {
+            System.out.println("=== [BENCH] R4 skipped");
+            return;
+        }
+        System.out.println("\n=== [BENCH] R4 UserDevice index effect ===");
+
+        runInTx(() -> {
+            System.out.println("[R4] EXPLAIN index_used:");
+            explain("EXPLAIN SELECT * FROM user_device WHERE user_id=1");
+            System.out.println("[R4] EXPLAIN full_scan:");
+            explain("EXPLAIN SELECT * FROM user_device IGNORE INDEX (idx_userdevice_user) WHERE user_id=1");
+        });
+
+        // 실제 user_device 는 user_id 1..1200 (seedUsers 최대) 범위 로 시드됨.
+        int userSpace = (int) Math.max(
+                Math.max(NOTIF_USER_COUNT, ACCOUNT_USER_COUNT),
+                U2_USER_ID_BASE + U2_USER_COUNT);
+        Random rnd = new Random(404);
+        Result idxRes = benchSimpleUserQuery(
+                "SELECT * FROM user_device WHERE user_id=?1",
+                rnd, 20, 100, userSpace);
+        Result scanRes = benchSimpleUserQuery(
+                "SELECT * FROM user_device IGNORE INDEX (idx_userdevice_user) WHERE user_id=?1",
+                new Random(404), 20, 100, userSpace);
+
+        appendCsv("R4", "index_used", "-", idxRes);
+        appendCsv("R4", "full_scan", "-", scanRes);
+        printResult("R4 index_used", idxRes);
+        printResult("R4 full_scan", scanRes);
+    }
+
+    // ============================================================
+    // R5: Account (user_id) 인덱스
+    // ============================================================
+    @Test
+    @Order(6)
+    void r5_accountIndex() throws IOException {
+        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,U1,U2");
+        if (!scenarios.contains("R5")) {
+            System.out.println("=== [BENCH] R5 skipped");
+            return;
+        }
+        System.out.println("\n=== [BENCH] R5 Account index effect ===");
+
+        runInTx(() -> {
+            System.out.println("[R5] EXPLAIN index_used:");
+            explain("EXPLAIN SELECT * FROM account WHERE user_id=1");
+            System.out.println("[R5] EXPLAIN full_scan:");
+            explain("EXPLAIN SELECT * FROM account IGNORE INDEX (idx_account_user, idx_account_user_name) "
+                  + "WHERE user_id=1");
+        });
+
+        Random rnd = new Random(505);
+        Result idxRes = benchSimpleUserQuery(
+                "SELECT * FROM account WHERE user_id=?1",
+                rnd, 20, 100, ACCOUNT_USER_COUNT);
+        Result scanRes = benchSimpleUserQuery(
+                "SELECT * FROM account IGNORE INDEX (idx_account_user, idx_account_user_name) "
+              + "WHERE user_id=?1",
+                new Random(505), 20, 100, ACCOUNT_USER_COUNT);
+
+        appendCsv("R5", "index_used", "-", idxRes);
+        appendCsv("R5", "full_scan", "-", scanRes);
+        printResult("R5 index_used", idxRes);
+        printResult("R5 full_scan", scanRes);
+    }
+
+    // 단일 user_id 파라미터 쿼리 벤치 공통
+    private Result benchSimpleUserQuery(String sql, Random rnd, int warmup, int iters, int userSpace) {
+        for (int i = 0; i < warmup; i++) {
+            long uid = rnd.nextInt(userSpace) + 1;
+            runInTx(() -> em.createNativeQuery(sql).setParameter(1, uid).getResultList());
+        }
+        resetStats();
+        long[] samples = new long[iters];
+        for (int i = 0; i < iters; i++) {
+            long uid = rnd.nextInt(userSpace) + 1;
+            long t0 = System.nanoTime();
+            runInTx(() -> em.createNativeQuery(sql).setParameter(1, uid).getResultList());
+            samples[i] = System.nanoTime() - t0;
+        }
+        long sqlCount = queryCount();
+        return Result.of(samples, sqlCount);
+    }
+
+    // ============================================================
+    // U2: Notification bulk soft-delete (H1 핵심)
+    //   before: 200 rows 를 개별 UPDATE 200회 (옛 findAll + forEach delete 시뮬)
+    //   after : softDeleteByUserId 단일 벌크 UPDATE
+    // 매 iteration 마다 새 user 사용 (warmup 3 + 측정 10) * 2 variant = 26 users 소진.
+    // ============================================================
+    @Test
+    @Order(7)
+    void u2_notificationBulkDelete() throws IOException {
+        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,U1,U2");
+        if (!scenarios.contains("U2")) {
+            System.out.println("=== [BENCH] U2 skipped");
+            return;
+        }
+        System.out.println("\n=== [BENCH] U2 Notification bulk soft-delete ===");
+
+        int warmup = 3;
+        int iters = 10;
+
+        // 사용자 인덱스 카운터: warmup 부터 순차 소진
+        int[] userCursor = {0};
+
+        // ----- BEFORE: individual UPDATE per row -----
+        for (int i = 0; i < warmup; i++) {
+            long uid = U2_USER_ID_BASE + userCursor[0]++;
+            runU2BeforeOnce(uid);
+        }
+        resetStats();
+        long[] beforeSamples = new long[iters];
+        for (int i = 0; i < iters; i++) {
+            long uid = U2_USER_ID_BASE + userCursor[0]++;
+            long t0 = System.nanoTime();
+            runU2BeforeOnce(uid);
+            beforeSamples[i] = System.nanoTime() - t0;
+        }
+        long beforeSql = queryCount();
+        Result beforeRes = Result.of(beforeSamples, beforeSql);
+        appendCsv("U2", "individual_update", "-", beforeRes);
+        printResult("U2 individual_update", beforeRes);
+
+        // ----- AFTER: single bulk UPDATE via repository -----
+        for (int i = 0; i < warmup; i++) {
+            long uid = U2_USER_ID_BASE + userCursor[0]++;
+            runU2AfterOnce(uid);
+        }
+        resetStats();
+        long[] afterSamples = new long[iters];
+        for (int i = 0; i < iters; i++) {
+            long uid = U2_USER_ID_BASE + userCursor[0]++;
+            long t0 = System.nanoTime();
+            runU2AfterOnce(uid);
+            afterSamples[i] = System.nanoTime() - t0;
+        }
+        long afterSql = queryCount();
+        Result afterRes = Result.of(afterSamples, afterSql);
+        appendCsv("U2", "bulk_update", "-", afterRes);
+        printResult("U2 bulk_update", afterRes);
+    }
+
+    private void runU2BeforeOnce(long userId) {
+        DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+        def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        TransactionStatus tx = txManager.getTransaction(def);
+        try {
+            // 1) SELECT ids for user (한 번의 조회)
+            @SuppressWarnings("unchecked")
+            List<Number> ids = em.createNativeQuery(
+                    "SELECT id FROM notification WHERE user_id=?1 AND deleted_at IS NULL")
+                    .setParameter(1, userId)
+                    .getResultList();
+            // 2) 각 row 개별 UPDATE
+            for (Number idNum : ids) {
+                em.createNativeQuery(
+                        "UPDATE notification SET deleted_at=NOW() WHERE id=?1")
+                        .setParameter(1, idNum.longValue())
+                        .executeUpdate();
+            }
+            em.flush();
+            txManager.commit(tx);
+        } catch (RuntimeException ex) {
+            txManager.rollback(tx);
+            throw ex;
+        }
+    }
+
+    private void runU2AfterOnce(long userId) {
+        DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+        def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        TransactionStatus tx = txManager.getTransaction(def);
+        try {
+            notificationRepository.softDeleteByUserId(userId);
             em.flush();
             txManager.commit(tx);
         } catch (RuntimeException ex) {

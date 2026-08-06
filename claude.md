@@ -186,6 +186,87 @@
 
 ---
 
+## DB 효율성 감사 (2026-08-05) — 전 도메인 스캔
+
+Board / Comment / Transaction 도메인 최적화 완료 후, 전 도메인 대상으로 인덱스 / N+1 / fetch 전략 / 캐시 정합성 감사 실시.
+
+### 이미 완료된 개선 (참고)
+
+- Board `idx_board_user_type (user_id, type)` / Comment `idx_comment_user (user_id, created_at)` 복합 인덱스
+- 전역 `hibernate.jdbc.batch_size=20`, `order_inserts/updates=true`, `default_batch_fetch_size=100`, `batch_versioned_data=true`
+- User↔UserSetting LAZY 명시
+- `spring.data.web.pageable.max-page-size: 100` 전역 설정
+- Comment `@SQLRestriction` 미부착은 **의도된 설계** (대댓글 트리 유지 위해 soft-deleted 로드 필요). 감사 시 오탐 금지.
+- 벤치마크 결과 (`docs/benchmark/results/2026-08-05_db_io.csv`):
+  - Board findByUserIdAndType: 3.54 → 1.57 ms (-55.5%)
+  - Comment findByUserId ORDER BY created_at DESC: 22.01 → 0.65 ms (-97.1%)
+  - Comment 200건 bulk update: SQL 4020 → 40 (-99.0%)
+
+### 도메인별 심각도 (2026-08-05 시점)
+
+| 도메인 | High | Med | 상태 |
+|---|---|---|---|
+| account | 1 | 1 | ⚠️ 인덱스 전무 |
+| notification | 1 | 2 | ⚠️ N+1 삭제 |
+| userdevice | 1 | 1 | ⚠️ 인덱스+FCM 검증 |
+| grouppruchase | 0 | 2 | ⚠️ 인덱스 전무 |
+| budget | 0 | 2 | ⚠️ 소프트삭제 일관성 |
+| expense/income compare | 0 | 1 | ⚠️ 캐시 evict 누락 |
+| transactioncategory | 0 | 1 | 인덱스 보강 여지 |
+| user, transaction, board, comment, like, bookmark, follow, tag, image, usersetting | 0 | 0~1 | ✓ 양호 |
+
+### 🔴 High (배포 전 필수)
+
+**D1. Notification 계정 삭제 시 N+1 DELETE**
+- 파일: `domain/notification/application/NotificationService.java:103`
+- 현상: `notificationRepository.deleteAll(notificationRepository.findAllByUserId(userId))` — 알림 N건 → SELECT 1 + DELETE N 왕복
+- 영향: 1000건 알림 계정 삭제 시 트랜잭션 장시간 점유
+- 완화: `@Modifying @Query("DELETE FROM Notification n WHERE n.userId = :userId") int deleteByUserId(Long userId)` 로 단일 벌크 DELETE
+
+**D2. UserDevice 인덱스·검증 부재** (S4 요금폭탄 항목과 연결)
+- 파일: `domain/notification/entity/UserDevice.java`, `dao/UserDeviceRepository.java`
+- 현상:
+  - `@Table(indexes=...)` 없음 → `findByUser` 호출 시 user_id 인덱스 없어 풀스캔 가능성
+  - FCM 토큰 컬럼 length/format 검증 없음, 사용자당 device 수 제한 없음
+- 영향: 스팸 토큰 등록 자동화 시 FCM API 호출 폭증 (Blaze plan 과금)
+- 완화: `@Index(user_id)` + `findByUserId(Long)` 신설 + `@Column(length=250)` + FCM 토큰 format 검증 + 1 user 최대 5 device
+
+**D3. Account 인덱스 전무**
+- 파일: `domain/asset/entity/Account.java:29~34`
+- 현상: `@Table` 자체 없음 → `findByUserId` 매 거래/조회 시 풀스캔
+- 영향: 계정 데이터 누적 시 매 거래 생성 latency 상승
+- 완화: `@Table(name="account", indexes={@Index("user_id"), @Index("user_id, account_name")})`
+
+### 🟠 Medium (한 줄 요약)
+
+- **D4. GroupPurchase 인덱스 전무** — `creator_id`, `(category_id, status)`, `deadline` 추가. `domain/grouppruchase/domain/GroupPurchase.java:20`
+- **D5. Budget `@SQLRestriction` 부재** — native workaround 로 우회 중, `Budget.java` 에 `@SQLRestriction("deleted_at IS NULL")` 추가로 일관성 확보 (Comment 처럼 트리 요구사항 없음)
+- **D6. Budget category null 방어** — `BudgetRepository.java:39-41` FETCH JOIN 후 Service 매핑 시 null 체크 미흡
+- **D7. Compare 캐시 evict 누락** — `TransactionService.create/update/delete` 시 `compare:expense`, `compare:budget` `@CacheEvict(allEntries=true)` 배선 필요
+- **D8. InterestCategoryService.deleteAllByUserId / AccountService fixedTx forEach delete** — D1 과 동일 패턴, `@Modifying DELETE` 치환
+- **D9. TransactionCategory 인덱스** — `(user_id, name, type)` 복합 고려
+- **D10. Bookmark/Follow raw Long 참조** — FK 없음. 스냅샷 목적이면 문서화, 아니면 `@ManyToOne` 전환 검토
+
+### 공통 안티패턴
+
+1. **findAll → forEach delete** (Notification / InterestCategory / Account.fixedTx) — 3 도메인 반복
+2. **인덱스 불균형** — Board/Comment/Like/Bookmark 완비, Account/GroupPurchase/UserDevice 전무
+3. **raw `Long userId` vs `@ManyToOne` 혼재** — Board/Comment/Like/Bookmark/GroupPurchase 5 도메인. 스냅샷 보존 의도 명시 필요
+4. **`@Cacheable` 대비 `@CacheEvict` 배선 누락** — compare 계열
+
+### 마이그레이션 SQL 초안 (prod 배포 시)
+
+```sql
+CREATE INDEX idx_userdevice_user      ON user_device (user_id);
+CREATE INDEX idx_account_user         ON account (user_id);
+CREATE INDEX idx_account_user_name    ON account (user_id, account_name);
+CREATE INDEX idx_gp_creator           ON group_purchase (creator_id);
+CREATE INDEX idx_gp_category_status   ON group_purchase (category_id, status);
+CREATE INDEX idx_gp_deadline          ON group_purchase (deadline);
+```
+
+---
+
 ## 후속 작업 우선순위
 
 ### P0 — 배포 전 필수 (요금 폭탄 / 데이터 손실 직결)

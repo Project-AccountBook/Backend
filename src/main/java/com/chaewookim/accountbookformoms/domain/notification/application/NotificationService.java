@@ -44,7 +44,7 @@ public class NotificationService {
     }
 
     private void sendPushSafely(User user, String title, String message, String redirectUrl, Long referenceId) {
-        userDeviceRepository.findByUser(user).ifPresent(device -> {
+        userDeviceRepository.findByUserId(user.getId()).ifPresent(device -> {
             try {
                 Map<String, String> data = Map.of(
                         "redirectUrl", redirectUrl != null ? redirectUrl : "",
@@ -100,6 +100,6 @@ public class NotificationService {
 
     @Transactional
     public void deleteAllByUserId(Long userId) {
-        notificationRepository.deleteAll(notificationRepository.findAllByUserId(userId));
+        notificationRepository.softDeleteByUserId(userId);
     }
 }
