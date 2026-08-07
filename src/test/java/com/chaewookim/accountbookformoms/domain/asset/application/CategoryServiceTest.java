@@ -11,7 +11,6 @@ import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionCategoryRep
 import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.CategoryRequest;
 import com.chaewookim.accountbookformoms.domain.asset.dto.response.CategoryResponse;
-import com.chaewookim.accountbookformoms.domain.asset.entity.FixedTransaction;
 import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
@@ -139,16 +138,15 @@ class CategoryServiceTest {
         given(user.getId()).willReturn(userId);
 
         TransactionCategory category = TransactionCategory.builder().user(user).name("식비").type(TransactionType.EXPENSE).build();
-        FixedTransaction fixedTransaction = mock(FixedTransaction.class);
 
         given(categoryRepository.findById(categoryId)).willReturn(Optional.of(category));
-        given(fixedTransactionRepository.findAllByTransactionCategoryId(categoryId)).willReturn(List.of(fixedTransaction));
+        given(fixedTransactionRepository.softDeleteByTransactionCategoryId(categoryId)).willReturn(1);
 
         // when
         categoryService.deleteCategory(categoryId, userId);
 
         // then
-        verify(fixedTransactionRepository, times(1)).delete(fixedTransaction);
+        verify(fixedTransactionRepository, times(1)).softDeleteByTransactionCategoryId(categoryId);
         verify(transactionRepository, times(1)).backfillCategorySnapshot(categoryId, "식비");
         verify(transactionRepository, times(1)).markCategoryArchived(categoryId);
         verify(budgetRepository, times(1)).backfillCategorySnapshot(categoryId, "식비");
@@ -168,7 +166,7 @@ class CategoryServiceTest {
 
         TransactionCategory category = TransactionCategory.builder().user(user).name("식비").type(TransactionType.EXPENSE).build();
         given(categoryRepository.findById(categoryId)).willReturn(Optional.of(category));
-        given(fixedTransactionRepository.findAllByTransactionCategoryId(categoryId)).willReturn(List.of());
+        given(fixedTransactionRepository.softDeleteByTransactionCategoryId(categoryId)).willReturn(0);
 
         // when
         categoryService.deleteCategory(categoryId, userId);
