@@ -218,7 +218,8 @@ public class BudgetService {
                 .collect(Collectors.toSet());
         Set<Long> existingTargetCategoryIds = budgetRepository.findByUserIdAndYearMonth(userId, targetYearMonth).stream()
                 .filter(this::isUserConfiguredBudget)
-                .map(budget -> budget.getTransactionCategory().getId())
+                .map(this::resolveCategoryId)
+                .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toCollection(HashSet::new));
 
         return new CopyPlan(sourceYearMonth, targetYearMonth, sourceBudgets, activeExpenseCategoryIds, existingTargetCategoryIds);

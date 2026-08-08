@@ -3,6 +3,7 @@ package com.chaewookim.accountbookformoms.domain.asset.dao;
 import com.chaewookim.accountbookformoms.domain.asset.entity.FixedTransaction;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -20,6 +21,16 @@ public interface FixedTransactionRepository extends JpaRepository<FixedTransacti
 
     @Query("SELECT f FROM FixedTransaction f WHERE f.account.id = :accountId")
     List<FixedTransaction> findAllByAccountId(@Param("accountId") Long accountId);
+
+    @Modifying
+    @Query("UPDATE FixedTransaction f SET f.deletedAt = CURRENT_TIMESTAMP "
+            + "WHERE f.account.id = :accountId AND f.deletedAt IS NULL")
+    int softDeleteByAccountId(@Param("accountId") Long accountId);
+
+    @Modifying
+    @Query("UPDATE FixedTransaction f SET f.deletedAt = CURRENT_TIMESTAMP "
+            + "WHERE f.transactionCategory.id = :categoryId AND f.deletedAt IS NULL")
+    int softDeleteByTransactionCategoryId(@Param("categoryId") Long categoryId);
 
     List<FixedTransaction> findAllByIsActiveTrue();
 

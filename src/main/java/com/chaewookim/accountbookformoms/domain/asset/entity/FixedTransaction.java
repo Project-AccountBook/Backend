@@ -37,7 +37,9 @@ import java.time.YearMonth;
 @SQLRestriction("deleted_at IS NULL")
 @Table(name = "fixed_transaction",
         indexes = {
-                @Index(name = "idx_fixed_transaction_user", columnList = "user_id")
+                @Index(name = "idx_fixed_transaction_user", columnList = "user_id"),
+                @Index(name = "idx_fixed_transaction_account", columnList = "account_id"),
+                @Index(name = "idx_fixed_transaction_category", columnList = "category_id")
         })
 public class FixedTransaction extends BaseEntity {
 

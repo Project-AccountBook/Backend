@@ -176,13 +176,13 @@ class AccountServiceTest {
         Account account = Account.builder().user(user).build();
 
         given(accountRepository.findById(1L)).willReturn(Optional.of(account));
-        given(fixedTransactionRepository.findAllByAccountId(1L)).willReturn(List.of());
+        given(fixedTransactionRepository.softDeleteByAccountId(1L)).willReturn(0);
 
         // when
         accountService.deleteAccount(userId, 1L);
 
         // then
-        verify(fixedTransactionRepository).findAllByAccountId(1L);
+        verify(fixedTransactionRepository).softDeleteByAccountId(1L);
         verify(transactionRepository).backfillSourceAccountSnapshot(1L, account.getAccountName());
         verify(transactionRepository).backfillTargetAccountSnapshot(1L, account.getAccountName());
         verify(transactionRepository).markSourceAccountArchived(1L);

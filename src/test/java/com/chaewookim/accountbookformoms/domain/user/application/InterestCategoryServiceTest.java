@@ -135,13 +135,12 @@ class InterestCategoryServiceTest {
 
         // given
         Long userId = 1L;
-        InterestCategory interest = mock(InterestCategory.class);
-        given(repository.findByUserId(userId)).willReturn(List.of(interest));
+        given(repository.softDeleteByUserId(userId)).willReturn(3);
 
         // when
         interestCategoryService.deleteAllByUserId(userId);
 
         // then
-        verify(repository).deleteAll(List.of(interest));
+        verify(repository).softDeleteByUserId(userId);
     }
 }

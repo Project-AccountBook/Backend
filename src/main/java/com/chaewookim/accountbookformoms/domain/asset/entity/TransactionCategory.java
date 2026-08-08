@@ -11,8 +11,10 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -22,6 +24,10 @@ import org.hibernate.annotations.SQLRestriction;
 
 @Entity
 @Getter
+@Table(name = "transaction_category",
+        indexes = @Index(
+                name = "idx_txcategory_user_name_type",
+                columnList = "user_id, name, type"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @SQLDelete(sql = "UPDATE transaction_category SET deleted_at = NOW() WHERE id = ?")
 @SQLRestriction("deleted_at IS NULL")
