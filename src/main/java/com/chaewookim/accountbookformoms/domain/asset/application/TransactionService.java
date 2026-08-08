@@ -55,13 +55,17 @@ public class TransactionService {
 
     private Long createTransaction(Long userId, TransactionRequest request, boolean fromFixedTransaction) {
         if (request.type() == TransactionType.TRANSFER) {
-            return createTransferTransaction(userId, request);
+            return createTransferTransaction(userId, request, fromFixedTransaction);
         }
         return createNormalTransaction(userId, request, fromFixedTransaction);
     }
 
     // 이체 전용 로직
-    private Long createTransferTransaction(Long userId, TransactionRequest request) {
+    private Long createTransferTransaction(Long userId, TransactionRequest request, boolean fromFixedTransaction) {
+
+        if (request.targetAccountId() == null) {
+            throw new CustomException(AssetErrorCode.TARGET_ACCOUNT_REQUIRED);
+        }
 
         if (request.accountId().equals(request.targetAccountId())) {
             throw new CustomException(AssetErrorCode.TRANSFER_TO_SELF_FORBIDDEN);
@@ -88,7 +92,7 @@ public class TransactionService {
         publishGoalAchievedCheck(source.getUser().getId(), source.getId());
         publishGoalAchievedCheck(target.getUser().getId(), target.getId());
 
-        return saveTransferTransaction(source, target, request);
+        return saveTransferTransaction(source, target, request, fromFixedTransaction);
     }
 
     // 일반 거래 전용 로직
@@ -143,7 +147,8 @@ public class TransactionService {
         return savedId;
     }
 
-    private Long saveTransferTransaction(Account source, Account target, TransactionRequest request) {
+    private Long saveTransferTransaction(Account source, Account target, TransactionRequest request,
+                                         boolean fromFixedTransaction) {
 
         TransactionCategory category = categoryRepository.findById(request.categoryId())
                 .orElseThrow(() -> new CustomException(AssetErrorCode.CATEGORY_NOT_FOUND));
@@ -158,6 +163,10 @@ public class TransactionService {
                 .transactionDate(request.transactionDate())
                 .description(request.description())
                 .build();
+
+        if (fromFixedTransaction) {
+            transaction.markAsFixedTransactionGenerated();
+        }
 
         return transactionRepository.save(transaction).getId();
     }
