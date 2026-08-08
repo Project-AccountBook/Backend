@@ -54,6 +54,10 @@ public class FixedTransaction extends BaseEntity {
     private Account account;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "target_account_id")
+    private Account targetAccount;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")
     private TransactionCategory transactionCategory;
 
@@ -90,11 +94,13 @@ public class FixedTransaction extends BaseEntity {
     private Boolean isActive;
 
     @Builder
-    public FixedTransaction(User user, Account account, TransactionCategory transactionCategory, TransactionType type, BigDecimal amount,
+    public FixedTransaction(User user, Account account, Account targetAccount, TransactionCategory transactionCategory,
+                            TransactionType type, BigDecimal amount,
                             TransactionFrequency frequency, Integer repeatDay, Integer repeatMonth,
                             LocalDate startDate, LocalDate endDate, String description) {
         this.user = user;
         this.account = account;
+        this.targetAccount = targetAccount;
         this.transactionCategory = transactionCategory;
         this.type = type;
         this.amount = amount;
@@ -189,9 +195,11 @@ public class FixedTransaction extends BaseEntity {
         };
     }
 
-    public void update(Account account, TransactionCategory category, FixedTransactionRequest request) {
+    public void update(Account account, Account targetAccount, TransactionCategory category, FixedTransactionRequest request) {
         this.account = account;
+        this.targetAccount = targetAccount;
         this.transactionCategory = category;
+        this.type = request.type();
         this.amount = request.amount();
         this.frequency = request.frequency();
         this.repeatDay = request.repeatDay();

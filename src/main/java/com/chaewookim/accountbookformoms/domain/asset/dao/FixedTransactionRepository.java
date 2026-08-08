@@ -21,6 +21,9 @@ public interface FixedTransactionRepository extends JpaRepository<FixedTransacti
     @Query("SELECT f FROM FixedTransaction f WHERE f.account.id = :accountId")
     List<FixedTransaction> findAllByAccountId(@Param("accountId") Long accountId);
 
+    @Query("SELECT f FROM FixedTransaction f WHERE f.targetAccount.id = :accountId")
+    List<FixedTransaction> findAllByTargetAccountId(@Param("accountId") Long accountId);
+
     List<FixedTransaction> findAllByIsActiveTrue();
 
     List<FixedTransaction> findAllByIsActiveTrueAndNextExecutionDateLessThanEqual(LocalDate today);

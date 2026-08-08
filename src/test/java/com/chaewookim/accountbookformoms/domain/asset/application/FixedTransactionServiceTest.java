@@ -57,7 +57,7 @@ class FixedTransactionServiceTest {
         Long userId = 1L;
         User user = User.builder().build();
         ReflectionTestUtils.setField(user, "id", userId);
-        FixedTransactionRequest request = new FixedTransactionRequest(1L, 1L, TransactionType.EXPENSE, new BigDecimal("10000"), TransactionFrequency.MONTHLY, now.getDayOfMonth(), null, now, null, "desc");
+        FixedTransactionRequest request = new FixedTransactionRequest(1L, null, 1L, TransactionType.EXPENSE, new BigDecimal("10000"), TransactionFrequency.MONTHLY, now.getDayOfMonth(), null, now, null, "desc");
 
         given(accountRepository.findByIdAndUserId(any(), any())).willReturn(Optional.of(Account.builder().build()));
         given(categoryRepository.findById(any())).willReturn(Optional.of(TransactionCategory.builder().build()));
@@ -115,7 +115,7 @@ class FixedTransactionServiceTest {
         // given
         Long userId = 1L;
         Long id = 1L;
-        FixedTransactionRequest request = new FixedTransactionRequest(1L, 1L, TransactionType.EXPENSE, new BigDecimal("20000"), TransactionFrequency.MONTHLY, 5, null, now, null, "updated");
+        FixedTransactionRequest request = new FixedTransactionRequest(1L, null, 1L, TransactionType.EXPENSE, new BigDecimal("20000"), TransactionFrequency.MONTHLY, 5, null, now, null, "updated");
         User user = User.builder().build();
         ReflectionTestUtils.setField(user, "id", userId);
 

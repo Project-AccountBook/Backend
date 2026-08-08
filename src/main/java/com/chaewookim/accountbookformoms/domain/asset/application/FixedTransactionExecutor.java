@@ -23,7 +23,7 @@ public class FixedTransactionExecutor {
 
         TransactionRequest request = new TransactionRequest(
                 fixedTransaction.getAccount().getId(),
-                null,
+                fixedTransaction.getTargetAccount() != null ? fixedTransaction.getTargetAccount().getId() : null,
                 fixedTransaction.getTransactionCategory().getId(),
                 fixedTransaction.getType(),
                 fixedTransaction.getAmount(),

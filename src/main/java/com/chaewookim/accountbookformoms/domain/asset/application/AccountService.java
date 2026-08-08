@@ -123,6 +123,9 @@ public class AccountService {
         List<FixedTransaction> fixedTransactions = fixedTransactionRepository.findAllByAccountId(accountId);
         fixedTransactions.forEach(fixedTransactionRepository::delete);
 
+        List<FixedTransaction> targetFixedTransactions = fixedTransactionRepository.findAllByTargetAccountId(accountId);
+        targetFixedTransactions.forEach(fixedTransactionRepository::delete);
+
         transactionRepository.backfillSourceAccountSnapshot(accountId, account.getAccountName());
         transactionRepository.backfillTargetAccountSnapshot(accountId, account.getAccountName());
         transactionRepository.markSourceAccountArchived(accountId);

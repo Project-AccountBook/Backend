@@ -108,4 +108,21 @@ class FixedTransactionExecutorTest {
         verify(transactionService).createTransactionFromFixed(eq(1L), argThat(request ->
                 request.transactionDate().equals(missedDate)));
     }
+
+    @Test
+    @DisplayName("이체 고정 거래면 대상 계좌 ID를 넘겨 생성한다")
+    void executeIfDue_TransferIncludesTargetAccount() {
+        Account targetAccount = Account.builder().build();
+        ReflectionTestUtils.setField(targetAccount, "id", 11L);
+        ReflectionTestUtils.setField(fixedTransaction, "type", TransactionType.TRANSFER);
+        ReflectionTestUtils.setField(fixedTransaction, "targetAccount", targetAccount);
+
+        boolean executed = fixedTransactionExecutor.executeIfDue(fixedTransaction, today);
+
+        assertThat(executed).isTrue();
+        verify(transactionService).createTransactionFromFixed(eq(1L), argThat(request ->
+                request.type() == TransactionType.TRANSFER
+                        && request.accountId().equals(10L)
+                        && request.targetAccountId().equals(11L)));
+    }
 }

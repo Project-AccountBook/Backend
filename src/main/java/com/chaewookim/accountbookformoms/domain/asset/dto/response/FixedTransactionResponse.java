@@ -9,7 +9,11 @@ import java.time.LocalDate;
 public record FixedTransactionResponse(
 
         Long id,
+        Long accountId,
         String accountName,
+        Long targetAccountId,
+        String targetAccountName,
+        Long categoryId,
         String categoryName,
         TransactionType type,
         BigDecimal amount,
@@ -22,13 +26,23 @@ public record FixedTransactionResponse(
         Boolean isActive
 ) {
     public static FixedTransactionResponse from(FixedTransaction entity) {
+        Long accountId = entity.getAccount() != null ? entity.getAccount().getId() : null;
         String accountName = entity.getAccount() != null
                 ? entity.getAccount().getAccountName()
                 : "삭제된 계좌";
 
+        Long targetAccountId = entity.getTargetAccount() != null ? entity.getTargetAccount().getId() : null;
+        String targetAccountName = entity.getTargetAccount() != null
+                ? entity.getTargetAccount().getAccountName()
+                : null;
+
         return new FixedTransactionResponse(
                 entity.getId(),
+                accountId,
                 accountName,
+                targetAccountId,
+                targetAccountName,
+                entity.getTransactionCategory().getId(),
                 entity.getTransactionCategory().getName(),
                 entity.getType(),
                 entity.getAmount(),
