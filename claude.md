@@ -239,10 +239,10 @@ Board / Comment / Transaction 도메인 최적화 완료 후, 전 도메인 대�
 
 ### 🟠 Medium (한 줄 요약)
 
-- **D4. GroupPurchase 인덱스 전무** — `creator_id`, `(category_id, status)`, `deadline` 추가. `domain/grouppruchase/domain/GroupPurchase.java:20`
-- **D5. Budget `@SQLRestriction` 부재** — native workaround 로 우회 중, `Budget.java` 에 `@SQLRestriction("deleted_at IS NULL")` 추가로 일관성 확보 (Comment 처럼 트리 요구사항 없음)
-- **D6. Budget category null 방어** — `BudgetRepository.java:39-41` FETCH JOIN 후 Service 매핑 시 null 체크 미흡
-- **D7. Compare 캐시 evict 누락** — `TransactionService.create/update/delete` 시 `compare:expense`, `compare:budget` `@CacheEvict(allEntries=true)` 배선 필요
+- **D4. GroupPurchase 인덱스 전무** — 실 쿼리 매핑 후 `idx_gp_status_category_deadline (status, category_id, deadline)` 1개 복합으로 확정. `creator_id`, `deadline` 단일은 실 쿼리 없어 제외.
+- ~~**D5. Budget `@SQLRestriction` 부재**~~ — 오탐. `Budget.java:30` 에 이미 `@SQLRestriction("deleted_at IS NULL")` 존재. native `findByUserIdAndYearMonthAndCategoryIdIncludingDeleted` 는 삭제된 카테고리 restore-on-recreate 흐름용 (버그 아님).
+- **D6. Budget category null 방어** — `BudgetService.java:221` `budget.getTransactionCategory().getId()` NPE 위험. `resolveCategoryId()` 헬퍼 재사용으로 snapshot fallback + null filter.
+- ~~**D7. Compare 캐시 evict 누락**~~ — 오탐. 그룹 캐시(age/amount/category × 공개 사용자 집합)는 `RedisConfig` 주석 명시대로 warm-up 30분 주기와 정합되도록 **의도적으로 30분 staleness 허용**. 개별 write마다 allEntries evict 시 cross-user warm hit 전면 파괴 → 성능 역행.
 - **D8. InterestCategoryService.deleteAllByUserId / AccountService fixedTx forEach delete** — D1 과 동일 패턴, `@Modifying DELETE` 치환
 - **D9. TransactionCategory 인덱스** — `(user_id, name, type)` 복합 고려
 - **D10. Bookmark/Follow raw Long 참조** — FK 없음. 스냅샷 목적이면 문서화, 아니면 `@ManyToOne` 전환 검토

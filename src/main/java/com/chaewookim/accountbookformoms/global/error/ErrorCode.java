@@ -10,6 +10,9 @@ public enum ErrorCode implements BaseErrorCode {
 
     // 400 Bad Request
     INVALID_PARAMETER(HttpStatus.BAD_REQUEST, "파라미터 값을 확인해주세요."),
+    FILE_EMPTY(HttpStatus.BAD_REQUEST, "파일이 비어있습니다."),
+    FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, "파일 크기는 5MB 이하여야 합니다."),
+    INVALID_FILE_TYPE(HttpStatus.BAD_REQUEST, "이미지 파일(jpeg, png, webp, gif)만 업로드할 수 있습니다."),
 
     // 401 Unauthorized
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "유효하지 않은 토큰입니다."),

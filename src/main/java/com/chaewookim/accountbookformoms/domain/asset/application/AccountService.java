@@ -7,8 +7,9 @@ import com.chaewookim.accountbookformoms.domain.asset.dto.request.AccountGoalReq
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.AccountRequest;
 import com.chaewookim.accountbookformoms.domain.asset.dto.response.AccountResponse;
 import com.chaewookim.accountbookformoms.domain.asset.entity.Account;
-import com.chaewookim.accountbookformoms.domain.asset.enums.AccountRole;
 import com.chaewookim.accountbookformoms.domain.asset.entity.FixedTransaction;
+import com.chaewookim.accountbookformoms.domain.asset.enums.AccountRole;
+
 import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
@@ -120,8 +121,7 @@ public class AccountService {
 
         Account account = validateAndGet(userId, accountId);
 
-        List<FixedTransaction> fixedTransactions = fixedTransactionRepository.findAllByAccountId(accountId);
-        fixedTransactions.forEach(fixedTransactionRepository::delete);
+        fixedTransactionRepository.softDeleteByAccountId(accountId);
 
         List<FixedTransaction> targetFixedTransactions = fixedTransactionRepository.findAllByTargetAccountId(accountId);
         targetFixedTransactions.forEach(fixedTransactionRepository::delete);

@@ -10,8 +10,10 @@ import com.chaewookim.accountbookformoms.domain.user.dto.request.VerifyRequest;
 import com.chaewookim.accountbookformoms.domain.user.dto.response.TokenResponse;
 import com.chaewookim.accountbookformoms.global.common.ApiResponse;
 import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
+import com.chaewookim.accountbookformoms.global.util.ClientIpUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
@@ -76,18 +78,20 @@ public class AuthController {
     @Operation(summary = "회원가입용 인증번호 발송", description = "회원가입을 위한 이메일 인증")
     @PostMapping("/email/send/signup")
     public ResponseEntity<ApiResponse<Void>> sendSignupCode(
-            @RequestBody @Valid EmailRequest request
+            @RequestBody @Valid EmailRequest request,
+            HttpServletRequest httpRequest
     ) {
-        authService.sendSignupVerificationCode(request.email());
+        authService.sendSignupVerificationCode(request.email(), ClientIpUtils.extract(httpRequest));
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @Operation(summary = "비밀번호 재설정용 인증번호 발송", description = "비밀번호 찾기를 위한 이메일 인증")
     @PostMapping("/email/send/password")
     public ResponseEntity<ApiResponse<Void>> sendPasswordCode(
-            @RequestBody @Valid EmailRequest request
+            @RequestBody @Valid EmailRequest request,
+            HttpServletRequest httpRequest
     ) {
-        authService.requestPasswordReset(request.email());
+        authService.requestPasswordReset(request.email(), ClientIpUtils.extract(httpRequest));
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
