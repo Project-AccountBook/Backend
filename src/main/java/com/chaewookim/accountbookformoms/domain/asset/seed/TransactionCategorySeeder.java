@@ -18,11 +18,11 @@ import java.util.Map;
 public class TransactionCategorySeeder {
 
     private static final List<String> EXPENSE_CATEGORIES = List.of(
-            "음식", "의류", "주거", "생활", "건강", "교통", "통신", "교육"
+            "음식", "의류", "주거", "생활", "건강", "교통", "통신", "교육", "잔고 조정"
     );
 
     private static final List<String> INCOME_CATEGORIES = List.of(
-            "급여", "사업", "투자", "용돈"
+            "급여", "사업", "투자", "용돈", "잔고 조정"
     );
 
     private static final List<String> TRANSFER_CATEGORIES = List.of(

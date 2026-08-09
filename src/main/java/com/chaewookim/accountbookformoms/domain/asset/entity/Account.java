@@ -89,6 +89,10 @@ public class Account extends BaseEntity {
         this.currentBalance = this.currentBalance.add(delta);
     }
 
+    public void updateInitialBalanceOnly(BigDecimal newInitialBalance) {
+        this.initialBalance = newInitialBalance;
+    }
+
     public void resetBalance(BigDecimal initialBalance) {
         this.initialBalance = initialBalance;
         this.currentBalance = initialBalance;

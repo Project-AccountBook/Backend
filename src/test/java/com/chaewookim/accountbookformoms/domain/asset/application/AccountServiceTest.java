@@ -2,12 +2,17 @@ package com.chaewookim.accountbookformoms.domain.asset.application;
 
 import com.chaewookim.accountbookformoms.domain.asset.dao.AccountRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dao.FixedTransactionRepository;
+import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionCategoryRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.AccountGoalRequest;
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.AccountRequest;
+import com.chaewookim.accountbookformoms.domain.asset.dto.request.AccountUpdateRequest;
 import com.chaewookim.accountbookformoms.domain.asset.dto.response.AccountResponse;
 import com.chaewookim.accountbookformoms.domain.asset.entity.Account;
+import com.chaewookim.accountbookformoms.domain.asset.entity.Transaction;
+import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory;
 import com.chaewookim.accountbookformoms.domain.asset.enums.AccountRole;
+import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
@@ -15,9 +20,11 @@ import com.chaewookim.accountbookformoms.global.error.CustomException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.CacheManager;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -31,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -49,7 +57,13 @@ class AccountServiceTest {
     TransactionRepository transactionRepository;
 
     @Mock
+    TransactionCategoryRepository categoryRepository;
+
+    @Mock
     ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    CacheManager cacheManager;
 
     @InjectMocks
     AccountService accountService;
@@ -132,18 +146,107 @@ class AccountServiceTest {
                 .build();
         ReflectionTestUtils.setField(account, "currentBalance", BigDecimal.valueOf(15000));
 
-        given(accountRepository.findById(accountId)).willReturn(Optional.of(account));
+        TransactionCategory category = TransactionCategory.builder()
+                .name("잔고 조정")
+                .type(TransactionType.INCOME)
+                .build();
+        given(accountRepository.findByIdWithLock(accountId)).willReturn(Optional.of(account));
         given(accountRepository.existsByUserIdAndAccountNameAndIdNot(userId, "새 이름", accountId)).willReturn(false);
-        AccountRequest request = new AccountRequest("새 이름", BigDecimal.valueOf(20000), AccountRole.SAVINGS);
+        given(categoryRepository.findByUserIsNullAndNameAndType("잔고 조정", TransactionType.INCOME))
+                .willReturn(Optional.of(category));
+        AccountUpdateRequest request = new AccountUpdateRequest(
+                "새 이름",
+                BigDecimal.valueOf(12000),
+                BigDecimal.valueOf(20000),
+                AccountRole.SAVINGS
+        );
 
         // when
         accountService.updateAccount(userId, accountId, request);
 
         // then
         assertThat(account.getAccountName()).isEqualTo("새 이름");
-        assertThat(account.getInitialBalance()).isEqualByComparingTo(BigDecimal.valueOf(20000));
-        assertThat(account.getCurrentBalance()).isEqualByComparingTo(BigDecimal.valueOf(25000));
+        assertThat(account.getInitialBalance()).isEqualByComparingTo(BigDecimal.valueOf(12000));
+        assertThat(account.getCurrentBalance()).isEqualByComparingTo(BigDecimal.valueOf(20000));
         assertThat(account.getRole()).isEqualTo(AccountRole.SAVINGS);
+
+        ArgumentCaptor<Transaction> transactionCaptor = ArgumentCaptor.forClass(Transaction.class);
+        verify(transactionRepository).save(transactionCaptor.capture());
+        Transaction adjustment = transactionCaptor.getValue();
+        assertThat(adjustment.getType()).isEqualTo(TransactionType.INCOME);
+        assertThat(adjustment.getAmount()).isEqualByComparingTo(BigDecimal.valueOf(5000));
+        assertThat(adjustment.getDescription()).isEqualTo("잔고 조정");
+    }
+
+    @Test
+    @DisplayName("계좌 잔고 감소 수정 - 지출 조정 내역 생성")
+    void updateAccount_decreaseBalance_createsExpenseAdjustment() {
+        Long userId = 1L;
+        Long accountId = 1L;
+        User user = User.builder().build();
+        ReflectionTestUtils.setField(user, "id", userId);
+        Account account = Account.builder()
+                .user(user)
+                .accountName("생활비")
+                .initialBalance(BigDecimal.valueOf(10000))
+                .build();
+        ReflectionTestUtils.setField(account, "currentBalance", BigDecimal.valueOf(15000));
+        TransactionCategory category = TransactionCategory.builder()
+                .name("잔고 조정")
+                .type(TransactionType.EXPENSE)
+                .build();
+
+        given(accountRepository.findByIdWithLock(accountId)).willReturn(Optional.of(account));
+        given(categoryRepository.findByUserIsNullAndNameAndType("잔고 조정", TransactionType.EXPENSE))
+                .willReturn(Optional.of(category));
+
+        accountService.updateAccount(
+                userId,
+                accountId,
+                new AccountUpdateRequest(
+                        "생활비",
+                        BigDecimal.valueOf(10000),
+                        BigDecimal.valueOf(7000),
+                        AccountRole.CHECKING
+                )
+        );
+
+        assertThat(account.getCurrentBalance()).isEqualByComparingTo(BigDecimal.valueOf(7000));
+        ArgumentCaptor<Transaction> transactionCaptor = ArgumentCaptor.forClass(Transaction.class);
+        verify(transactionRepository).save(transactionCaptor.capture());
+        assertThat(transactionCaptor.getValue().getType()).isEqualTo(TransactionType.EXPENSE);
+        assertThat(transactionCaptor.getValue().getAmount()).isEqualByComparingTo(BigDecimal.valueOf(8000));
+    }
+
+    @Test
+    @DisplayName("계좌 잔고가 같으면 조정 내역을 생성하지 않음")
+    void updateAccount_sameBalance_doesNotCreateAdjustment() {
+        Long userId = 1L;
+        Long accountId = 1L;
+        User user = User.builder().build();
+        ReflectionTestUtils.setField(user, "id", userId);
+        Account account = Account.builder()
+                .user(user)
+                .accountName("생활비")
+                .initialBalance(BigDecimal.valueOf(10000))
+                .build();
+
+        given(accountRepository.findByIdWithLock(accountId)).willReturn(Optional.of(account));
+
+        accountService.updateAccount(
+                userId,
+                accountId,
+                new AccountUpdateRequest(
+                        "이름 변경",
+                        BigDecimal.valueOf(10000),
+                        BigDecimal.valueOf(10000),
+                        AccountRole.SAVINGS
+                )
+        );
+
+        assertThat(account.getAccountName()).isEqualTo("이름 변경");
+        assertThat(account.getRole()).isEqualTo(AccountRole.SAVINGS);
+        verify(transactionRepository, never()).save(any(Transaction.class));
     }
 
     @Test
@@ -157,11 +260,15 @@ class AccountServiceTest {
         ReflectionTestUtils.setField(owner, "id", ownerId);
         Account account = Account.builder().user(owner).build();
 
-        given(accountRepository.findById(1L)).willReturn(Optional.of(account));
+        given(accountRepository.findByIdWithLock(1L)).willReturn(Optional.of(account));
 
         // when & then
         assertThrows(CustomException.class, () ->
-                accountService.updateAccount(hackerId, 1L, new AccountRequest("이름", BigDecimal.ZERO, null))
+                accountService.updateAccount(
+                        hackerId,
+                        1L,
+                        new AccountUpdateRequest("이름", BigDecimal.ZERO, BigDecimal.ZERO, null)
+                )
         );
     }
 
@@ -332,12 +439,16 @@ class AccountServiceTest {
                 .initialBalance(BigDecimal.valueOf(10000))
                 .build();
 
-        given(accountRepository.findById(accountId)).willReturn(Optional.of(account));
+        given(accountRepository.findByIdWithLock(accountId)).willReturn(Optional.of(account));
         given(accountRepository.existsByUserIdAndAccountNameAndIdNot(userId, "중복 이름", accountId)).willReturn(true);
 
         // when & then
         assertThatThrownBy(() ->
-                accountService.updateAccount(userId, accountId, new AccountRequest("중복 이름", BigDecimal.ZERO, null))
+                accountService.updateAccount(
+                        userId,
+                        accountId,
+                        new AccountUpdateRequest("중복 이름", BigDecimal.ZERO, BigDecimal.ZERO, null)
+                )
         ).isInstanceOf(CustomException.class)
                 .satisfies(ex -> {
                     CustomException customEx = (CustomException) ex;
