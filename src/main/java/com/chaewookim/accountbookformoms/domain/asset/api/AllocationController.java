@@ -22,7 +22,7 @@ public class AllocationController {
 
     private final MonthlyAllocationService monthlyAllocationService;
 
-    @Operation(summary = "월별 저축·투자 집계", description = "계좌 역할·이체 내역·카테고리 플래그 기준 월별 저축률·투자율 조회")
+    @Operation(summary = "월별 저축·투자 집계", description = "저축·투자 역할 계좌의 월간 이체 순유입 기준 저축률·투자율 조회")
     @GetMapping("/{yearMonth}")
     public ResponseEntity<ApiResponse<MonthlyAllocationSummaryResponse>> getMonthlyAllocation(
             @AuthenticationPrincipal UserPrincipal userPrincipal,

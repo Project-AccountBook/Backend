@@ -8,6 +8,7 @@ import com.chaewookim.accountbookformoms.domain.asset.dto.response.TransactionRe
 import com.chaewookim.accountbookformoms.domain.asset.entity.Account;
 import com.chaewookim.accountbookformoms.domain.asset.entity.Transaction;
 import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory;
+import com.chaewookim.accountbookformoms.domain.asset.enums.AccountKind;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
 import com.chaewookim.accountbookformoms.domain.budget.event.BudgetExceededCheckEvent;
@@ -79,12 +80,12 @@ public class TransactionService {
         Account source = (request.accountId().equals(first.getId())) ? first : second;
         Account target = (request.targetAccountId().equals(first.getId())) ? first : second;
 
-        if (!source.getUser().getId().equals(userId)) {
+        if (!source.getUser().getId().equals(userId)
+                || !target.getUser().getId().equals(userId)) {
             throw new CustomException(AssetErrorCode.TRANSACTION_FORBIDDEN);
         }
 
-        source.changeBalance(request.amount().negate());
-        target.changeBalance(request.amount());
+        applyTransferBalances(source, target, request.amount());
 
         resetGoalAchievementStateIfNeeded(source);
         resetGoalAchievementStateIfNeeded(target);
@@ -105,6 +106,7 @@ public class TransactionService {
             throw new CustomException(AssetErrorCode.TRANSACTION_FORBIDDEN);
         }
 
+        validateNormalTransactionType(account, request.type());
         BigDecimal amount = (request.type() == TransactionType.EXPENSE) ? request.amount().negate() : request.amount();
         account.changeBalance(amount);
 
@@ -211,13 +213,13 @@ public class TransactionService {
             Account source = request.accountId().equals(first.getId()) ? first : second;
             Account target = request.targetAccountId().equals(first.getId()) ? first : second;
 
-            if (!source.getUser().getId().equals(userId)) {
+            if (!source.getUser().getId().equals(userId)
+                    || !target.getUser().getId().equals(userId)) {
                 throw new CustomException(AssetErrorCode.TRANSACTION_FORBIDDEN);
             }
 
             transaction.update(request, category, source, target);
-            source.changeBalance(request.amount().negate());
-            target.changeBalance(request.amount());
+            applyTransferBalances(source, target, request.amount());
             resetGoalAchievementStateIfNeeded(source);
             resetGoalAchievementStateIfNeeded(target);
             publishGoalAchievedCheck(userId, source.getId());
@@ -230,6 +232,7 @@ public class TransactionService {
                 throw new CustomException(AssetErrorCode.TRANSACTION_FORBIDDEN);
             }
 
+            validateNormalTransactionType(account, request.type());
             transaction.update(request, category, account, null);
             BigDecimal amount = (request.type() == TransactionType.EXPENSE) ? request.amount().negate() : request.amount();
             account.changeBalance(amount);
@@ -258,10 +261,9 @@ public class TransactionService {
                 .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
 
         if (transaction.getType() == TransactionType.TRANSFER && transaction.getTargetAccount() != null) {
-            source.changeBalance(transaction.getAmount());
             Account target = accountRepository.findByIdWithLock(transaction.getTargetAccount().getId())
                     .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
-            target.changeBalance(transaction.getAmount().negate());
+            reverseTransferBalances(source, target, transaction.getAmount());
             resetGoalAchievementStateIfNeeded(source);
             resetGoalAchievementStateIfNeeded(target);
             return;
@@ -278,6 +280,57 @@ public class TransactionService {
         if (!account.isGoalAchieved() && account.isGoalAchievedNotified()) {
             account.resetGoalAchievedNotified();
         }
+    }
+
+    private void validateNormalTransactionType(Account account, TransactionType type) {
+        if (account.getKind() == AccountKind.LOAN) {
+            throw new CustomException(AssetErrorCode.NORMAL_TRANSACTION_NOT_ALLOWED_FOR_LOAN);
+        }
+        if (type == TransactionType.INCOME && account.getKind() != AccountKind.ASSET) {
+            throw new CustomException(AssetErrorCode.INCOME_NOT_ALLOWED_FOR_LIABILITY);
+        }
+    }
+
+    private void applyTransferBalances(Account source, Account target, BigDecimal amount) {
+        if (source.getKind() == AccountKind.LOAN) {
+            if (target.getKind() != AccountKind.ASSET) {
+                throw new CustomException(AssetErrorCode.INVALID_LOAN_TRANSFER);
+            }
+            source.disburse(amount);
+            target.changeBalance(amount);
+            return;
+        }
+        if (target.getKind() == AccountKind.LOAN) {
+            if (source.getKind() != AccountKind.ASSET) {
+                throw new CustomException(AssetErrorCode.INVALID_LOAN_TRANSFER);
+            }
+            source.changeBalance(amount.negate());
+            target.changeBalance(amount);
+            return;
+        }
+        source.changeBalance(amount.negate());
+        target.changeBalance(amount);
+    }
+
+    private void reverseTransferBalances(Account source, Account target, BigDecimal amount) {
+        if (source.getKind() == AccountKind.LOAN) {
+            if (target.getKind() != AccountKind.ASSET) {
+                throw new CustomException(AssetErrorCode.INVALID_LOAN_TRANSFER);
+            }
+            source.reverseDisbursement(amount);
+            target.changeBalance(amount.negate());
+            return;
+        }
+        if (target.getKind() == AccountKind.LOAN) {
+            if (source.getKind() != AccountKind.ASSET) {
+                throw new CustomException(AssetErrorCode.INVALID_LOAN_TRANSFER);
+            }
+            source.changeBalance(amount);
+            target.changeBalance(amount.negate());
+            return;
+        }
+        source.changeBalance(amount);
+        target.changeBalance(amount.negate());
     }
 
     // 공통 검증 로직

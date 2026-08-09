@@ -12,6 +12,7 @@ import com.chaewookim.accountbookformoms.domain.asset.entity.Account;
 import com.chaewookim.accountbookformoms.domain.asset.entity.FixedTransaction;
 import com.chaewookim.accountbookformoms.domain.asset.entity.Transaction;
 import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory;
+import com.chaewookim.accountbookformoms.domain.asset.enums.AccountKind;
 import com.chaewookim.accountbookformoms.domain.asset.enums.AccountRole;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 
@@ -58,13 +59,15 @@ public class AccountService {
                 .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
         String accountName = request.accountName().trim();
+        AccountKind kind = resolveKind(request);
+        LoanTerms loanTerms = resolveLoanTerms(request, kind);
 
         Optional<Account> deletedAccount = accountRepository.findByUserIdAndAccountNameIncludingDeleted(userId, accountName);
         if (deletedAccount.isPresent() && deletedAccount.get().getDeletedAt() != null) {
             Account account = deletedAccount.get();
             account.restore();
-            account.resetBalance(request.initialBalance());
-            account.updateRole(resolveRole(request));
+            account.reinitialize(kind, request.creditLimit(), loanTerms.loanLimit(),
+                    loanTerms.disbursedAmount(), request.initialBalance(), resolveRole(request));
             return accountRepository.save(account).getId();
         }
 
@@ -77,6 +80,10 @@ public class AccountService {
                 .accountName(accountName)
                 .initialBalance(request.initialBalance())
                 .role(resolveRole(request))
+                .kind(kind)
+                .creditLimit(request.creditLimit())
+                .loanLimit(loanTerms.loanLimit())
+                .disbursedAmount(loanTerms.disbursedAmount())
                 .build();
 
         return accountRepository.save(account).getId();
@@ -102,6 +109,9 @@ public class AccountService {
             throw new CustomException(AssetErrorCode.DUPLICATE_ACCOUNT_NAME);
         }
 
+        account.updateKindAndLimits(
+                resolveKind(request, account), request.creditLimit(), request.loanLimit(),
+                request.initialBalance(), request.currentBalance());
         account.updateAccountName(accountName);
         if (request.role() != null) {
             account.updateRole(request.role());
@@ -154,6 +164,36 @@ public class AccountService {
         return request.role() != null ? request.role() : AccountRole.CHECKING;
     }
 
+    private AccountKind resolveKind(AccountRequest request) {
+        return request.kind() != null ? request.kind() : AccountKind.ASSET;
+    }
+
+    private AccountKind resolveKind(AccountUpdateRequest request, Account account) {
+        return request.kind() != null ? request.kind() : account.getKind();
+    }
+
+    private LoanTerms resolveLoanTerms(AccountRequest request, AccountKind kind) {
+        if (kind != AccountKind.LOAN) {
+            if (request.loanLimit() != null || request.loanAlreadyDisbursed() != null) {
+                throw new CustomException(AssetErrorCode.LOAN_FIELDS_NOT_ALLOWED);
+            }
+            return new LoanTerms(null, null);
+        }
+
+        BigDecimal loanLimit = request.loanLimit() != null
+                ? request.loanLimit()
+                : request.initialBalance().abs();
+        boolean alreadyDisbursed = request.loanAlreadyDisbursed() == null
+                || request.loanAlreadyDisbursed();
+        if (!alreadyDisbursed && request.initialBalance().compareTo(BigDecimal.ZERO) != 0) {
+            throw new CustomException(AssetErrorCode.INVALID_UNDISBURSED_LOAN_BALANCE);
+        }
+        return new LoanTerms(loanLimit, alreadyDisbursed ? loanLimit : BigDecimal.ZERO);
+    }
+
+    private record LoanTerms(BigDecimal loanLimit, BigDecimal disbursedAmount) {
+    }
+
     @Transactional
     public void deleteAccount(Long userId, Long accountId) {
 
@@ -164,8 +204,8 @@ public class AccountService {
         List<FixedTransaction> targetFixedTransactions = fixedTransactionRepository.findAllByTargetAccountId(accountId);
         targetFixedTransactions.forEach(fixedTransactionRepository::delete);
 
-        transactionRepository.backfillSourceAccountSnapshot(accountId, account.getAccountName());
-        transactionRepository.backfillTargetAccountSnapshot(accountId, account.getAccountName());
+        transactionRepository.backfillSourceAccountSnapshot(accountId, account.getAccountName(), account.getRole());
+        transactionRepository.backfillTargetAccountSnapshot(accountId, account.getAccountName(), account.getRole());
         transactionRepository.markSourceAccountArchived(accountId);
         transactionRepository.markTargetAccountArchived(accountId);
 

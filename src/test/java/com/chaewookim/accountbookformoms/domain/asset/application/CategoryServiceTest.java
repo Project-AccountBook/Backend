@@ -68,7 +68,7 @@ class CategoryServiceTest {
         // given
         User user = mock(User.class);
         given(user.getId()).willReturn(1L);
-        CategoryRequest request = new CategoryRequest("쇼핑", TransactionType.EXPENSE, null, null);
+        CategoryRequest request = new CategoryRequest("쇼핑", TransactionType.EXPENSE);
         TransactionCategory savedCategory = TransactionCategory.builder().user(user).name("쇼핑").type(TransactionType.EXPENSE).build();
         given(categoryRepository.findByUserIdAndNameAndTypeIncludingDeleted(1L, "쇼핑", "EXPENSE"))
                 .willReturn(Optional.empty());
@@ -99,7 +99,7 @@ class CategoryServiceTest {
         given(categoryRepository.existsByUserIdAndNameAndTypeAndIdNot(userId, "변경", TransactionType.INCOME, categoryId))
                 .willReturn(false);
 
-        CategoryRequest request = new CategoryRequest("변경", TransactionType.INCOME, null, null);
+        CategoryRequest request = new CategoryRequest("변경", TransactionType.INCOME);
 
         // when
         categoryService.updateCategory(categoryId, userId, request);
@@ -204,7 +204,7 @@ class CategoryServiceTest {
         // given
         User user = mock(User.class);
         given(user.getId()).willReturn(1L);
-        CategoryRequest request = new CategoryRequest("쇼핑", TransactionType.EXPENSE, null, null);
+        CategoryRequest request = new CategoryRequest("쇼핑", TransactionType.EXPENSE);
         given(categoryRepository.findByUserIdAndNameAndTypeIncludingDeleted(1L, "쇼핑", "EXPENSE"))
                 .willReturn(Optional.empty());
         given(categoryRepository.existsByUserIsNullAndNameAndType("쇼핑", TransactionType.EXPENSE)).willReturn(false);
