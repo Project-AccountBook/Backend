@@ -44,6 +44,9 @@ class TransactionServiceTest {
     private CacheManager cacheManager;
 
     @Mock
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
+    @Mock
     private Cache dashboardCache;
 
     @InjectMocks

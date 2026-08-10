@@ -60,6 +60,9 @@ class UserServiceTest {
     @Mock
     private UserDeviceService userDeviceService;
 
+    @Mock
+    private KakaoGeocodingClient kakaoGeocodingClient;
+
     @InjectMocks
     private UserService userService;
 

@@ -12,6 +12,7 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import com.chaewookim.accountbookformoms.global.util.CookieUtils;
@@ -27,6 +28,12 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     private final RefreshTokenRepository refreshTokenRepository;
     private final HttpCookieOAuth2AuthorizationRequestRepository httpCookieOAuth2AuthorizationRequestRepository;
     private final OAuth2RedirectUriValidator redirectUriValidator;
+
+    @Value("${app.oauth2.admin-redirect-uri:https://admin-frontend-rho-five.vercel.app/oauth2/redirect}")
+    private String adminRedirectUri;
+
+    @Value("${app.oauth2.admin-redirect-uri-local:http://localhost:5174/oauth2/redirect}")
+    private String adminRedirectUriLocal;
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException {
@@ -46,11 +53,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         String targetUrl = redirectUriValidator.resolve(candidateUri);
 
         if ("ROLE_ADMIN".equals(role)) {
-            if (targetUrl.contains("localhost")) {
-                targetUrl = "http://localhost:5174/oauth2/redirect";
-            } else {
-                targetUrl = "https://admin-frontend-rho-five.vercel.app/oauth2/redirect";
-            }
+            targetUrl = targetUrl.contains("localhost") ? adminRedirectUriLocal : adminRedirectUri;
         }
 
         ResponseCookie refreshTokenCookie = ResponseCookie.from("refreshToken", refreshToken)

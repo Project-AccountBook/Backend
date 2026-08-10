@@ -210,15 +210,15 @@ class BudgetServiceTest {
                 .yearMonth(sourceYearMonth)
                 .totalBudget(new BigDecimal("1000"))
                 .expectedExpense(new BigDecimal("100"))
+                .transactionCategory(activeCategory)
                 .build();
-        given(activeBudget.getTransactionCategory()).willReturn(activeCategory);
 
         Budget deletedCategoryBudget = Budget.builder()
                 .yearMonth(sourceYearMonth)
                 .totalBudget(new BigDecimal("500"))
                 .expectedExpense(BigDecimal.ZERO)
+                .transactionCategory(deletedCategory)
                 .build();
-        given(deletedCategoryBudget.getTransactionCategory()).willReturn(deletedCategory);
 
         given(budgetRepository.findByUserIdAndYearMonth(userId, targetYearMonth)).willReturn(List.of());
         given(budgetRepository.findLatestBudgetYearMonthBefore(userId, targetYearMonth))
@@ -277,8 +277,8 @@ class BudgetServiceTest {
                 .yearMonth(sourceYearMonth)
                 .totalBudget(new BigDecimal("1000"))
                 .expectedExpense(new BigDecimal("200"))
+                .transactionCategory(category)
                 .build();
-        given(sourceBudget.getTransactionCategory()).willReturn(category);
 
         User user = mock(User.class);
 
@@ -319,8 +319,8 @@ class BudgetServiceTest {
                 .yearMonth(sourceYearMonth)
                 .totalBudget(new BigDecimal("1000"))
                 .expectedExpense(new BigDecimal("200"))
+                .transactionCategory(category)
                 .build();
-        given(sourceBudget.getTransactionCategory()).willReturn(category);
 
         User user = mock(User.class);
 
