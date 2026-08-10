@@ -1,9 +1,11 @@
 package com.chaewookim.accountbookformoms.benchmark;
 
+import com.chaewookim.accountbookformoms.domain.asset.dao.FixedTransactionRepository;
 import com.chaewookim.accountbookformoms.domain.board.dao.BoardRepository;
 import com.chaewookim.accountbookformoms.domain.comment.dao.CommentRepository;
 import com.chaewookim.accountbookformoms.domain.comment.entity.Comment;
 import com.chaewookim.accountbookformoms.domain.notification.dao.NotificationRepository;
+import com.chaewookim.accountbookformoms.domain.user.dao.InterestCategoryRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.PersistenceContext;
@@ -99,6 +101,8 @@ class DbIoBenchmark {
     @Autowired BoardRepository boardRepository;
     @Autowired CommentRepository commentRepository;
     @Autowired NotificationRepository notificationRepository;
+    @Autowired InterestCategoryRepository interestCategoryRepository;
+    @Autowired FixedTransactionRepository fixedTransactionRepository;
     @Autowired PlatformTransactionManager txManager;
     @PersistenceContext EntityManager em;
     @PersistenceUnit EntityManagerFactory emf;
@@ -132,7 +136,23 @@ class DbIoBenchmark {
     static final int U2_NOTIF_PER_USER = 200;
     // U2 유저는 R3 시드 범위 이후로 배정 (충돌 방지)
     static final long U2_USER_ID_BASE = 1000L;             // 1000 ~ 1199
+
+    // R6, R7 시드 규모
+    static final int GP_COUNT = 10_000;                    // R6: group_purchase 10,000 rows
+    static final int GP_CATEGORY_MAX = 50;                 // category_id 1..50
+    static final int GP_CREATOR_MAX = 100;                 // creator_id 1..100
+    static final int TXCAT_USER_COUNT = 100;               // R7: 100 users
+    static final int TXCAT_PER_USER = 20;                  // R7: 100 * 20 = 2,000 rows
     // R3 별도 알림 시드에서 사용할 user_id 범위: 1..100 (Board 시드와 겹쳐도 무관, FK 없음)
+
+    // U3, U4 시드 규모
+    static final int U3_USER_COUNT = 60;                   // U3: user 1..60, each 100 interest_category = 6,000 rows
+    static final int U3_IC_PER_USER = 100;
+    static final int GP_CATEGORY_SEED_COUNT = 20;          // group_purchase_category 20 rows
+    static final int U4_ACCOUNT_COUNT = 60;                // U4: 60 accounts (신규, R5 account 와 별개)
+    static final int U4_FIXED_PER_ACCOUNT = 100;           // 60 * 100 = 6,000 fixed_transaction rows
+    static final int U4_TXCAT_MAX = 20;                    // transaction_category_id 1..20 재사용 (R7 시드)
+    // U4 accounts 를 user_id 1..60 에 걸쳐 시드. account_id 는 auto-increment (R5 의 3000 이후로 배정됨)
 
     static final Path CSV_PATH =
             Paths.get("docs/benchmark/results/2026-08-05_db_io.csv");
@@ -182,6 +202,26 @@ class DbIoBenchmark {
         long t6 = System.currentTimeMillis();
         System.out.println("=== [BENCH] U2 Notification seed done: " + (t6 - t5) + " ms");
 
+        seedGroupPurchases();
+        long t7 = System.currentTimeMillis();
+        System.out.println("=== [BENCH] GroupPurchase seed done: " + (t7 - t6) + " ms");
+
+        seedTransactionCategories();
+        long t8 = System.currentTimeMillis();
+        System.out.println("=== [BENCH] TransactionCategory seed done: " + (t8 - t7) + " ms");
+
+        seedGpCategories();
+        long t9 = System.currentTimeMillis();
+        System.out.println("=== [BENCH] GpCategory seed done: " + (t9 - t8) + " ms");
+
+        seedInterestCategories();
+        long t10 = System.currentTimeMillis();
+        System.out.println("=== [BENCH] InterestCategory seed done: " + (t10 - t9) + " ms");
+
+        seedU4AccountsAndFixedTx();
+        long t11 = System.currentTimeMillis();
+        System.out.println("=== [BENCH] U4 Account + FixedTransaction seed done: " + (t11 - t10) + " ms");
+
         // ANALYZE
         runInTx(() -> {
             em.createNativeQuery("ANALYZE TABLE board").getResultList();
@@ -189,8 +229,246 @@ class DbIoBenchmark {
             em.createNativeQuery("ANALYZE TABLE notification").getResultList();
             em.createNativeQuery("ANALYZE TABLE user_device").getResultList();
             em.createNativeQuery("ANALYZE TABLE account").getResultList();
+            em.createNativeQuery("ANALYZE TABLE group_purchase").getResultList();
+            em.createNativeQuery("ANALYZE TABLE transaction_category").getResultList();
+            em.createNativeQuery("ANALYZE TABLE group_purchase_category").getResultList();
+            em.createNativeQuery("ANALYZE TABLE interest_category").getResultList();
+            em.createNativeQuery("ANALYZE TABLE fixed_transaction").getResultList();
         });
         System.out.println("=== [BENCH] ANALYZE done");
+    }
+
+    // R6 시드: group_purchase 10,000 rows
+    // - status: PurchaseStatus enum (RECRUITING/SUCCESS/FAILED/CLOSED 균등)
+    // - category_id 1..50, creator_id 1..100, deadline 랜덤 미래
+    // creator_id 는 raw Long (FK 없음) 이므로 1..100 이면 됨
+    private void seedGroupPurchases() {
+        DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+        def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        TransactionStatus tx = txManager.getTransaction(def);
+        try {
+            Random rnd = new Random(606);
+            String[] statuses = {"RECRUITING", "SUCCESS", "FAILED", "CLOSED"};
+            for (int i = 1; i <= GP_COUNT; i++) {
+                long creatorId = rnd.nextInt(GP_CREATOR_MAX) + 1;
+                long categoryId = rnd.nextInt(GP_CATEGORY_MAX) + 1;
+                String status = statuses[i % 4];
+                // deadline: now + random(1..365) days
+                int daysAhead = rnd.nextInt(365) + 1;
+                int price = 1000 + rnd.nextInt(50000);
+                int minP = 2 + rnd.nextInt(5);
+                int maxP = minP + 5 + rnd.nextInt(20);
+                em.createNativeQuery(
+                        "INSERT INTO group_purchase "
+                      + "(creator_id, category_id, title, content, price, min_participants, "
+                      + " max_participants, current_participants, status, deadline, pickup_location, "
+                      + " view_count, created_at, updated_at) "
+                      + "VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, DATE_ADD(NOW(), INTERVAL ? DAY), ?, 0, NOW(), NOW())")
+                        .setParameter(1, creatorId)
+                        .setParameter(2, categoryId)
+                        .setParameter(3, "gp-title-" + i)
+                        .setParameter(4, "gp-content-" + i)
+                        .setParameter(5, price)
+                        .setParameter(6, minP)
+                        .setParameter(7, maxP)
+                        .setParameter(8, status)
+                        .setParameter(9, daysAhead)
+                        .setParameter(10, "pickup-loc-" + (i % 20))
+                        .executeUpdate();
+                if (i % 1000 == 0) {
+                    em.flush();
+                    em.clear();
+                    System.out.println("  ... group_purchases inserted " + i);
+                }
+            }
+            em.flush();
+            em.clear();
+            txManager.commit(tx);
+        } catch (RuntimeException ex) {
+            txManager.rollback(tx);
+            throw ex;
+        }
+    }
+
+    // R7 시드: transaction_category 2,000 rows
+    // - user_id 1..100 (FK: user 테이블. 이미 seedUsers 로 1..1200 시드됨)
+    // - name = "cat_{seq}", seq 0..19 (per user)
+    // - type = INCOME/EXPENSE/TRANSFER 순환
+    private void seedTransactionCategories() {
+        DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+        def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        TransactionStatus tx = txManager.getTransaction(def);
+        try {
+            String[] types = {"INCOME", "EXPENSE", "TRANSFER"};
+            int total = 0;
+            for (long uid = 1; uid <= TXCAT_USER_COUNT; uid++) {
+                for (int k = 0; k < TXCAT_PER_USER; k++) {
+                    String type = types[(int) ((uid + k) % 3)];
+                    em.createNativeQuery(
+                            "INSERT INTO transaction_category "
+                          + "(user_id, name, type, include_in_savings_rate, include_in_investment_rate, "
+                          + " created_at, updated_at) "
+                          + "VALUES (?, ?, ?, false, false, NOW(), NOW())")
+                            .setParameter(1, uid)
+                            .setParameter(2, "cat_" + k)
+                            .setParameter(3, type)
+                            .executeUpdate();
+                    total++;
+                    if (total % 500 == 0) {
+                        em.flush();
+                        em.clear();
+                        System.out.println("  ... transaction_categories inserted " + total);
+                    }
+                }
+            }
+            em.flush();
+            em.clear();
+            txManager.commit(tx);
+        } catch (RuntimeException ex) {
+            txManager.rollback(tx);
+            throw ex;
+        }
+    }
+
+    // U3 지원: group_purchase_category 20 rows (InterestCategory.category_id FK)
+    private void seedGpCategories() {
+        DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+        def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        TransactionStatus tx = txManager.getTransaction(def);
+        try {
+            for (int i = 1; i <= GP_CATEGORY_SEED_COUNT; i++) {
+                em.createNativeQuery(
+                        "INSERT INTO group_purchase_category "
+                      + "(name, sort_order, description, created_at, updated_at) "
+                      + "VALUES (?, ?, ?, NOW(), NOW())")
+                        .setParameter(1, "gp-cat-" + i)
+                        .setParameter(2, i)
+                        .setParameter(3, "gp-cat-desc-" + i)
+                        .executeUpdate();
+            }
+            em.flush();
+            em.clear();
+            txManager.commit(tx);
+        } catch (RuntimeException ex) {
+            txManager.rollback(tx);
+            throw ex;
+        }
+    }
+
+    // U3 시드: interest_category = 60 users * 100 = 6,000 rows
+    // user_id 1..60, category_id 1..20 순환
+    private void seedInterestCategories() {
+        DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+        def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        TransactionStatus tx = txManager.getTransaction(def);
+        try {
+            int total = 0;
+            for (long uid = 1; uid <= U3_USER_COUNT; uid++) {
+                for (int k = 0; k < U3_IC_PER_USER; k++) {
+                    long catId = (k % GP_CATEGORY_SEED_COUNT) + 1;
+                    em.createNativeQuery(
+                            "INSERT INTO interest_category "
+                          + "(user_id, category_id, is_alarm_enabled, created_at, updated_at) "
+                          + "VALUES (?, ?, false, NOW(), NOW())")
+                            .setParameter(1, uid)
+                            .setParameter(2, catId)
+                            .executeUpdate();
+                    total++;
+                    if (total % 2000 == 0) {
+                        em.flush();
+                        em.clear();
+                        System.out.println("  ... interest_categories inserted " + total);
+                    }
+                }
+            }
+            em.flush();
+            em.clear();
+            txManager.commit(tx);
+        } catch (RuntimeException ex) {
+            txManager.rollback(tx);
+            throw ex;
+        }
+    }
+
+    // U4 시드:
+    //  1) account 60개 신규 (user_id 1..60, R5 accounts 뒤에 auto-increment 로 배정)
+    //     → 배정된 account_id 를 List 로 수집해 상수로 노출
+    //  2) 각 account 마다 fixed_transaction 100건 → 6,000 rows
+    //     transaction_category_id 1..20 (R7 시드 재사용)
+    private final List<Long> u4AccountIds = new ArrayList<>();
+    private void seedU4AccountsAndFixedTx() {
+        // 1) accounts 신규 60개
+        {
+            DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+            def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+            TransactionStatus tx = txManager.getTransaction(def);
+            try {
+                for (int i = 0; i < U4_ACCOUNT_COUNT; i++) {
+                    long uid = i + 1; // user_id 1..60
+                    Object idObj = em.createNativeQuery(
+                            "INSERT INTO account (user_id, account_name, initial_balance, current_balance, role, "
+                          + "goal_achieved_notified, created_at, updated_at) "
+                          + "VALUES (?, ?, 0, 0, 'CHECKING', false, NOW(), NOW())")
+                            .setParameter(1, uid)
+                            .setParameter(2, "u4-acc-" + uid)
+                            .executeUpdate();
+                    // executeUpdate() 는 int (row count) 반환. auto-increment 값을 얻기 위해 별도 SELECT.
+                    Object lastId = em.createNativeQuery("SELECT LAST_INSERT_ID()").getSingleResult();
+                    u4AccountIds.add(((Number) lastId).longValue());
+                }
+                em.flush();
+                em.clear();
+                txManager.commit(tx);
+            } catch (RuntimeException ex) {
+                txManager.rollback(tx);
+                throw ex;
+            }
+            System.out.println("  ... U4 accounts seeded, ids=" + u4AccountIds.get(0) + ".." + u4AccountIds.get(u4AccountIds.size()-1));
+        }
+        // 2) fixed_transaction 6000건
+        {
+            DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+            def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+            TransactionStatus tx = txManager.getTransaction(def);
+            try {
+                String[] types = {"INCOME", "EXPENSE", "TRANSFER"};
+                int total = 0;
+                for (int i = 0; i < u4AccountIds.size(); i++) {
+                    long accountId = u4AccountIds.get(i);
+                    long uid = i + 1; // 매칭된 owner user_id
+                    for (int k = 0; k < U4_FIXED_PER_ACCOUNT; k++) {
+                        long catId = (k % U4_TXCAT_MAX) + 1; // 1..20 (R7 시드 - user_id 1..100 에 걸쳐 존재)
+                        String type = types[k % 3];
+                        em.createNativeQuery(
+                                "INSERT INTO fixed_transaction "
+                              + "(user_id, account_id, category_id, type, amount, frequency, repeat_day, "
+                              + " repeat_month, start_date, end_date, last_executed_date, next_execution_date, "
+                              + " description, is_active, created_at, updated_at) "
+                              + "VALUES (?, ?, ?, ?, ?, 'MONTHLY', 1, NULL, CURDATE(), NULL, NULL, "
+                              + "        DATE_ADD(CURDATE(), INTERVAL 30 DAY), ?, true, NOW(), NOW())")
+                                .setParameter(1, uid)
+                                .setParameter(2, accountId)
+                                .setParameter(3, catId)
+                                .setParameter(4, type)
+                                .setParameter(5, 1000 + k)
+                                .setParameter(6, "u4-ft-" + accountId + "-" + k)
+                                .executeUpdate();
+                        total++;
+                        if (total % 2000 == 0) {
+                            em.flush();
+                            em.clear();
+                            System.out.println("  ... fixed_transactions inserted " + total);
+                        }
+                    }
+                }
+                em.flush();
+                em.clear();
+                txManager.commit(tx);
+            } catch (RuntimeException ex) {
+                txManager.rollback(tx);
+                throw ex;
+            }
+        }
     }
 
     // User 필수 컬럼: email (unique, notnull), username (notnull), role (notnull enum),
@@ -452,7 +730,7 @@ class DbIoBenchmark {
     @Test
     @Order(1)
     void r1_boardIndex() throws IOException {
-        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,U1,U2");
+        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,R6,R7,U1,U2,U3,U4");
         if (!scenarios.contains("R1")) {
             System.out.println("=== [BENCH] R1 skipped");
             return;
@@ -516,7 +794,7 @@ class DbIoBenchmark {
     @Test
     @Order(2)
     void r2_commentIndex() throws IOException {
-        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,U1,U2");
+        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,R6,R7,U1,U2,U3,U4");
         if (!scenarios.contains("R2")) {
             System.out.println("=== [BENCH] R2 skipped");
             return;
@@ -569,7 +847,7 @@ class DbIoBenchmark {
     @Test
     @Order(3)
     void u1_jdbcBatch() throws IOException {
-        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,U1,U2");
+        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,R6,R7,U1,U2,U3,U4");
         if (!scenarios.contains("U1")) {
             System.out.println("=== [BENCH] U1 skipped");
             return;
@@ -617,7 +895,7 @@ class DbIoBenchmark {
     @Test
     @Order(4)
     void r3_notificationIndex() throws IOException {
-        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,U1,U2");
+        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,R6,R7,U1,U2,U3,U4");
         if (!scenarios.contains("R3")) {
             System.out.println("=== [BENCH] R3 skipped");
             return;
@@ -653,7 +931,7 @@ class DbIoBenchmark {
     @Test
     @Order(5)
     void r4_userDeviceIndex() throws IOException {
-        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,U1,U2");
+        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,R6,R7,U1,U2,U3,U4");
         if (!scenarios.contains("R4")) {
             System.out.println("=== [BENCH] R4 skipped");
             return;
@@ -691,7 +969,7 @@ class DbIoBenchmark {
     @Test
     @Order(6)
     void r5_accountIndex() throws IOException {
-        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,U1,U2");
+        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,R6,R7,U1,U2,U3,U4");
         if (!scenarios.contains("R5")) {
             System.out.println("=== [BENCH] R5 skipped");
             return;
@@ -748,7 +1026,7 @@ class DbIoBenchmark {
     @Test
     @Order(7)
     void u2_notificationBulkDelete() throws IOException {
-        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,U1,U2");
+        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,R6,R7,U1,U2,U3,U4");
         if (!scenarios.contains("U2")) {
             System.out.println("=== [BENCH] U2 skipped");
             return;
@@ -830,6 +1108,335 @@ class DbIoBenchmark {
         TransactionStatus tx = txManager.getTransaction(def);
         try {
             notificationRepository.softDeleteByUserId(userId);
+            em.flush();
+            txManager.commit(tx);
+        } catch (RuntimeException ex) {
+            txManager.rollback(tx);
+            throw ex;
+        }
+    }
+
+    // ============================================================
+    // R6: GroupPurchase (status, category_id, deadline) 인덱스
+    //   쿼리: WHERE status=? AND category_id=? ORDER BY deadline ASC LIMIT 20
+    // ============================================================
+    @Test
+    @Order(8)
+    void r6_groupPurchaseIndex() throws IOException {
+        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,R6,R7,U1,U2,U3,U4");
+        if (!scenarios.contains("R6")) {
+            System.out.println("=== [BENCH] R6 skipped");
+            return;
+        }
+        System.out.println("\n=== [BENCH] R6 GroupPurchase index effect ===");
+
+        runInTx(() -> {
+            System.out.println("[R6] EXPLAIN index_used:");
+            explain("EXPLAIN SELECT * FROM group_purchase WHERE status='RECRUITING' AND category_id=1 "
+                  + "ORDER BY deadline ASC LIMIT 20");
+            System.out.println("[R6] EXPLAIN full_scan:");
+            explain("EXPLAIN SELECT * FROM group_purchase IGNORE INDEX (idx_gp_status_category_deadline) "
+                  + "WHERE status='RECRUITING' AND category_id=1 ORDER BY deadline ASC LIMIT 20");
+        });
+
+        Random rnd = new Random(606);
+        Result idxRes = benchGpQuery(
+                "SELECT * FROM group_purchase WHERE status=?1 AND category_id=?2 "
+              + "ORDER BY deadline ASC LIMIT 20",
+                rnd, 20, 100);
+        Result scanRes = benchGpQuery(
+                "SELECT * FROM group_purchase IGNORE INDEX (idx_gp_status_category_deadline) "
+              + "WHERE status=?1 AND category_id=?2 ORDER BY deadline ASC LIMIT 20",
+                new Random(606), 20, 100);
+
+        appendCsv("R6", "index_used", "-", idxRes);
+        appendCsv("R6", "full_scan", "-", scanRes);
+        printResult("R6 index_used", idxRes);
+        printResult("R6 full_scan", scanRes);
+    }
+
+    // status 는 RECRUITING 위주로 편중 (실제 조회 패턴)
+    private Result benchGpQuery(String sql, Random rnd, int warmup, int iters) {
+        // RECRUITING 를 50% 나머지 나눔
+        String[] statuses = {"RECRUITING", "RECRUITING", "SUCCESS", "FAILED", "CLOSED"};
+        for (int i = 0; i < warmup; i++) {
+            String s = statuses[rnd.nextInt(statuses.length)];
+            long catId = rnd.nextInt(GP_CATEGORY_MAX) + 1;
+            runInTx(() -> em.createNativeQuery(sql)
+                    .setParameter(1, s)
+                    .setParameter(2, catId)
+                    .getResultList());
+        }
+        resetStats();
+        long[] samples = new long[iters];
+        for (int i = 0; i < iters; i++) {
+            String s = statuses[rnd.nextInt(statuses.length)];
+            long catId = rnd.nextInt(GP_CATEGORY_MAX) + 1;
+            long t0 = System.nanoTime();
+            runInTx(() -> em.createNativeQuery(sql)
+                    .setParameter(1, s)
+                    .setParameter(2, catId)
+                    .getResultList());
+            samples[i] = System.nanoTime() - t0;
+        }
+        long sqlCount = queryCount();
+        return Result.of(samples, sqlCount);
+    }
+
+    // ============================================================
+    // R7: TransactionCategory (user_id, name, type) 인덱스
+    //   쿼리: SELECT 1 FROM transaction_category
+    //         WHERE user_id=? AND name=? AND type=? LIMIT 1
+    // ============================================================
+    @Test
+    @Order(9)
+    void r7_transactionCategoryIndex() throws IOException {
+        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,R6,R7,U1,U2,U3,U4");
+        if (!scenarios.contains("R7")) {
+            System.out.println("=== [BENCH] R7 skipped");
+            return;
+        }
+        System.out.println("\n=== [BENCH] R7 TransactionCategory exists index effect ===");
+
+        runInTx(() -> {
+            System.out.println("[R7] EXPLAIN index_used:");
+            explain("EXPLAIN SELECT 1 FROM transaction_category "
+                  + "WHERE user_id=1 AND name='cat_0' AND type='INCOME' LIMIT 1");
+            System.out.println("[R7] EXPLAIN full_scan:");
+            explain("EXPLAIN SELECT 1 FROM transaction_category IGNORE INDEX (idx_txcategory_user_name_type) "
+                  + "WHERE user_id=1 AND name='cat_0' AND type='INCOME' LIMIT 1");
+        });
+
+        Random rnd = new Random(707);
+        Result idxRes = benchTxCatQuery(
+                "SELECT 1 FROM transaction_category "
+              + "WHERE user_id=?1 AND name=?2 AND type=?3 LIMIT 1",
+                rnd, 20, 100);
+        Result scanRes = benchTxCatQuery(
+                "SELECT 1 FROM transaction_category IGNORE INDEX (idx_txcategory_user_name_type) "
+              + "WHERE user_id=?1 AND name=?2 AND type=?3 LIMIT 1",
+                new Random(707), 20, 100);
+
+        appendCsv("R7", "index_used", "-", idxRes);
+        appendCsv("R7", "full_scan", "-", scanRes);
+        printResult("R7 index_used", idxRes);
+        printResult("R7 full_scan", scanRes);
+    }
+
+    private Result benchTxCatQuery(String sql, Random rnd, int warmup, int iters) {
+        String[] types = {"INCOME", "EXPENSE", "TRANSFER"};
+        for (int i = 0; i < warmup; i++) {
+            long uid = rnd.nextInt(TXCAT_USER_COUNT) + 1;
+            String name = "cat_" + rnd.nextInt(TXCAT_PER_USER);
+            String type = types[rnd.nextInt(types.length)];
+            runInTx(() -> em.createNativeQuery(sql)
+                    .setParameter(1, uid)
+                    .setParameter(2, name)
+                    .setParameter(3, type)
+                    .getResultList());
+        }
+        resetStats();
+        long[] samples = new long[iters];
+        for (int i = 0; i < iters; i++) {
+            long uid = rnd.nextInt(TXCAT_USER_COUNT) + 1;
+            String name = "cat_" + rnd.nextInt(TXCAT_PER_USER);
+            String type = types[rnd.nextInt(types.length)];
+            long t0 = System.nanoTime();
+            runInTx(() -> em.createNativeQuery(sql)
+                    .setParameter(1, uid)
+                    .setParameter(2, name)
+                    .setParameter(3, type)
+                    .getResultList());
+            samples[i] = System.nanoTime() - t0;
+        }
+        long sqlCount = queryCount();
+        return Result.of(samples, sqlCount);
+    }
+
+    // ============================================================
+    // U3: InterestCategory bulk soft-delete (D8 확장)
+    //   before: 100 rows 개별 UPDATE
+    //   after : softDeleteByUserId 단일 벌크 UPDATE
+    // 매 iteration 마다 새 user 사용 (warmup 3 + 측정 10) * 2 variant = 26 users 소진.
+    // ============================================================
+    @Test
+    @Order(10)
+    void u3_interestCategoryBulkDelete() throws IOException {
+        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,R6,R7,U1,U2,U3,U4");
+        if (!scenarios.contains("U3")) {
+            System.out.println("=== [BENCH] U3 skipped");
+            return;
+        }
+        System.out.println("\n=== [BENCH] U3 InterestCategory bulk soft-delete ===");
+
+        int warmup = 3;
+        int iters = 10;
+
+        // U3 시드는 user_id 1..60 사용. userCursor 는 1부터 시작 (0 아님).
+        int[] userCursor = {1};
+
+        // ----- BEFORE -----
+        for (int i = 0; i < warmup; i++) {
+            long uid = userCursor[0]++;
+            runU3BeforeOnce(uid);
+        }
+        resetStats();
+        long[] beforeSamples = new long[iters];
+        for (int i = 0; i < iters; i++) {
+            long uid = userCursor[0]++;
+            long t0 = System.nanoTime();
+            runU3BeforeOnce(uid);
+            beforeSamples[i] = System.nanoTime() - t0;
+        }
+        long beforeSql = queryCount();
+        Result beforeRes = Result.of(beforeSamples, beforeSql);
+        appendCsv("U3", "individual_update", "-", beforeRes);
+        printResult("U3 individual_update", beforeRes);
+
+        // ----- AFTER -----
+        for (int i = 0; i < warmup; i++) {
+            long uid = userCursor[0]++;
+            runU3AfterOnce(uid);
+        }
+        resetStats();
+        long[] afterSamples = new long[iters];
+        for (int i = 0; i < iters; i++) {
+            long uid = userCursor[0]++;
+            long t0 = System.nanoTime();
+            runU3AfterOnce(uid);
+            afterSamples[i] = System.nanoTime() - t0;
+        }
+        long afterSql = queryCount();
+        Result afterRes = Result.of(afterSamples, afterSql);
+        appendCsv("U3", "bulk_update", "-", afterRes);
+        printResult("U3 bulk_update", afterRes);
+    }
+
+    private void runU3BeforeOnce(long userId) {
+        DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+        def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        TransactionStatus tx = txManager.getTransaction(def);
+        try {
+            @SuppressWarnings("unchecked")
+            List<Number> ids = em.createNativeQuery(
+                    "SELECT id FROM interest_category WHERE user_id=?1 AND deleted_at IS NULL")
+                    .setParameter(1, userId)
+                    .getResultList();
+            for (Number idNum : ids) {
+                em.createNativeQuery(
+                        "UPDATE interest_category SET deleted_at=NOW() WHERE id=?1")
+                        .setParameter(1, idNum.longValue())
+                        .executeUpdate();
+            }
+            em.flush();
+            txManager.commit(tx);
+        } catch (RuntimeException ex) {
+            txManager.rollback(tx);
+            throw ex;
+        }
+    }
+
+    private void runU3AfterOnce(long userId) {
+        DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+        def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        TransactionStatus tx = txManager.getTransaction(def);
+        try {
+            interestCategoryRepository.softDeleteByUserId(userId);
+            em.flush();
+            txManager.commit(tx);
+        } catch (RuntimeException ex) {
+            txManager.rollback(tx);
+            throw ex;
+        }
+    }
+
+    // ============================================================
+    // U4: FixedTransaction by account_id bulk soft-delete (D8 확장)
+    //   before: 100 rows 개별 UPDATE
+    //   after : softDeleteByAccountId 단일 벌크 UPDATE
+    // 매 iteration 마다 새 account 사용. account_id 는 seed 시 수집한 u4AccountIds.
+    // ============================================================
+    @Test
+    @Order(11)
+    void u4_fixedTransactionBulkDelete() throws IOException {
+        String scenarios = System.getProperty("bench.run.scenarios", "R1,R2,R3,R4,R5,R6,R7,U1,U2,U3,U4");
+        if (!scenarios.contains("U4")) {
+            System.out.println("=== [BENCH] U4 skipped");
+            return;
+        }
+        System.out.println("\n=== [BENCH] U4 FixedTransaction bulk soft-delete ===");
+
+        int warmup = 3;
+        int iters = 10;
+        int[] cursor = {0}; // u4AccountIds index
+
+        // ----- BEFORE -----
+        for (int i = 0; i < warmup; i++) {
+            long accId = u4AccountIds.get(cursor[0]++);
+            runU4BeforeOnce(accId);
+        }
+        resetStats();
+        long[] beforeSamples = new long[iters];
+        for (int i = 0; i < iters; i++) {
+            long accId = u4AccountIds.get(cursor[0]++);
+            long t0 = System.nanoTime();
+            runU4BeforeOnce(accId);
+            beforeSamples[i] = System.nanoTime() - t0;
+        }
+        long beforeSql = queryCount();
+        Result beforeRes = Result.of(beforeSamples, beforeSql);
+        appendCsv("U4", "individual_update", "-", beforeRes);
+        printResult("U4 individual_update", beforeRes);
+
+        // ----- AFTER -----
+        for (int i = 0; i < warmup; i++) {
+            long accId = u4AccountIds.get(cursor[0]++);
+            runU4AfterOnce(accId);
+        }
+        resetStats();
+        long[] afterSamples = new long[iters];
+        for (int i = 0; i < iters; i++) {
+            long accId = u4AccountIds.get(cursor[0]++);
+            long t0 = System.nanoTime();
+            runU4AfterOnce(accId);
+            afterSamples[i] = System.nanoTime() - t0;
+        }
+        long afterSql = queryCount();
+        Result afterRes = Result.of(afterSamples, afterSql);
+        appendCsv("U4", "bulk_update", "-", afterRes);
+        printResult("U4 bulk_update", afterRes);
+    }
+
+    private void runU4BeforeOnce(long accountId) {
+        DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+        def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        TransactionStatus tx = txManager.getTransaction(def);
+        try {
+            @SuppressWarnings("unchecked")
+            List<Number> ids = em.createNativeQuery(
+                    "SELECT id FROM fixed_transaction WHERE account_id=?1 AND deleted_at IS NULL")
+                    .setParameter(1, accountId)
+                    .getResultList();
+            for (Number idNum : ids) {
+                em.createNativeQuery(
+                        "UPDATE fixed_transaction SET deleted_at=NOW() WHERE id=?1")
+                        .setParameter(1, idNum.longValue())
+                        .executeUpdate();
+            }
+            em.flush();
+            txManager.commit(tx);
+        } catch (RuntimeException ex) {
+            txManager.rollback(tx);
+            throw ex;
+        }
+    }
+
+    private void runU4AfterOnce(long accountId) {
+        DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+        def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        TransactionStatus tx = txManager.getTransaction(def);
+        try {
+            fixedTransactionRepository.softDeleteByAccountId(accountId);
             em.flush();
             txManager.commit(tx);
         } catch (RuntimeException ex) {

@@ -14,6 +14,10 @@ import java.time.LocalDateTime;
 
 @Entity
 @Getter
+@Table(name = "group_purchase",
+        indexes = @Index(
+                name = "idx_gp_status_category_deadline",
+                columnList = "status, category_id, deadline"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @SQLDelete(sql = "UPDATE group_purchase SET deleted_at = NOW() WHERE id = ?")
 @SQLRestriction("deleted_at IS NULL")

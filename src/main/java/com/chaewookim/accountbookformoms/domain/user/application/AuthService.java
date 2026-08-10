@@ -76,19 +76,19 @@ public class AuthService {
     }
 
     @Transactional
-    public void sendSignupVerificationCode(String email) {
+    public void sendSignupVerificationCode(String email, String clientIp) {
 
         if (userRepository.findByEmail(email).isPresent()) {
             throw new CustomException(UserErrorCode.DUPLICATE_EMAIL);
         }
 
-        emailVerificationService.sendVerificationCode(email, VerificationType.SIGNUP);
+        emailVerificationService.sendVerificationCode(email, VerificationType.SIGNUP, clientIp);
     }
 
     @Transactional
-    public void requestPasswordReset(String email) {
+    public void requestPasswordReset(String email, String clientIp) {
         userRepository.findByEmail(email).orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
-        emailVerificationService.sendVerificationCode(email, VerificationType.RESET);
+        emailVerificationService.sendVerificationCode(email, VerificationType.RESET, clientIp);
     }
 
     @Transactional

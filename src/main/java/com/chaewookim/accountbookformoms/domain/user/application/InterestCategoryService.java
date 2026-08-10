@@ -68,6 +68,6 @@ public class InterestCategoryService {
 
     @Transactional
     public void deleteAllByUserId(Long userId) {
-        repository.deleteAll(repository.findByUserId(userId));
+        repository.softDeleteByUserId(userId);
     }
 }
