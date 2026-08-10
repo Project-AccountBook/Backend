@@ -1,6 +1,7 @@
 package com.chaewookim.accountbookformoms.domain.asset.entity;
 
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.FixedTransactionRequest;
+import com.chaewookim.accountbookformoms.domain.asset.enums.FixedTransactionExecutionFailure;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionFrequency;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
@@ -89,6 +90,12 @@ public class FixedTransaction extends BaseEntity {
     private LocalDate lastExecutedDate;
 
     private LocalDate nextExecutionDate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 40)
+    private FixedTransactionExecutionFailure failureReason;
+
+    private LocalDate failedExecutionDate;
 
     private String description;
 
@@ -212,10 +219,33 @@ public class FixedTransaction extends BaseEntity {
 
         LocalDate basis = LocalDate.now().isBefore(startDate) ? startDate : LocalDate.now();
         this.nextExecutionDate = calculateInitialNextDate(basis, frequency, repeatDay, repeatMonth);
+        clearExecutionFailure();
     }
 
     public void toggleActive() {
         this.isActive = !this.isActive;
+    }
+
+    public boolean hasExecutionFailure() {
+        return failureReason != null && failedExecutionDate != null;
+    }
+
+    public void markExecutionFailed(LocalDate executionDate, FixedTransactionExecutionFailure reason) {
+        this.failedExecutionDate = executionDate;
+        this.failureReason = reason;
+    }
+
+    public void clearExecutionFailure() {
+        this.failureReason = null;
+        this.failedExecutionDate = null;
+    }
+
+    public void skipFailedOccurrence() {
+        if (!hasExecutionFailure()) {
+            throw new CustomException(AssetErrorCode.FIXED_TRANSACTION_NOT_FAILED);
+        }
+        LocalDate skippedDate = this.failedExecutionDate;
+        updateExecutionStatus(skippedDate);
     }
 
     private LocalDate calculateNextExecutionDate(LocalDate executedDate) {
@@ -237,6 +267,7 @@ public class FixedTransaction extends BaseEntity {
     public void updateExecutionStatus(LocalDate executedDate) {
         this.lastExecutedDate = executedDate;
         this.nextExecutionDate = calculateNextExecutionDate(executedDate);
+        clearExecutionFailure();
     }
 
     public void alignNextExecutionDateIfStale(LocalDate today) {

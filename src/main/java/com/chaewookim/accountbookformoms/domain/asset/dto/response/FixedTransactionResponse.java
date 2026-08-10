@@ -1,58 +1,1 @@
-package com.chaewookim.accountbookformoms.domain.asset.dto.response;
-
-import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionFrequency;
-import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
-import com.chaewookim.accountbookformoms.domain.asset.entity.FixedTransaction;
-import java.math.BigDecimal;
-import java.time.LocalDate;
-
-public record FixedTransactionResponse(
-
-        Long id,
-        Long accountId,
-        String accountName,
-        Long targetAccountId,
-        String targetAccountName,
-        Long categoryId,
-        String categoryName,
-        TransactionType type,
-        BigDecimal amount,
-        TransactionFrequency frequency,
-        Integer repeatDay,
-        Integer repeatMonth,
-        LocalDate startDate,
-        LocalDate endDate,
-        String description,
-        Boolean isActive
-) {
-    public static FixedTransactionResponse from(FixedTransaction entity) {
-        Long accountId = entity.getAccount() != null ? entity.getAccount().getId() : null;
-        String accountName = entity.getAccount() != null
-                ? entity.getAccount().getAccountName()
-                : "삭제된 계좌";
-
-        Long targetAccountId = entity.getTargetAccount() != null ? entity.getTargetAccount().getId() : null;
-        String targetAccountName = entity.getTargetAccount() != null
-                ? entity.getTargetAccount().getAccountName()
-                : null;
-
-        return new FixedTransactionResponse(
-                entity.getId(),
-                accountId,
-                accountName,
-                targetAccountId,
-                targetAccountName,
-                entity.getTransactionCategory().getId(),
-                entity.getTransactionCategory().getName(),
-                entity.getType(),
-                entity.getAmount(),
-                entity.getFrequency(),
-                entity.getRepeatDay(),
-                entity.getRepeatMonth(),
-                entity.getStartDate(),
-                entity.getEndDate(),
-                entity.getDescription(),
-                entity.getIsActive()
-        );
-    }
-}
+package com.chaewookim.accountbookformoms.domain.asset.dto.response;import com.chaewookim.accountbookformoms.domain.asset.enums.FixedTransactionExecutionFailure;import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionFrequency;import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;import com.chaewookim.accountbookformoms.domain.asset.entity.FixedTransaction;import java.math.BigDecimal;import java.time.LocalDate;public record FixedTransactionResponse(        Long id,        Long accountId,        String accountName,        Long targetAccountId,        String targetAccountName,        Long categoryId,        String categoryName,        TransactionType type,        BigDecimal amount,        TransactionFrequency frequency,        Integer repeatDay,        Integer repeatMonth,        LocalDate startDate,        LocalDate endDate,        String description,        Boolean isActive,        LocalDate nextExecutionDate,        LocalDate lastExecutedDate,        FixedTransactionExecutionFailure failureReason,        LocalDate failedExecutionDate) {    public static FixedTransactionResponse from(FixedTransaction entity) {        Long accountId = entity.getAccount() != null ? entity.getAccount().getId() : null;        String accountName = entity.getAccount() != null                ? entity.getAccount().getAccountName()                : "삭제된 계좌";        Long targetAccountId = entity.getTargetAccount() != null ? entity.getTargetAccount().getId() : null;        String targetAccountName = entity.getTargetAccount() != null                ? entity.getTargetAccount().getAccountName()                : null;        return new FixedTransactionResponse(                entity.getId(),                accountId,                accountName,                targetAccountId,                targetAccountName,                entity.getTransactionCategory().getId(),                entity.getTransactionCategory().getName(),                entity.getType(),                entity.getAmount(),                entity.getFrequency(),                entity.getRepeatDay(),                entity.getRepeatMonth(),                entity.getStartDate(),                entity.getEndDate(),                entity.getDescription(),                entity.getIsActive(),                entity.getNextExecutionDate(),                entity.getLastExecutedDate(),                entity.getFailureReason(),                entity.getFailedExecutionDate()        );    }}

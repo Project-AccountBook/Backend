@@ -29,6 +29,7 @@ public class FixedTransactionService {
     private final AccountRepository accountRepository;
     private final TransactionCategoryRepository categoryRepository;
     private final FixedTransactionImmediateExecutionService fixedTransactionImmediateExecutionService;
+    private final FixedTransactionExecutor fixedTransactionExecutor;
 
     @Transactional
     public Long createFixedTransaction(Long userId, User user, FixedTransactionRequest request) {
@@ -138,6 +139,18 @@ public class FixedTransactionService {
     public void deleteFixedTransaction(Long userId, Long id) {
         FixedTransaction fixedTransaction = validateAndGet(userId, id);
         fixedTransactionRepository.delete(fixedTransaction);
+    }
+
+    @Transactional
+    public void retryFailedExecution(Long userId, Long id) {
+        FixedTransaction fixedTransaction = validateAndGet(userId, id);
+        fixedTransactionExecutor.retryFailedOccurrence(fixedTransaction);
+    }
+
+    @Transactional
+    public void skipFailedExecution(Long userId, Long id) {
+        FixedTransaction fixedTransaction = validateAndGet(userId, id);
+        fixedTransaction.skipFailedOccurrence();
     }
 
     // 공통 검증 로직

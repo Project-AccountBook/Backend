@@ -45,6 +45,7 @@ public enum AssetErrorCode implements BaseErrorCode {
     INVALID_REPEAT_MONTH(HttpStatus.BAD_REQUEST, "반복 월은 1월부터 12월 사이여야 합니다."),
     FIXED_TRANSACTION_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 고정 내역을 찾을 수 없습니다."),
     FIXED_TRANSACTION_FORBIDDEN(HttpStatus.FORBIDDEN, "본인의 고정 내역만 접근할 수 있습니다."),
+    FIXED_TRANSACTION_NOT_FAILED(HttpStatus.BAD_REQUEST, "실행 실패한 고정 거래만 처리할 수 있습니다."),
 
     // Category
     CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "카테고리를 찾을 수 없습니다."),

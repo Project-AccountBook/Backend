@@ -44,6 +44,9 @@ class FixedTransactionServiceTest {
     @Mock
     private FixedTransactionImmediateExecutionService fixedTransactionImmediateExecutionService;
 
+    @Mock
+    private FixedTransactionExecutor fixedTransactionExecutor;
+
     @InjectMocks
     private FixedTransactionService fixedTransactionService;
 
