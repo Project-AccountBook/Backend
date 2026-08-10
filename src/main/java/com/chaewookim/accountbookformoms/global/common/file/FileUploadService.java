@@ -37,8 +37,8 @@ public class FileUploadService {
     @Value("${aws.s3.bucket}")
     private String bucketName;
 
-    @Value("${aws.s3.region}")
-    private String region;
+    @Value("${aws.cdn.base-url}")
+    private String cdnBaseUrl;
 
     public String uploadFile(MultipartFile file) {
         validate(file);
@@ -56,8 +56,9 @@ public class FileUploadService {
 
             s3Client.putObject(putObjectRequest, RequestBody.fromInputStream(inputStream, file.getSize()));
 
-            // 업로드된 파일의 전체를 브라우저에서 바로 볼 수 있는 S3 주소
-            return "https://" + bucketName + ".s3." + region + ".amazonaws.com/" + uniqueFileName;
+            // CloudFront(커스텀 도메인) URL — S3는 OAC로만 조회
+            String base = cdnBaseUrl.endsWith("/") ? cdnBaseUrl.substring(0, cdnBaseUrl.length() - 1) : cdnBaseUrl;
+            return base + "/" + uniqueFileName;
         } catch (Exception e) {
             log.error("AWS S3 파일 업로드 실패", e);
             throw new RuntimeException("파일 업로드 중 오류가 발생했습니다.");
