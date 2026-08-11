@@ -22,6 +22,10 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
+
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 
@@ -35,6 +39,8 @@ public class SecurityConfig {
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
     private final HttpCookieOAuth2AuthorizationRequestRepository httpCookieOAuth2AuthorizationRequestRepository;
 
+    @Value("${app.cors.allowed-origins:http://localhost:5173}")
+    private List<String> allowedOrigins;
     private final CorsProperties corsProperties;
 
     // 비밀번호 암호화
@@ -46,10 +52,19 @@ public class SecurityConfig {
     // 시큐리티 필터 체인
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        CookieCsrfTokenRepository tokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        CsrfTokenRequestAttributeHandler requestHandler = new CsrfTokenRequestAttributeHandler();
+        
         http
-                // REST API이기 때문에 CSRF 보안 비활성화
-                .csrf(AbstractHttpConfigurer::disable)
+                // CSRF 방어 활성화 (CookieCsrfTokenRepository 사용)
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(tokenRepository)
+                        .csrfTokenRequestHandler(requestHandler)
+                )
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                
+                // CsrfCookieFilter 등록
+                .addFilterAfter(new CsrfCookieFilter(), BasicAuthenticationFilter.class)
                 // JWT 사용 예정이기 때문에 폼 로그인 & HTTP Basic 인증 비활성화
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
