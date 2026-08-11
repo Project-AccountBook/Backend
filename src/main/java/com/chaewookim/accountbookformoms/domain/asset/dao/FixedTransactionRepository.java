@@ -16,11 +16,8 @@ public interface FixedTransactionRepository extends JpaRepository<FixedTransacti
 
     List<FixedTransaction> findAllByUserId(Long userId);
 
-    @Query("SELECT f FROM FixedTransaction f WHERE f.transactionCategory.id = :categoryId")
-    List<FixedTransaction> findAllByTransactionCategoryId(@Param("categoryId") Long categoryId);
-
-    @Query("SELECT f FROM FixedTransaction f WHERE f.account.id = :accountId")
-    List<FixedTransaction> findAllByAccountId(@Param("accountId") Long accountId);
+    @Query("SELECT f FROM FixedTransaction f WHERE f.targetAccount.id = :accountId")
+    List<FixedTransaction> findAllByTargetAccountId(@Param("accountId") Long accountId);
 
     @Modifying
     @Query("UPDATE FixedTransaction f SET f.deletedAt = CURRENT_TIMESTAMP "

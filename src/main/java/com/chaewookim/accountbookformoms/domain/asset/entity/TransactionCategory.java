@@ -48,67 +48,19 @@ public class TransactionCategory extends BaseEntity {
     @Enumerated(EnumType.STRING)
     private TransactionType type;
 
-    @Column(nullable = false)
-    private boolean includeInSavingsRate = false;
-
-    @Column(nullable = false)
-    private boolean includeInInvestmentRate = false;
-
     @Builder
     public TransactionCategory(
             User user,
             String name,
-            TransactionType type,
-            Boolean includeInSavingsRate,
-            Boolean includeInInvestmentRate
+            TransactionType type
     ) {
         this.user = user;
         this.name = name;
         this.type = type;
-        applyAllocationFlags(type, includeInSavingsRate, includeInInvestmentRate);
     }
 
-    public void update(String name, TransactionType transactionType, Boolean includeInSavingsRate, Boolean includeInInvestmentRate) {
-        TransactionType previousType = this.type;
+    public void update(String name, TransactionType transactionType) {
         this.name = name;
         this.type = transactionType;
-
-        if (transactionType != TransactionType.TRANSFER) {
-            this.includeInSavingsRate = false;
-            this.includeInInvestmentRate = false;
-            return;
-        }
-
-        if (includeInSavingsRate != null) {
-            this.includeInSavingsRate = includeInSavingsRate;
-        } else if (previousType != TransactionType.TRANSFER) {
-            this.includeInSavingsRate = true;
-        }
-
-        if (includeInInvestmentRate != null) {
-            this.includeInInvestmentRate = includeInInvestmentRate;
-        } else if (previousType != TransactionType.TRANSFER) {
-            this.includeInInvestmentRate = false;
-        }
-    }
-
-    public void updateAllocationFlags(boolean includeInSavingsRate, boolean includeInInvestmentRate) {
-        if (this.type != TransactionType.TRANSFER) {
-            this.includeInSavingsRate = false;
-            this.includeInInvestmentRate = false;
-            return;
-        }
-        this.includeInSavingsRate = includeInSavingsRate;
-        this.includeInInvestmentRate = includeInInvestmentRate;
-    }
-
-    private void applyAllocationFlags(TransactionType type, Boolean includeInSavingsRate, Boolean includeInInvestmentRate) {
-        if (type != TransactionType.TRANSFER) {
-            this.includeInSavingsRate = false;
-            this.includeInInvestmentRate = false;
-            return;
-        }
-        this.includeInSavingsRate = includeInSavingsRate != null ? includeInSavingsRate : true;
-        this.includeInInvestmentRate = includeInInvestmentRate != null ? includeInInvestmentRate : false;
     }
 }

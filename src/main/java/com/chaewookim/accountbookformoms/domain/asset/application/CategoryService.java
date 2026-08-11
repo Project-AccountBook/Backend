@@ -3,7 +3,6 @@ package com.chaewookim.accountbookformoms.domain.asset.application;
 import com.chaewookim.accountbookformoms.domain.asset.dao.FixedTransactionRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionCategoryRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionRepository;
-import com.chaewookim.accountbookformoms.domain.asset.dto.request.CategoryAllocationRequest;
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.CategoryRequest;
 import com.chaewookim.accountbookformoms.domain.asset.dto.response.CategoryResponse;
 
@@ -48,7 +47,7 @@ public class CategoryService {
         if (deletedCategory.isPresent() && deletedCategory.get().getDeletedAt() != null) {
             TransactionCategory category = deletedCategory.get();
             category.restore();
-            category.update(name, request.type(), request.includeInSavingsRate(), request.includeInInvestmentRate());
+            category.update(name, request.type());
             return CategoryResponse.from(categoryRepository.save(category));
         }
 
@@ -59,8 +58,6 @@ public class CategoryService {
                         .user(user)
                         .name(name)
                         .type(request.type())
-                        .includeInSavingsRate(request.includeInSavingsRate())
-                        .includeInInvestmentRate(request.includeInInvestmentRate())
                         .build()
         );
         return CategoryResponse.from(savedCategory);
@@ -73,23 +70,7 @@ public class CategoryService {
         String name = request.name().trim();
 
         validateCategoryNameUnique(userId, name, request.type(), categoryId);
-        category.update(name, request.type(), request.includeInSavingsRate(), request.includeInInvestmentRate());
-    }
-
-    @Transactional
-    public void updateCategoryAllocation(Long categoryId, Long userId, CategoryAllocationRequest request) {
-        TransactionCategory category = categoryRepository.findById(categoryId)
-                .orElseThrow(() -> new CustomException(AssetErrorCode.CATEGORY_NOT_FOUND));
-
-        if (category.getType() != TransactionType.TRANSFER) {
-            throw new CustomException(AssetErrorCode.CATEGORY_ALLOCATION_ONLY_TRANSFER);
-        }
-
-        if (category.getUser() != null && !category.getUser().getId().equals(userId)) {
-            throw new CustomException(AssetErrorCode.CATEGORY_FORBIDDEN);
-        }
-
-        category.updateAllocationFlags(request.includeInSavingsRate(), request.includeInInvestmentRate());
+        category.update(name, request.type());
     }
 
     @Transactional

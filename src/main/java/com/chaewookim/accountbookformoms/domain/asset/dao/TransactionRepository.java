@@ -215,21 +215,27 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     @Query("""
             UPDATE Transaction t
                SET t.snapshotAccountId = :accountId,
-                   t.snapshotAccountName = :accountName
+                   t.snapshotAccountName = :accountName,
+                   t.snapshotAccountRole = :accountRole
              WHERE t.account.id = :accountId
-               AND t.snapshotAccountName IS NULL
+               AND (t.snapshotAccountName IS NULL OR t.snapshotAccountRole IS NULL)
             """)
-    void backfillSourceAccountSnapshot(@Param("accountId") Long accountId, @Param("accountName") String accountName);
+    void backfillSourceAccountSnapshot(@Param("accountId") Long accountId,
+                                       @Param("accountName") String accountName,
+                                       @Param("accountRole") com.chaewookim.accountbookformoms.domain.asset.enums.AccountRole accountRole);
 
     @Modifying(clearAutomatically = true)
     @Query("""
             UPDATE Transaction t
                SET t.snapshotTargetAccountId = :accountId,
-                   t.snapshotTargetAccountName = :accountName
+                   t.snapshotTargetAccountName = :accountName,
+                   t.snapshotTargetAccountRole = :accountRole
              WHERE t.targetAccount.id = :accountId
-               AND t.snapshotTargetAccountName IS NULL
+               AND (t.snapshotTargetAccountName IS NULL OR t.snapshotTargetAccountRole IS NULL)
             """)
-    void backfillTargetAccountSnapshot(@Param("accountId") Long accountId, @Param("accountName") String accountName);
+    void backfillTargetAccountSnapshot(@Param("accountId") Long accountId,
+                                       @Param("accountName") String accountName,
+                                       @Param("accountRole") com.chaewookim.accountbookformoms.domain.asset.enums.AccountRole accountRole);
 
     @Modifying(clearAutomatically = true)
     @Query("UPDATE Transaction t SET t.accountArchived = true WHERE t.snapshotAccountId = :accountId")

@@ -8,6 +8,7 @@ import com.chaewookim.accountbookformoms.domain.asset.dto.response.FixedTransact
 import com.chaewookim.accountbookformoms.domain.asset.entity.Account;
 import com.chaewookim.accountbookformoms.domain.asset.entity.FixedTransaction;
 import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory;
+import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
@@ -28,18 +29,21 @@ public class FixedTransactionService {
     private final AccountRepository accountRepository;
     private final TransactionCategoryRepository categoryRepository;
     private final FixedTransactionImmediateExecutionService fixedTransactionImmediateExecutionService;
+    private final FixedTransactionExecutor fixedTransactionExecutor;
 
     @Transactional
     public Long createFixedTransaction(Long userId, User user, FixedTransactionRequest request) {
 
         Account account = accountRepository.findByIdAndUserId(request.accountId(), userId)
                 .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
+        Account targetAccount = resolveTargetAccount(userId, request);
         TransactionCategory category = categoryRepository.findById(request.categoryId())
                 .orElseThrow(() -> new CustomException(AssetErrorCode.CATEGORY_NOT_FOUND));
 
         FixedTransaction fixedTransaction = FixedTransaction.builder()
                 .user(user)
                 .account(account)
+                .targetAccount(targetAccount)
                 .transactionCategory(category)
                 .type(request.type())
                 .amount(request.amount())
@@ -54,6 +58,20 @@ public class FixedTransactionService {
         FixedTransaction saved = fixedTransactionRepository.save(fixedTransaction);
         scheduleImmediateExecution(saved.getId());
         return saved.getId();
+    }
+
+    private Account resolveTargetAccount(Long userId, FixedTransactionRequest request) {
+        if (request.type() != TransactionType.TRANSFER) {
+            return null;
+        }
+        if (request.targetAccountId() == null) {
+            throw new CustomException(AssetErrorCode.TARGET_ACCOUNT_REQUIRED);
+        }
+        if (request.accountId().equals(request.targetAccountId())) {
+            throw new CustomException(AssetErrorCode.TRANSFER_TO_SELF_FORBIDDEN);
+        }
+        return accountRepository.findByIdAndUserId(request.targetAccountId(), userId)
+                .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
     }
 
     private void scheduleImmediateExecution(Long fixedTransactionId) {
@@ -75,7 +93,7 @@ public class FixedTransactionService {
         List<FixedTransactionResponse> responses = new java.util.ArrayList<>();
 
         for (FixedTransaction fixedTransaction : fixedTransactionRepository.findAllByUserId(userId)) {
-            if (!hasActiveAccount(fixedTransaction)) {
+            if (!hasActiveAccounts(fixedTransaction)) {
                 fixedTransactionRepository.delete(fixedTransaction);
                 continue;
             }
@@ -85,12 +103,16 @@ public class FixedTransactionService {
         return responses;
     }
 
-    private boolean hasActiveAccount(FixedTransaction fixedTransaction) {
+    private boolean hasActiveAccounts(FixedTransaction fixedTransaction) {
         Account account = fixedTransaction.getAccount();
-        if (account == null) {
+        if (account == null || accountRepository.findById(account.getId()).isEmpty()) {
             return false;
         }
-        return accountRepository.findById(account.getId()).isPresent();
+        if (fixedTransaction.getType() == TransactionType.TRANSFER) {
+            Account target = fixedTransaction.getTargetAccount();
+            return target != null && accountRepository.findById(target.getId()).isPresent();
+        }
+        return true;
     }
 
     @Transactional
@@ -100,10 +122,11 @@ public class FixedTransactionService {
 
         Account account = accountRepository.findByIdAndUserId(request.accountId(), userId)
                 .orElseThrow(() -> new CustomException(AssetErrorCode.ACCOUNT_NOT_FOUND));
+        Account targetAccount = resolveTargetAccount(userId, request);
         TransactionCategory category = categoryRepository.findById(request.categoryId())
                 .orElseThrow(() -> new CustomException(AssetErrorCode.CATEGORY_NOT_FOUND));
 
-        fixedTransaction.update(account, category, request);
+        fixedTransaction.update(account, targetAccount, category, request);
     }
 
     @Transactional
@@ -116,6 +139,18 @@ public class FixedTransactionService {
     public void deleteFixedTransaction(Long userId, Long id) {
         FixedTransaction fixedTransaction = validateAndGet(userId, id);
         fixedTransactionRepository.delete(fixedTransaction);
+    }
+
+    @Transactional
+    public void retryFailedExecution(Long userId, Long id) {
+        FixedTransaction fixedTransaction = validateAndGet(userId, id);
+        fixedTransactionExecutor.retryFailedOccurrence(fixedTransaction);
+    }
+
+    @Transactional
+    public void skipFailedExecution(Long userId, Long id) {
+        FixedTransaction fixedTransaction = validateAndGet(userId, id);
+        fixedTransaction.skipFailedOccurrence();
     }
 
     // 공통 검증 로직

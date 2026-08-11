@@ -1,7 +1,6 @@
 package com.chaewookim.accountbookformoms.domain.asset.api;
 
 import com.chaewookim.accountbookformoms.domain.asset.application.CategoryService;
-import com.chaewookim.accountbookformoms.domain.asset.dto.request.CategoryAllocationRequest;
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.CategoryRequest;
 import com.chaewookim.accountbookformoms.domain.asset.dto.response.CategoryResponse;
 import com.chaewookim.accountbookformoms.global.common.ApiResponse;
@@ -57,17 +56,6 @@ public class CategoryController {
             @Valid @RequestBody CategoryRequest request
     ) {
         categoryService.updateCategory(id, userPrincipal.getUserId(), request);
-        return ResponseEntity.ok(ApiResponse.success(null));
-    }
-
-    @Operation(summary = "이체 카테고리 저축률·투자율 설정", description = "기본·커스텀 이체 카테고리의 저축률·투자율 포함 여부 수정")
-    @PatchMapping("/{id}/allocation")
-    public ResponseEntity<ApiResponse<Void>> updateCategoryAllocation(
-            @AuthenticationPrincipal UserPrincipal userPrincipal,
-            @PathVariable Long id,
-            @Valid @RequestBody CategoryAllocationRequest request
-    ) {
-        categoryService.updateCategoryAllocation(id, userPrincipal.getUserId(), request);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 

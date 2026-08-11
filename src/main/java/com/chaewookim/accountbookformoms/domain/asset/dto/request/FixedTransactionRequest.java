@@ -13,6 +13,8 @@ public record FixedTransactionRequest(
         @NotNull(message = "계좌 ID는 필수입니다.")
         Long accountId,
 
+        Long targetAccountId,
+
         @NotNull(message = "카테고리 ID는 필수입니다.")
         Long categoryId,
 
@@ -29,7 +31,6 @@ public record FixedTransactionRequest(
         @NotNull(message = "반복일은 필수입니다.")
         Integer repeatDay,
 
-        /** YEARLY 전용 (1~12). WEEKLY/MONTHLY는 null */
         Integer repeatMonth,
 
         @NotNull(message = "시작일은 필수입니다.")
