@@ -3,6 +3,7 @@ package com.chaewookim.accountbookformoms.domain.asset.api;
 import com.chaewookim.accountbookformoms.domain.asset.application.AccountService;
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.AccountGoalRequest;
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.AccountRequest;
+import com.chaewookim.accountbookformoms.domain.asset.dto.request.AccountUpdateRequest;
 import com.chaewookim.accountbookformoms.domain.asset.dto.response.AccountResponse;
 import com.chaewookim.accountbookformoms.global.common.ApiResponse;
 import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
@@ -62,7 +63,7 @@ public class AccountController {
     public ResponseEntity<ApiResponse<Void>> updateAccount(
             @AuthenticationPrincipal UserPrincipal user,
             @PathVariable Long accountId,
-            @Valid @RequestBody AccountRequest dto
+            @Valid @RequestBody AccountUpdateRequest dto
     ) {
         accountService.updateAccount(user.getUserId(), accountId, dto);
         return ResponseEntity.ok(ApiResponse.success(null));

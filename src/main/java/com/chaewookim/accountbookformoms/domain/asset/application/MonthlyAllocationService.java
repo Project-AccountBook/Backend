@@ -1,7 +1,6 @@
 package com.chaewookim.accountbookformoms.domain.asset.application;
 
 import com.chaewookim.accountbookformoms.domain.asset.dao.AccountRepository;
-import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionCategoryRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionRepository;
 import com.chaewookim.accountbookformoms.domain.asset.dto.response.AllocationBucketResponse;
 import com.chaewookim.accountbookformoms.domain.asset.dto.response.GoalProgressResponse;
@@ -9,7 +8,7 @@ import com.chaewookim.accountbookformoms.domain.asset.dto.response.MonthlyAlloca
 import com.chaewookim.accountbookformoms.domain.asset.dto.response.MonthlyAllocationSummaryResponse;
 import com.chaewookim.accountbookformoms.domain.asset.entity.Account;
 import com.chaewookim.accountbookformoms.domain.asset.entity.Transaction;
-import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory;
+import com.chaewookim.accountbookformoms.domain.asset.enums.AccountKind;
 import com.chaewookim.accountbookformoms.domain.asset.enums.AccountRole;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.portfolio.application.PortfolioService;
@@ -23,9 +22,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -34,7 +31,6 @@ public class MonthlyAllocationService {
 
     private final TransactionRepository transactionRepository;
     private final AccountRepository accountRepository;
-    private final TransactionCategoryRepository categoryRepository;
     private final PortfolioService portfolioService;
 
     public MonthlyAllocationSummaryResponse getMonthlyAllocationSummary(Long userId, String yearMonth) {
@@ -50,14 +46,6 @@ public class MonthlyAllocationService {
         YearMonth month = YearMonth.parse(yearMonth);
         LocalDate startDate = month.atDay(1);
         LocalDate endDate = month.atEndOfMonth();
-
-        List<Account> accounts = accountRepository.findByUserId(userId);
-        Map<Long, AccountRole> roleMap = new HashMap<>();
-        for (Account account : accounts) {
-            roleMap.put(account.getId(), account.getRole());
-        }
-
-        Map<Long, CategoryAllocationFlags> categoryFlags = buildCategoryFlags(userId);
 
         BigDecimal savingsInflow = BigDecimal.ZERO;
         BigDecimal savingsOutflow = BigDecimal.ZERO;
@@ -75,33 +63,12 @@ public class MonthlyAllocationService {
                 continue;
             }
 
-            Long sourceAccountId = resolveAccountId(tx.getAccount(), tx.getSnapshotAccountId());
-            if (sourceAccountId == null) {
-                continue;
-            }
-
-            AccountRole sourceRole = roleMap.getOrDefault(sourceAccountId, AccountRole.CHECKING);
-
-            Long targetAccountId = resolveAccountId(tx.getTargetAccount(), tx.getSnapshotTargetAccountId());
-            AccountRole targetRole = targetAccountId != null
-                    ? roleMap.getOrDefault(targetAccountId, AccountRole.CHECKING)
-                    : AccountRole.CHECKING;
-
-            CategoryAllocationFlags flags = new CategoryAllocationFlags(false, false);
-            if (tx.getTransactionCategory() != null) {
-                flags = categoryFlags.getOrDefault(
-                        tx.getTransactionCategory().getId(),
-                        flags
-                );
-            }
+            AccountRole sourceRole = resolveRole(tx.getSnapshotAccountRole(), tx.getAccount());
+            AccountRole targetRole = resolveRole(tx.getSnapshotTargetAccountRole(), tx.getTargetAccount());
 
             if (targetRole == AccountRole.SAVINGS) {
                 savingsInflow = savingsInflow.add(amount);
             } else if (targetRole == AccountRole.INVESTMENT) {
-                investmentInflow = investmentInflow.add(amount);
-            } else if (flags.includeInSavingsRate()) {
-                savingsInflow = savingsInflow.add(amount);
-            } else if (flags.includeInInvestmentRate()) {
                 investmentInflow = investmentInflow.add(amount);
             }
 
@@ -121,8 +88,9 @@ public class MonthlyAllocationService {
 
     public List<GoalProgressResponse> buildGoalProgress(Long userId) {
         return accountRepository.findByUserId(userId).stream()
-                .filter(account -> account.getGoalAmount() != null
-                        && account.getGoalAmount().compareTo(BigDecimal.ZERO) > 0)
+                .filter(account -> account.getKind() == AccountKind.ASSET
+                        || account.getKind() == AccountKind.LOAN)
+                .filter(account -> account.getGoalAmount() != null)
                 .map(this::toGoalProgress)
                 .sorted(Comparator.comparing(GoalProgressResponse::progressPercent).reversed())
                 .toList();
@@ -138,12 +106,13 @@ public class MonthlyAllocationService {
 
         BigDecimal goalAmount = account.getGoalAmount();
         BigDecimal balance = account.getCurrentBalance() != null ? account.getCurrentBalance() : BigDecimal.ZERO;
-        Integer progressPercent = calculateProgressPercent(balance, goalAmount);
+        Integer progressPercent = account.calculateGoalProgressPercent();
         LocalDate goalDate = account.getGoalDate();
 
         return new GoalProgressResponse(
                 account.getId(),
                 account.getAccountName(),
+                account.getKind(),
                 account.getRole(),
                 balance,
                 goalAmount,
@@ -153,20 +122,6 @@ public class MonthlyAllocationService {
         );
     }
 
-    private Integer calculateProgressPercent(BigDecimal currentBalance, BigDecimal goalAmount) {
-
-        if (goalAmount == null || goalAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            return null;
-        }
-
-        int percent = currentBalance
-                .multiply(BigDecimal.valueOf(100))
-                .divide(goalAmount, 0, RoundingMode.HALF_UP)
-                .intValue();
-
-        return Math.min(100, Math.max(0, percent));
-    }
-
     private Integer calculateDDay(LocalDate goalDate) {
 
         if (goalDate == null) {
@@ -174,23 +129,6 @@ public class MonthlyAllocationService {
         }
 
         return (int) ChronoUnit.DAYS.between(LocalDate.now(), goalDate);
-    }
-
-    private Map<Long, CategoryAllocationFlags> buildCategoryFlags(Long userId) {
-
-        Map<Long, CategoryAllocationFlags> flags = new HashMap<>();
-
-        for (TransactionCategory category : categoryRepository.findAllByUserOrSystem(userId)) {
-            flags.put(
-                    category.getId(),
-                    new CategoryAllocationFlags(
-                            category.isIncludeInSavingsRate(),
-                            category.isIncludeInInvestmentRate()
-                    )
-            );
-        }
-
-        return flags;
     }
 
     private AllocationBucketResponse buildBucket(BigDecimal inflow, BigDecimal outflow, BigDecimal totalIncome) {
@@ -206,13 +144,14 @@ public class MonthlyAllocationService {
         return new AllocationBucketResponse(net, rate, inflow, outflow);
     }
 
-    private Long resolveAccountId(Account account, Long snapshotAccountId) {
-        if (account != null) {
-            return account.getId();
+    private AccountRole resolveRole(AccountRole snapshotRole, Account account) {
+        if (snapshotRole != null) {
+            return snapshotRole;
         }
-        return snapshotAccountId;
+        if (account != null && account.getRole() != null) {
+            return account.getRole();
+        }
+        return AccountRole.CHECKING;
     }
 
-    private record CategoryAllocationFlags(boolean includeInSavingsRate, boolean includeInInvestmentRate) {
-    }
 }

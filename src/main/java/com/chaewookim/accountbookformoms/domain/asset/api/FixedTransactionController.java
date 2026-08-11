@@ -78,4 +78,24 @@ public class FixedTransactionController {
         fixedTransactionService.deleteFixedTransaction(userPrincipal.getUserId(), id);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
+
+    @Operation(summary = "실행 실패 고정 거래 재실행", description = "잔액/한도 부족으로 실패한 회차를 즉시 재실행")
+    @PostMapping("/{id}/retry")
+    public ResponseEntity<ApiResponse<Void>> retryFailedExecution(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable Long id
+    ) {
+        fixedTransactionService.retryFailedExecution(userPrincipal.getUserId(), id);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @Operation(summary = "실행 실패 고정 거래 건너뛰기", description = "잔액/한도 부족으로 실패한 회차를 건너뛰고 다음 회차로 진행")
+    @PostMapping("/{id}/skip")
+    public ResponseEntity<ApiResponse<Void>> skipFailedExecution(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable Long id
+    ) {
+        fixedTransactionService.skipFailedExecution(userPrincipal.getUserId(), id);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
 }

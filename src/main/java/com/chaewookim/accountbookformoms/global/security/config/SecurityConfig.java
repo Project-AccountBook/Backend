@@ -3,6 +3,7 @@ package com.chaewookim.accountbookformoms.global.security.config;
 import com.chaewookim.accountbookformoms.global.security.jwt.JwtFilter;
 import com.chaewookim.accountbookformoms.global.security.jwt.JwtTokenProvider;
 import com.chaewookim.accountbookformoms.global.security.oauth2.CustomOAuth2UserService;
+import com.chaewookim.accountbookformoms.global.security.oauth2.HttpCookieOAuth2AuthorizationRequestRepository;
 import com.chaewookim.accountbookformoms.global.security.oauth2.OAuth2SuccessHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,10 +33,9 @@ public class SecurityConfig {
     private final JwtTokenProvider jwtTokenProvider;
     private final CustomOAuth2UserService customOAuth2UserService;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
-    private final com.chaewookim.accountbookformoms.global.security.oauth2.HttpCookieOAuth2AuthorizationRequestRepository httpCookieOAuth2AuthorizationRequestRepository;
+    private final HttpCookieOAuth2AuthorizationRequestRepository httpCookieOAuth2AuthorizationRequestRepository;
 
-    @Value("${app.cors.allowed-origins}")
-    private List<String> allowedOrigins;
+    private final CorsProperties corsProperties;
 
     // 비밀번호 암호화
     @Bean
@@ -147,7 +147,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        configuration.setAllowedOrigins(allowedOrigins);
+        configuration.setAllowedOrigins(corsProperties.getAllowedOrigins());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);

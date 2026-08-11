@@ -7,7 +7,7 @@ import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
 
-public record AccountRequest(
+public record AccountUpdateRequest(
 
         @NotBlank(message = "계좌 이름은 필수 입력 값입니다.")
         String accountName,
@@ -15,18 +15,19 @@ public record AccountRequest(
         @NotNull(message = "초기 잔고는 필수 입력 값입니다.")
         BigDecimal initialBalance,
 
+        @NotNull(message = "현재 잔고는 필수 입력 값입니다.")
+        BigDecimal currentBalance,
+
         AccountRole role,
 
         AccountKind kind,
 
         BigDecimal creditLimit,
 
-        BigDecimal loanLimit,
-
-        Boolean loanAlreadyDisbursed
+        BigDecimal loanLimit
 ) {
-    public AccountRequest(String accountName, BigDecimal initialBalance, AccountRole role,
-                          AccountKind kind, BigDecimal creditLimit) {
-        this(accountName, initialBalance, role, kind, creditLimit, null, null);
+    public AccountUpdateRequest(String accountName, BigDecimal initialBalance, BigDecimal currentBalance,
+                                AccountRole role, AccountKind kind, BigDecimal creditLimit) {
+        this(accountName, initialBalance, currentBalance, role, kind, creditLimit, null);
     }
 }

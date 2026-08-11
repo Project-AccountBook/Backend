@@ -1,6 +1,7 @@
 package com.chaewookim.accountbookformoms.domain.asset.entity;
 
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.FixedTransactionRequest;
+import com.chaewookim.accountbookformoms.domain.asset.enums.FixedTransactionExecutionFailure;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionFrequency;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.asset.error.AssetErrorCode;
@@ -56,6 +57,10 @@ public class FixedTransaction extends BaseEntity {
     private Account account;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "target_account_id")
+    private Account targetAccount;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")
     private TransactionCategory transactionCategory;
 
@@ -86,17 +91,25 @@ public class FixedTransaction extends BaseEntity {
 
     private LocalDate nextExecutionDate;
 
+    @Enumerated(EnumType.STRING)
+    @Column(length = 40)
+    private FixedTransactionExecutionFailure failureReason;
+
+    private LocalDate failedExecutionDate;
+
     private String description;
 
     @Column(nullable = false)
     private Boolean isActive;
 
     @Builder
-    public FixedTransaction(User user, Account account, TransactionCategory transactionCategory, TransactionType type, BigDecimal amount,
+    public FixedTransaction(User user, Account account, Account targetAccount, TransactionCategory transactionCategory,
+                            TransactionType type, BigDecimal amount,
                             TransactionFrequency frequency, Integer repeatDay, Integer repeatMonth,
                             LocalDate startDate, LocalDate endDate, String description) {
         this.user = user;
         this.account = account;
+        this.targetAccount = targetAccount;
         this.transactionCategory = transactionCategory;
         this.type = type;
         this.amount = amount;
@@ -191,9 +204,11 @@ public class FixedTransaction extends BaseEntity {
         };
     }
 
-    public void update(Account account, TransactionCategory category, FixedTransactionRequest request) {
+    public void update(Account account, Account targetAccount, TransactionCategory category, FixedTransactionRequest request) {
         this.account = account;
+        this.targetAccount = targetAccount;
         this.transactionCategory = category;
+        this.type = request.type();
         this.amount = request.amount();
         this.frequency = request.frequency();
         this.repeatDay = request.repeatDay();
@@ -204,10 +219,33 @@ public class FixedTransaction extends BaseEntity {
 
         LocalDate basis = LocalDate.now().isBefore(startDate) ? startDate : LocalDate.now();
         this.nextExecutionDate = calculateInitialNextDate(basis, frequency, repeatDay, repeatMonth);
+        clearExecutionFailure();
     }
 
     public void toggleActive() {
         this.isActive = !this.isActive;
+    }
+
+    public boolean hasExecutionFailure() {
+        return failureReason != null && failedExecutionDate != null;
+    }
+
+    public void markExecutionFailed(LocalDate executionDate, FixedTransactionExecutionFailure reason) {
+        this.failedExecutionDate = executionDate;
+        this.failureReason = reason;
+    }
+
+    public void clearExecutionFailure() {
+        this.failureReason = null;
+        this.failedExecutionDate = null;
+    }
+
+    public void skipFailedOccurrence() {
+        if (!hasExecutionFailure()) {
+            throw new CustomException(AssetErrorCode.FIXED_TRANSACTION_NOT_FAILED);
+        }
+        LocalDate skippedDate = this.failedExecutionDate;
+        updateExecutionStatus(skippedDate);
     }
 
     private LocalDate calculateNextExecutionDate(LocalDate executedDate) {
@@ -229,6 +267,7 @@ public class FixedTransaction extends BaseEntity {
     public void updateExecutionStatus(LocalDate executedDate) {
         this.lastExecutedDate = executedDate;
         this.nextExecutionDate = calculateNextExecutionDate(executedDate);
+        clearExecutionFailure();
     }
 
     public void alignNextExecutionDateIfStale(LocalDate today) {
