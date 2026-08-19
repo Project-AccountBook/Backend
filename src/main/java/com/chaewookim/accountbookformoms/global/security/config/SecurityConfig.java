@@ -22,10 +22,6 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
-import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
-import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
-
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 
@@ -52,19 +48,8 @@ public class SecurityConfig {
     // 시큐리티 필터 체인
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        CookieCsrfTokenRepository tokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
-        CsrfTokenRequestAttributeHandler requestHandler = new CsrfTokenRequestAttributeHandler();
-        
         http
-                // CSRF 방어 활성화 (CookieCsrfTokenRepository 사용)
-                .csrf(csrf -> csrf
-                        .csrfTokenRepository(tokenRepository)
-                        .csrfTokenRequestHandler(requestHandler)
-                )
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                
-                // CsrfCookieFilter 등록
-                .addFilterAfter(new CsrfCookieFilter(), BasicAuthenticationFilter.class)
                 // JWT 사용 예정이기 때문에 폼 로그인 & HTTP Basic 인증 비활성화
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
@@ -116,23 +101,6 @@ public class SecurityConfig {
                         // 그 외 모든 요청은 인증 필요
                         .anyRequest().authenticated()
                 )
-                // API 요청은 로그인 페이지로 리다이렉트하지 않고 JSON으로 응답
-                .exceptionHandling(exception -> exception
-                        .authenticationEntryPoint((request, response, authException) -> {
-                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                            response.setContentType("application/json;charset=UTF-8");
-                            response.getWriter().write(
-                                    "{\"success\":false,\"data\":null,\"error\":\"인증이 필요합니다.\"}"
-                            );
-                        })
-                        .accessDeniedHandler((request, response, accessDeniedException) -> {
-                            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                            response.setContentType("application/json;charset=UTF-8");
-                            response.getWriter().write(
-                                    "{\"success\":false,\"data\":null,\"error\":\"접근 권한이 없습니다.\"}"
-                            );
-                        })
-                )
                 // OAuth2 로그인 설정
                 .oauth2Login(oauth -> oauth
                         .authorizationEndpoint(endpoint -> endpoint
@@ -145,15 +113,29 @@ public class SecurityConfig {
                 )
                 // JWT 필터 추가
                 .addFilterBefore(new JwtFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class)
+                // API 요청은 로그인 페이지로 리다이렉트하지 않고 JSON으로 응답
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint((request, response, authException) -> {
                             if (request.getRequestURI().startsWith("/api/")) {
-                                response.sendError(jakarta.servlet.http.HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
-                            } else {
-                                response.sendRedirect("/login");
+                                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                                response.setContentType("application/json;charset=UTF-8");
+                                response.getWriter().write(
+                                        "{\"success\":false,\"data\":null,\"error\":\"인증이 필요합니다.\"}"
+                                );
+                                return;
                             }
+                            response.sendRedirect("/login");
                         })
-                );
+                        .accessDeniedHandler((request, response, accessDeniedException) -> {
+                            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                            response.setContentType("application/json;charset=UTF-8");
+                            response.getWriter().write(
+                                    "{\"success\":false,\"data\":null,\"error\":\"접근 권한이 없습니다.\"}"
+                            );
+                        })
+                )
+                // oauth2Login 이후에 끄지 않으면 CSRF가 다시 활성화될 수 있음
+                .csrf(AbstractHttpConfigurer::disable);
 
         return http.build();
     }

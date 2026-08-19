@@ -1,7 +1,7 @@
 name: Deploy to OCI
 on:
   push:
-    branches: [ dev ]
+    branches: [ fix/ACC-173-security-csrf ]
 
 concurrency:
   group: deploy-${{ github.ref }}
