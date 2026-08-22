@@ -136,7 +136,8 @@ public class GroupPurchaseService {
             sort = Sort.by(Sort.Direction.ASC, "deadline");
         }
 
-        List<GroupPurchase> list = groupPurchaseRepository.findActiveGroupPurchases(PurchaseStatus.RECRUITING, filterRegion, categoryId, sort);
+        List<PurchaseStatus> statuses = List.of(PurchaseStatus.RECRUITING, PurchaseStatus.SUCCESS, PurchaseStatus.CLOSED);
+        List<GroupPurchase> list = groupPurchaseRepository.findActiveGroupPurchases(statuses, filterRegion, categoryId, sort);
 
         if (Boolean.TRUE.equals(nearMe) && currentUserId != null) {
             User user = userRepository.findById(currentUserId).orElse(null);
@@ -599,5 +600,21 @@ public class GroupPurchaseService {
         return wishlistRepository.findByUserId(userId).stream()
                 .map(Wishlist::getGroupPurchaseId)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void processExpiredGroupPurchases(List<GroupPurchase> expiredPurchases) {
+        for (GroupPurchase gp : expiredPurchases) {
+            if (gp.getCurrentParticipants() >= gp.getMinParticipants()) {
+                gp.updateStatusByAdmin(PurchaseStatus.SUCCESS);
+                deductBudgetForUser(gp.getCreatorId(), gp.getCreatorAccountId(), gp);
+                List<GroupPurchaseParticipant> participants = groupPurchaseParticipantRepository.findByGroupPurchaseId(gp.getId());
+                for (GroupPurchaseParticipant p : participants) {
+                    deductBudgetForUser(p.getUserId(), p.getAccountId(), gp);
+                }
+            } else {
+                gp.updateStatusByAdmin(PurchaseStatus.FAILED);
+            }
+        }
     }
 }

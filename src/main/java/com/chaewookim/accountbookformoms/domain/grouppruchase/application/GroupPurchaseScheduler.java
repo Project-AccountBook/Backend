@@ -18,22 +18,20 @@ import java.util.List;
 public class GroupPurchaseScheduler {
 
     private final GroupPurchaseRepository groupPurchaseRepository;
+    private final GroupPurchaseService groupPurchaseService;
 
     /**
      * 매 분 0초마다 실행되어, 마감 기한이 지난 모집 중(RECRUITING) 상태의 공동구매를 실패(FAILED)로 변경합니다.
      * 이미 예약 결제 방식이므로 추가적인 환불(deduct취소) 로직은 필요 없습니다.
      */
     @Scheduled(cron = "0 * * * * *")
-    @Transactional
     public void closeExpiredGroupPurchases() {
         LocalDateTime now = LocalDateTime.now();
         List<GroupPurchase> expiredPurchases = groupPurchaseRepository.findExpiredGroupPurchases(PurchaseStatus.RECRUITING, now);
 
         if (!expiredPurchases.isEmpty()) {
-            log.info("마감 기한이 경과된 공동구매 {}건을 FAILED 처리합니다.", expiredPurchases.size());
-            for (GroupPurchase gp : expiredPurchases) {
-                gp.updateStatusByAdmin(PurchaseStatus.FAILED);
-            }
+            log.info("마감 기한이 경과된 공동구매 {}건을 처리합니다.", expiredPurchases.size());
+            groupPurchaseService.processExpiredGroupPurchases(expiredPurchases);
         }
     }
 }

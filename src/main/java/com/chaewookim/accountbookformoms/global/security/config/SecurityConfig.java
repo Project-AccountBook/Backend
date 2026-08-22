@@ -52,19 +52,12 @@ public class SecurityConfig {
     // 시큐리티 필터 체인
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        CookieCsrfTokenRepository tokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
-        CsrfTokenRequestAttributeHandler requestHandler = new CsrfTokenRequestAttributeHandler();
         
         http
-                // CSRF 방어 활성화 (CookieCsrfTokenRepository 사용)
-                .csrf(csrf -> csrf
-                        .csrfTokenRepository(tokenRepository)
-                        .csrfTokenRequestHandler(requestHandler)
-                )
+                // JWT 사용 방식(Authorization 헤더)이므로 CSRF 방어 비활성화
+                .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 
-                // CsrfCookieFilter 등록
-                .addFilterAfter(new CsrfCookieFilter(), BasicAuthenticationFilter.class)
                 // JWT 사용 예정이기 때문에 폼 로그인 & HTTP Basic 인증 비활성화
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
