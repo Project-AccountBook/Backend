@@ -75,6 +75,16 @@ public class GroupPurchaseController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    @Operation(summary = "공동구매 조기 마감", description = "현재 인원이 최소 인원 이상일 때 개설자가 수동으로 조기 마감(성공)시킵니다.")
+    @PostMapping("/{id}/early-close")
+    public ResponseEntity<ApiResponse<GroupPurchaseResponse>> earlyClose(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        GroupPurchaseResponse response = groupPurchaseService.earlyCloseGroupPurchase(id, userPrincipal.getUserId());
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
     @Operation(summary = "공동구매 삭제", description = "ID에 해당하는 공동구매 정보를 삭제(Soft Delete)합니다. 개설자만 삭제 가능합니다.")
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<String>> delete(

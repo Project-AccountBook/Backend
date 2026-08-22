@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 public record ProductResponse(
         Long id,
         String name,
-        int price,
+        long price,
         String description,
         String imageUrl,
         Long categoryId,

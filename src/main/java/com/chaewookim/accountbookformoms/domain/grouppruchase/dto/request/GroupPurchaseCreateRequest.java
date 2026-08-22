@@ -17,7 +17,7 @@ public record GroupPurchaseCreateRequest(
         String content,
 
         @Min(value = 0, message = "금액은 0원 이상이어야 합니다.")
-        int price,
+        long price,
 
         @Min(value = 1, message = "최소 성사 인원은 1명 이상이어야 합니다.")
         int minParticipants,

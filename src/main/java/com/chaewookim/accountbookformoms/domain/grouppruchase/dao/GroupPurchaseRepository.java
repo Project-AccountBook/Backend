@@ -51,5 +51,11 @@ public interface GroupPurchaseRepository extends JpaRepository<GroupPurchase, Lo
             @Param("userId") Long userId,
             Pageable pageable
     );
+
+    @Query("SELECT gp FROM GroupPurchase gp WHERE gp.status = :status AND gp.deadline < :now")
+    List<GroupPurchase> findExpiredGroupPurchases(
+            @Param("status") PurchaseStatus status,
+            @Param("now") LocalDateTime now
+    );
 }
 

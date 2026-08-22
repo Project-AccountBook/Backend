@@ -56,8 +56,7 @@ class TransactionServiceTest {
     @Mock
     private Cache dashboardCache;
 
-    @Mock
-    private ApplicationEventPublisher eventPublisher;
+
 
     @InjectMocks
     private TransactionService transactionService;

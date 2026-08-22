@@ -13,7 +13,7 @@ public record GroupPurchaseAdminResponse(
         Long categoryId,
         String categoryName,
         String title,
-        int price,
+        long price,
         int minParticipants,
         int maxParticipants,
         int currentParticipants,

@@ -24,7 +24,7 @@ public class Product extends BaseEntity {
     private String name;
 
     @Column(nullable = false)
-    private int price;
+    private long price;
 
     @Column(nullable = true, columnDefinition = "TEXT")
     private String description;
@@ -42,7 +42,7 @@ public class Product extends BaseEntity {
     private Long reportId;       // 참고한 제보 ID (선택)
 
     @Builder
-    public Product(Long id, String name, int price, String description, String imageUrl, Long categoryId, Long applicationId, Long reportId) {
+    public Product(Long id, String name, long price, String description, String imageUrl, Long categoryId, Long applicationId, Long reportId) {
         this.id = id;
         this.name = name;
         this.price = price;
@@ -53,7 +53,7 @@ public class Product extends BaseEntity {
         this.reportId = reportId;
     }
 
-    public void update(String name, int price, String description, String imageUrl, Long categoryId, Long applicationId, Long reportId) {
+    public void update(String name, long price, String description, String imageUrl, Long categoryId, Long applicationId, Long reportId) {
         this.name = name;
         this.price = price;
         this.description = description;

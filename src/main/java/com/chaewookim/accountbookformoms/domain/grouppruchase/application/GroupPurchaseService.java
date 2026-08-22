@@ -94,8 +94,8 @@ public class GroupPurchaseService {
 
         GroupPurchase saved = groupPurchaseRepository.save(groupPurchase);
         
-        // deduct budget for creator
-        deductBudgetForUser(creatorId, request.accountId(), saved);
+        // 예약 결제로 변경됨에 따라 개설 시 즉시 결제하지 않음
+        // deductBudgetForUser(creatorId, request.accountId(), saved);
 
         String categoryName = groupPurchaseCategoryRepository.findById(request.categoryId())
                 .map(Category::getName)
@@ -209,6 +209,39 @@ public class GroupPurchaseService {
         groupPurchaseRepository.delete(groupPurchase);
     }
 
+    @Transactional
+    public GroupPurchaseResponse earlyCloseGroupPurchase(Long id, Long currentUserId) {
+        GroupPurchase groupPurchase = groupPurchaseRepository.findById(id)
+                .orElseThrow(() -> new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND));
+
+        if (!groupPurchase.getCreatorId().equals(currentUserId)) {
+            throw new CustomException(ErrorCode.UNAUTHORIZED_GROUP_PURCHASE);
+        }
+
+        if (groupPurchase.getStatus() != PurchaseStatus.RECRUITING) {
+            throw new CustomException(ErrorCode.GROUP_PURCHASE_NOT_RECRUITING);
+        }
+
+        if (groupPurchase.getCurrentParticipants() < groupPurchase.getMinParticipants()) {
+            throw new CustomException(ErrorCode.GROUP_PURCHASE_MIN_NOT_REACHED);
+        }
+
+        groupPurchase.updateStatusByAdmin(PurchaseStatus.SUCCESS);
+
+        // 예약 결제로 변경됨에 따라 성공 시 일괄 결제 진행
+        deductBudgetForUser(groupPurchase.getCreatorId(), groupPurchase.getCreatorAccountId(), groupPurchase);
+        List<GroupPurchaseParticipant> participants = groupPurchaseParticipantRepository.findByGroupPurchaseId(id);
+        for (GroupPurchaseParticipant p : participants) {
+            deductBudgetForUser(p.getUserId(), p.getAccountId(), groupPurchase);
+        }
+
+        String creatorNickname = userRepository.findById(groupPurchase.getCreatorId())
+                .map(User::getUsername)
+                .orElse("탈퇴한 사용자");
+
+        return GroupPurchaseResponse.of(groupPurchase, creatorNickname);
+    }
+
     private static final double EARTH_RADIUS_KM = 6371.0;
 
     private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
@@ -289,14 +322,12 @@ public class GroupPurchaseService {
     public void updateGroupPurchaseStatusByAdmin(Long id, PurchaseStatus status) {
         GroupPurchase gp = groupPurchaseRepository.findById(id)
                 .orElseThrow(() -> new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND));
+        PurchaseStatus previousStatus = gp.getStatus();
         gp.updateStatusByAdmin(status);
         
-        if (status == PurchaseStatus.FAILED) {
-            refundBudgetForUser(gp.getCreatorId(), gp.getCreatorAccountId(), gp);
-            List<GroupPurchaseParticipant> participants = groupPurchaseParticipantRepository.findByGroupPurchaseId(id);
-            for (GroupPurchaseParticipant participant : participants) {
-                refundBudgetForUser(participant.getUserId(), participant.getAccountId(), gp);
-            }
+        // 예약 결제로 변경됨에 따라, 이미 결제된 SUCCESS 상태에서 FAILED 등으로 바뀔 때만 환불 처리
+        if (status == PurchaseStatus.FAILED && previousStatus == PurchaseStatus.SUCCESS) {
+            refundAllParticipants(gp);
         }
     }
 
@@ -356,6 +387,10 @@ public class GroupPurchaseService {
             throw new CustomException(ErrorCode.GROUP_PURCHASE_NOT_RECRUITING);
         }
 
+        if (groupPurchase.getDeadline().isBefore(LocalDateTime.now())) {
+            throw new CustomException(ErrorCode.GROUP_PURCHASE_DEADLINE_PASSED);
+        }
+
         if (groupPurchaseParticipantRepository.existsByGroupPurchaseIdAndUserId(groupPurchaseId, userId)) {
             throw new CustomException(ErrorCode.GROUP_PURCHASE_ALREADY_JOINED);
         }
@@ -371,13 +406,16 @@ public class GroupPurchaseService {
                 .build();
         groupPurchaseParticipantRepository.save(participant);
         
-        // deduct budget for joiner
-        deductBudgetForUser(userId, request.accountId(), groupPurchase);
-
         groupPurchase.join();
 
         if (groupPurchase.getStatus() == PurchaseStatus.SUCCESS) {
-            // Auto transactions are now handled immediately upon join/create.
+            // 인원 달성 성공 시, 예약되었던 모든 인원(개설자 포함) 일괄 결제 진행
+            deductBudgetForUser(groupPurchase.getCreatorId(), groupPurchase.getCreatorAccountId(), groupPurchase);
+            
+            List<GroupPurchaseParticipant> participants = groupPurchaseParticipantRepository.findByGroupPurchaseId(groupPurchaseId);
+            for (GroupPurchaseParticipant p : participants) {
+                deductBudgetForUser(p.getUserId(), p.getAccountId(), groupPurchase);
+            }
         }
 
         String creatorNickname = userRepository.findById(groupPurchase.getCreatorId())
@@ -434,8 +472,13 @@ public class GroupPurchaseService {
 
         groupPurchaseParticipantRepository.delete(participant);
 
+        PurchaseStatus previousStatus = groupPurchase.getStatus();
         groupPurchase.leave();
-        refundBudgetForUser(userId, participant.getAccountId(), groupPurchase);
+        
+        if (previousStatus == PurchaseStatus.SUCCESS) {
+            // 이미 결제(SUCCESS)가 일어난 뒤 누군가 이탈하여 인원이 미달되면, 전체 환불 후 다시 RECRUITING 상태로 돌아감
+            refundAllParticipants(groupPurchase);
+        }
 
         String creatorNickname = userRepository.findById(groupPurchase.getCreatorId())
                 .map(User::getUsername)
@@ -449,53 +492,49 @@ public class GroupPurchaseService {
                 .map(Category::getName)
                 .orElse("");
         BigDecimal amount = BigDecimal.valueOf(groupPurchase.getPrice());
-        String description = "공동구매 지출: " + groupPurchase.getTitle();
+        String description = "공동구매 지출: " + groupPurchase.getTitle() + " (공구 ID: " + groupPurchase.getId() + ")";
 
-        try {
-            Account account = null;
-            if (accountId != null) {
-                account = accountRepository.findById(accountId).orElse(null);
-            }
-            if (account == null) {
-                List<Account> accounts = accountRepository.findByUserId(memberId);
-                if (!accounts.isEmpty()) {
-                    account = accounts.get(0);
-                }
-            }
-
-            if (account == null) {
-                log.warn("가계부 자동 기입 실패: 사용자(ID={})의 자산 계좌가 존재하지 않습니다.", memberId);
-                return;
-            }
-
-            List<TransactionCategory> userCategories = transactionCategoryRepository.findAllByUserOrSystem(memberId);
-            TransactionCategory targetCategory = userCategories.stream()
-                    .filter(c -> c.getType() == TransactionType.EXPENSE && c.getName().equals(categoryName))
-                    .findFirst()
-                    .orElseGet(() -> userCategories.stream()
-                            .filter(c -> c.getType() == TransactionType.EXPENSE)
-                            .findFirst()
-                            .orElse(null));
-
-            if (targetCategory == null) {
-                log.warn("가계부 자동 기입 실패: 사용자(ID={})의 지출 카테고리가 존재하지 않습니다.", memberId);
-                return;
-            }
-
-            Transaction transaction = Transaction.builder()
-                    .user(account.getUser())
-                    .account(account)
-                    .transactionCategory(targetCategory)
-                    .type(TransactionType.EXPENSE)
-                    .amount(amount)
-                    .transactionDate(LocalDate.now())
-                    .description(description)
-                    .build();
-            transactionRepository.save(transaction);
-            account.changeBalance(amount.negate());
-        } catch (Exception e) {
-            log.warn("가계부 자동 기입 실패: 사용자(ID={})의 지출 생성 중 예외가 발생했습니다. 메시지: {}", memberId, e.getMessage());
+        Account account = null;
+        if (accountId != null) {
+            account = accountRepository.findById(accountId).orElse(null);
         }
+        if (account == null) {
+            List<Account> accounts = accountRepository.findByUserId(memberId);
+            if (!accounts.isEmpty()) {
+                account = accounts.get(0);
+            }
+        }
+
+        if (account == null) {
+            log.warn("가계부 자동 기입 실패: 사용자(ID={})의 자산 계좌가 존재하지 않습니다.", memberId);
+            throw new IllegalStateException("계좌가 존재하지 않아 결제를 진행할 수 없습니다.");
+        }
+
+        List<TransactionCategory> userCategories = transactionCategoryRepository.findAllByUserOrSystem(memberId);
+        TransactionCategory targetCategory = userCategories.stream()
+                .filter(c -> c.getType() == TransactionType.EXPENSE && c.getName().equals(categoryName))
+                .findFirst()
+                .orElseGet(() -> userCategories.stream()
+                        .filter(c -> c.getType() == TransactionType.EXPENSE)
+                        .findFirst()
+                        .orElse(null));
+
+        if (targetCategory == null) {
+            log.warn("가계부 자동 기입 실패: 사용자(ID={})의 지출 카테고리가 존재하지 않습니다.", memberId);
+            throw new IllegalStateException("해당 지출 카테고리가 존재하지 않습니다.");
+        }
+
+        Transaction transaction = Transaction.builder()
+                .user(account.getUser())
+                .account(account)
+                .transactionCategory(targetCategory)
+                .type(TransactionType.EXPENSE)
+                .amount(amount)
+                .transactionDate(LocalDate.now())
+                .description(description)
+                .build();
+        transactionRepository.save(transaction);
+        account.changeBalance(amount.negate()); // 잔액이 부족하면 여기서 CustomException(AssetErrorCode.INSUFFICIENT_BALANCE) 발생 후 트랜잭션 롤백됨
     }
 
     private void refundBudgetForUser(Long memberId, Long accountId, GroupPurchase groupPurchase) {
@@ -515,32 +554,19 @@ public class GroupPurchaseService {
                 return;
             }
 
-            String description = "공동구매 취소 환불: " + groupPurchase.getTitle();
-            List<Transaction> transactions = transactionRepository.findByAccountIdAndDescriptionAndType(account.getId(), "공동구매 지출: " + groupPurchase.getTitle(), TransactionType.EXPENSE);
+            List<Transaction> transactions = transactionRepository.findByAccountIdAndDescriptionAndType(
+                    account.getId(), 
+                    "공동구매 지출: " + groupPurchase.getTitle() + " (공구 ID: " + groupPurchase.getId() + ")", 
+                    TransactionType.EXPENSE
+            );
+            
             if (!transactions.isEmpty()) {
                 Transaction originalExpense = transactions.get(0);
                 
-                List<com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory> userCategories = 
-                    transactionCategoryRepository.findAllByUserOrSystem(memberId);
-                
-                com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory incomeCategory = userCategories.stream()
-                        .filter(c -> c.getType() == TransactionType.INCOME)
-                        .findFirst()
-                        .orElse(null);
-
-                if (incomeCategory != null) {
-                    Transaction refundTx = Transaction.builder()
-                            .user(account.getUser())
-                            .account(account)
-                            .transactionCategory(incomeCategory)
-                            .type(TransactionType.INCOME)
-                            .amount(originalExpense.getAmount())
-                            .transactionDate(LocalDate.now())
-                            .description(description)
-                            .build();
-                    transactionRepository.save(refundTx);
-                    account.changeBalance(originalExpense.getAmount());
-                }
+                // 새로운 수입 내역(INCOME)을 생성하는 대신, 기존 지출 내역(EXPENSE)을 삭제하여 예산을 원상 복구함
+                transactionRepository.delete(originalExpense);
+                // 통장 잔고 롤백
+                account.changeBalance(originalExpense.getAmount());
             }
         } catch (Exception e) {
             log.warn("가계부 환불(결제 취소) 실패: 사용자(ID={})의 지출 취소 중 예외가 발생했습니다. 메시지: {}", memberId, e.getMessage());
