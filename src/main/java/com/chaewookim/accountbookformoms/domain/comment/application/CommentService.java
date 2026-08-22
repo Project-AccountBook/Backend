@@ -11,6 +11,9 @@ import com.chaewookim.accountbookformoms.domain.comment.entity.Comment;
 import com.chaewookim.accountbookformoms.domain.comment.enums.ReferenceType;
 import com.chaewookim.accountbookformoms.domain.comment.error.CommentErrorCode;
 import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseRepository;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseParticipantRepository;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.GroupPurchaseParticipant;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.GroupPurchase;
 import com.chaewookim.accountbookformoms.domain.like.application.PostLikeService;
 import com.chaewookim.accountbookformoms.domain.like.enums.LikeTargetType;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
@@ -34,6 +37,7 @@ public class CommentService {
     private final CommentRepository commentRepository;
     private final BoardRepository boardRepository;
     private final GroupPurchaseRepository groupPurchaseRepository;
+    private final GroupPurchaseParticipantRepository groupPurchaseParticipantRepository;
     private final UserRepository userRepository;
     private final PostLikeService likeService;
 
@@ -46,6 +50,7 @@ public class CommentService {
                 .referenceType(request.referenceType())
                 .parentId(null)
                 .content(request.content())
+                .isSecret(request.isSecret())
                 .build();
         return commentRepository.save(comment).getId();
     }
@@ -68,6 +73,7 @@ public class CommentService {
                 .referenceType(request.referenceType())
                 .parentId(parentCommentId)
                 .content(request.content())
+                .isSecret(request.isSecret())
                 .build();
         return commentRepository.save(reply).getId();
     }
@@ -122,7 +128,7 @@ public class CommentService {
     public List<CommentResponse> list(Long postId, ReferenceType referenceType, Long viewerId) {
         List<Comment> comments = commentRepository
                 .findByReferenceIdAndReferenceTypeOrderByCreatedAtAsc(postId, referenceType);
-        return enrich(comments, viewerId);
+        return enrich(comments, viewerId, postId, referenceType);
     }
 
     public org.springframework.data.domain.Page<com.chaewookim.accountbookformoms.domain.comment.dto.response.CommentThreadResponse> listThreads(
@@ -139,7 +145,7 @@ public class CommentService {
                 : commentRepository.findByParentIdInOrderByCreatedAtAsc(parentIds);
         List<Comment> all = new java.util.ArrayList<>(topLevel.getContent());
         all.addAll(replies);
-        Map<Long, CommentResponse> byId = enrich(all, viewerId).stream()
+        Map<Long, CommentResponse> byId = enrich(all, viewerId, postId, referenceType).stream()
                 .collect(Collectors.toMap(CommentResponse::id, r -> r));
         Map<Long, List<CommentResponse>> repliesByParent = new java.util.HashMap<>();
         replies.forEach(r -> repliesByParent
@@ -151,17 +157,53 @@ public class CommentService {
         ));
     }
 
-    private List<CommentResponse> enrich(List<Comment> comments, Long viewerId) {
+    private List<CommentResponse> enrich(List<Comment> comments, Long viewerId, Long postId, ReferenceType referenceType) {
         List<Long> ids = comments.stream().map(Comment::getId).toList();
         Map<Long, String> nicknames = loadNicknames(comments.stream().map(Comment::getUserId).toList());
         Map<Long, Long> likeCounts = likeService.countByTargets(LikeTargetType.COMMENT, ids);
         Set<Long> liked = likeService.likedTargets(LikeTargetType.COMMENT, ids, viewerId);
+        
+        Long postCreatorId = null;
+        Set<Long> participantIds = Set.of();
+        
+        if (referenceType == ReferenceType.GROUPPURCHASE && postId != null) {
+            GroupPurchase gp = groupPurchaseRepository.findById(postId).orElse(null);
+            if (gp != null) {
+                postCreatorId = gp.getCreatorId();
+                participantIds = groupPurchaseParticipantRepository.findByGroupPurchaseId(postId)
+                        .stream().map(GroupPurchaseParticipant::getUserId).collect(Collectors.toSet());
+            }
+        } else if ((referenceType == ReferenceType.QNA || referenceType == ReferenceType.KNOWHOW) && postId != null) {
+            Board board = boardRepository.findById(postId).orElse(null);
+            if (board != null) {
+                postCreatorId = board.getUserId();
+            }
+        }
+        
+        final Long finalPostCreatorId = postCreatorId;
+        final Set<Long> finalParticipantIds = participantIds;
+
         return comments.stream()
-                .map(c -> CommentResponse.from(
-                        c,
-                        nicknames.get(c.getUserId()),
-                        likeCounts.getOrDefault(c.getId(), 0L),
-                        liked.contains(c.getId())))
+                .map(c -> {
+                    String authorRole = "NONE";
+                    if (finalPostCreatorId != null && finalPostCreatorId.equals(c.getUserId())) {
+                        authorRole = "CREATOR";
+                    } else if (finalParticipantIds.contains(c.getUserId())) {
+                        authorRole = "PARTICIPANT";
+                    }
+                    
+                    boolean canRead = !c.isSecret() || (viewerId != null && (viewerId.equals(c.getUserId()) || viewerId.equals(finalPostCreatorId)));
+                    
+                    String overrideContent = canRead ? null : "비밀 댓글입니다.";
+                    
+                    return CommentResponse.from(
+                            c, 
+                            nicknames.get(c.getUserId()),
+                            likeCounts.getOrDefault(c.getId(), 0L),
+                            liked.contains(c.getId()),
+                            authorRole,
+                            overrideContent);
+                })
                 .toList();
     }
 

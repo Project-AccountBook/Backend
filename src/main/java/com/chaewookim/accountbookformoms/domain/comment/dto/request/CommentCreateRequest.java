@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotNull;
 
 public record CommentCreateRequest(
         @NotNull ReferenceType referenceType,
-        @NotBlank String content
+        @NotBlank String content,
+        Boolean isSecret
 ) {
 }

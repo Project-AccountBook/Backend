@@ -83,7 +83,7 @@ class CommentServiceTest {
         @DisplayName("성공 — 댓글이 저장되고 id 반환")
         void create_success() {
             // given
-            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "새 댓글");
+            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "새 댓글", false);
             Comment saved = buildComment(COMMENT_ID, OWNER_ID, POST_ID, ReferenceType.QNA, null);
             given(boardRepository.existsById(POST_ID)).willReturn(true);
             given(commentRepository.save(any(Comment.class))).willReturn(saved);
@@ -100,7 +100,7 @@ class CommentServiceTest {
         @DisplayName("실패 — 대상 QNA 게시글이 존재하지 않으면 BOARD_NOT_FOUND")
         void create_fail_board_not_found() {
             // given
-            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "새 댓글");
+            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "새 댓글", false);
             given(boardRepository.existsById(POST_ID)).willReturn(false);
 
             // when & then
@@ -115,7 +115,7 @@ class CommentServiceTest {
         @DisplayName("실패 — 대상 공동구매 글이 존재하지 않으면 GROUP_PURCHASE_NOT_FOUND")
         void create_fail_group_purchase_not_found() {
             // given
-            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.GROUPPURCHASE, "새 댓글");
+            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.GROUPPURCHASE, "새 댓글", false);
             given(groupPurchaseRepository.existsById(POST_ID)).willReturn(false);
 
             // when & then
@@ -135,7 +135,7 @@ class CommentServiceTest {
         @DisplayName("성공 — 1depth 댓글에 대댓글 작성")
         void reply_success() {
             // given
-            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "대댓글");
+            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "대댓글", false);
             Comment parent = buildComment(PARENT_ID, OWNER_ID, POST_ID, ReferenceType.QNA, null);
             Comment saved = buildComment(REPLY_ID, OWNER_ID, POST_ID, ReferenceType.QNA, PARENT_ID);
             given(boardRepository.existsById(POST_ID)).willReturn(true);
@@ -154,7 +154,7 @@ class CommentServiceTest {
         @DisplayName("실패 — 대댓글 작성 시 대상 QNA 게시글이 존재하지 않으면 BOARD_NOT_FOUND")
         void reply_fail_board_not_found() {
             // given
-            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "대댓글");
+            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "대댓글", false);
             given(boardRepository.existsById(POST_ID)).willReturn(false);
 
             // when & then
@@ -169,7 +169,7 @@ class CommentServiceTest {
         @DisplayName("실패 — 대댓글 작성 시 대상 공동구매 글이 존재하지 않으면 GROUP_PURCHASE_NOT_FOUND")
         void reply_fail_group_purchase_not_found() {
             // given
-            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.GROUPPURCHASE, "대댓글");
+            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.GROUPPURCHASE, "대댓글", false);
             given(groupPurchaseRepository.existsById(POST_ID)).willReturn(false);
 
             // when & then
@@ -184,7 +184,7 @@ class CommentServiceTest {
         @DisplayName("실패 — 부모 댓글이 존재하지 않으면 COMMENT_NOT_FOUND")
         void reply_fail_parent_not_found() {
             // given
-            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "대댓글");
+            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "대댓글", false);
             given(boardRepository.existsById(POST_ID)).willReturn(true);
             given(commentRepository.findById(PARENT_ID)).willReturn(Optional.empty());
 
@@ -200,7 +200,7 @@ class CommentServiceTest {
         @DisplayName("실패 — 부모가 이미 대댓글이면 COMMENT_REPLY_DEPTH_EXCEEDED")
         void reply_fail_depth_exceeded() {
             // given
-            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "대대댓글");
+            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "대대댓글", false);
             Comment parentReply = buildComment(PARENT_ID, OWNER_ID, POST_ID, ReferenceType.QNA, 998L);
             given(boardRepository.existsById(POST_ID)).willReturn(true);
             given(commentRepository.findById(PARENT_ID)).willReturn(Optional.of(parentReply));
@@ -217,7 +217,7 @@ class CommentServiceTest {
         @DisplayName("실패 — 부모의 referenceId가 다르면 COMMENT_REFERENCE_MISMATCH")
         void reply_fail_reference_id_mismatch() {
             // given
-            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "대댓글");
+            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "대댓글", false);
             Comment parent = buildComment(PARENT_ID, OWNER_ID, 999L, ReferenceType.QNA, null);
             given(boardRepository.existsById(POST_ID)).willReturn(true);
             given(commentRepository.findById(PARENT_ID)).willReturn(Optional.of(parent));
@@ -234,7 +234,7 @@ class CommentServiceTest {
         @DisplayName("실패 — 부모의 referenceType이 다르면 COMMENT_REFERENCE_MISMATCH")
         void reply_fail_reference_type_mismatch() {
             // given
-            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "대댓글");
+            CommentCreateRequest request = new CommentCreateRequest(ReferenceType.QNA, "대댓글", false);
             Comment parent = buildComment(PARENT_ID, OWNER_ID, POST_ID, ReferenceType.GROUPPURCHASE, null);
             given(boardRepository.existsById(POST_ID)).willReturn(true);
             given(commentRepository.findById(PARENT_ID)).willReturn(Optional.of(parent));
