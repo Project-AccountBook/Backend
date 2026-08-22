@@ -515,13 +515,18 @@ public class GroupPurchaseService {
                 .filter(c -> c.getType() == TransactionType.EXPENSE && c.getName().equals(categoryName))
                 .findFirst()
                 .orElseGet(() -> userCategories.stream()
-                        .filter(c -> c.getType() == TransactionType.EXPENSE)
+                        .filter(c -> c.getType() == TransactionType.EXPENSE && c.getName().equals("공동구매"))
                         .findFirst()
                         .orElse(null));
 
         if (targetCategory == null) {
-            log.warn("가계부 자동 기입 실패: 사용자(ID={})의 지출 카테고리가 존재하지 않습니다.", memberId);
-            throw new IllegalStateException("해당 지출 카테고리가 존재하지 않습니다.");
+            User user = userRepository.findById(memberId).orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
+            targetCategory = TransactionCategory.builder()
+                    .name("공동구매")
+                    .type(TransactionType.EXPENSE)
+                    .user(user)
+                    .build();
+            targetCategory = transactionCategoryRepository.save(targetCategory);
         }
 
         Transaction transaction = Transaction.builder()
