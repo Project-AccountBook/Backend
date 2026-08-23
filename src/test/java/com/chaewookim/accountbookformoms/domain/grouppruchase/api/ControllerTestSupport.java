@@ -64,4 +64,7 @@ public abstract class ControllerTestSupport {
 
     @MockBean
     protected ReportService reportService;
+
+    @MockBean
+    protected com.chaewookim.accountbookformoms.global.security.config.CorsProperties corsProperties;
 }

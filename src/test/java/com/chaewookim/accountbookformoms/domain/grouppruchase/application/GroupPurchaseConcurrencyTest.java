@@ -106,7 +106,7 @@ public class GroupPurchaseConcurrencyTest {
             Long userId = users.get(i).getId();
             executorService.submit(() -> {
                 try {
-                    groupPurchaseLockFacade.joinGroupPurchase(userId, savedGroupPurchaseId);
+                    groupPurchaseLockFacade.joinGroupPurchase(userId, savedGroupPurchaseId, new com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseJoinRequest(1L));
                     successCount.incrementAndGet();
                 } catch (Exception e) {
                     failCount.incrementAndGet();

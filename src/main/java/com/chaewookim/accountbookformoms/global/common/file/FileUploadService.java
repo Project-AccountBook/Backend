@@ -37,7 +37,7 @@ public class FileUploadService {
     @Value("${aws.s3.bucket}")
     private String bucketName;
 
-    @Value("${aws.cdn.base-url}")
+    @Value("${aws.cdn.base-url:}")
     private String cdnBaseUrl;
 
     public String uploadFile(MultipartFile file) {

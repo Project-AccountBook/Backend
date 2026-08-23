@@ -89,7 +89,6 @@ dependencies {
 // (일반 test 도 현재 동일 이유로 깨져있는 상태이므로 아래 제외 목록으로 임시 우회)
 def brokenTestSources = [
     '**/grouppruchase/application/GroupPurchaseServiceTest.java',
-    '**/grouppruchase/application/GroupPurchaseConcurrencyTest.java',
     '**/grouppruchase/api/GroupPurchaseCategoryControllerTest.java',
     '**/grouppruchase/api/GroupPurchaseControllerTest.java'
 ]

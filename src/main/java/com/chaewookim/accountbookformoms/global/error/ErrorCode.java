@@ -65,6 +65,8 @@ public enum ErrorCode implements BaseErrorCode {
     GROUP_PURCHASE_NOT_JOINED(HttpStatus.BAD_REQUEST, "참여하지 않은 공동구매입니다."),
     GROUP_PURCHASE_FULL(HttpStatus.BAD_REQUEST, "모집 인원이 마감되었습니다."),
     GROUP_PURCHASE_NOT_RECRUITING(HttpStatus.BAD_REQUEST, "현재 모집 중인 공동구매가 아닙니다."),
+    GROUP_PURCHASE_DEADLINE_PASSED(HttpStatus.BAD_REQUEST, "마감 기한이 지난 공동구매입니다."),
+    GROUP_PURCHASE_MIN_NOT_REACHED(HttpStatus.BAD_REQUEST, "최소 모집 인원에 도달하지 못했습니다."),
 
     // 락 획득 실패
     LOCK_ACQUISITION_FAILED(HttpStatus.TOO_MANY_REQUESTS, "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.");
