@@ -73,11 +73,12 @@ app:
       - "https://admin-frontend-rho-five.vercel.app"
       - "capacitor://localhost"
       - "http://localhost"
+      - "https://localhost"
   mail:
     from: ${MAIL_FROM:noreply@moneydiary.cloud}
     dev-log-code: ${MAIL_DEV_LOG_CODE:false}
   oauth2:
-    authorized-redirect-uri: ${FRONTEND_REDIRECT_URL:http://localhost:5173/oauth2/redirect}
+    authorized-redirect-uri: ${FRONTEND_REDIRECT_URL:com.jointliving.app://oauth2/redirect}
     admin-redirect-uri: ${ADMIN_REDIRECT_URL:https://admin-frontend-rho-five.vercel.app/oauth2/redirect}
     admin-redirect-uri-local: ${ADMIN_REDIRECT_URL_LOCAL:http://localhost:5174/oauth2/redirect}
     # 로그인 완료 후 리다이렉트 가능한 URI 화이트리스트. 이 목록에 없는 값이 들어오면
