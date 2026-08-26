@@ -12,24 +12,45 @@ import java.util.Set;
 public class OAuth2RedirectUriValidator {
 
     private final Set<String> allowedRedirectUris;
-    private final String defaultRedirectUri;
+    private final String appDefaultRedirectUri;
+    private final String webDefaultRedirectUri;
 
     public OAuth2RedirectUriValidator(
             @Value("${app.oauth2.authorized-redirect-uris:}") List<String> allowedRedirectUris,
-            @Value("${app.oauth2.authorized-redirect-uri:com.jointliving.app://oauth2/redirect}") String defaultRedirectUri
+            @Value("${app.oauth2.authorized-redirect-uri:com.jointliving.app://oauth2/redirect}") String appDefaultRedirectUri,
+            @Value("${app.oauth2.authorized-redirect-uri-web:http://localhost:5173/oauth2/redirect}") String webDefaultRedirectUri
     ) {
         this.allowedRedirectUris = Set.copyOf(allowedRedirectUris);
-        this.defaultRedirectUri = defaultRedirectUri;
+        this.appDefaultRedirectUri = appDefaultRedirectUri;
+        this.webDefaultRedirectUri = webDefaultRedirectUri;
     }
 
     public String resolve(String candidateUri) {
-        if (candidateUri == null || candidateUri.isBlank()) {
-            return defaultRedirectUri;
-        }
-        if (allowedRedirectUris.contains(candidateUri)) {
+        if (candidateUri != null && !candidateUri.isBlank() && allowedRedirectUris.contains(candidateUri)) {
             return candidateUri;
         }
-        log.warn("OAuth2 redirect_uri whitelist 미등록 값 감지, 기본 URI 로 fallback: {}", candidateUri);
-        return defaultRedirectUri;
+        if (candidateUri != null && !candidateUri.isBlank()) {
+            log.warn("OAuth2 redirect_uri whitelist 미등록 값 감지, fallback 적용: {}", candidateUri);
+            return fallbackForUnknown(candidateUri);
+        }
+        return appDefaultRedirectUri;
+    }
+
+    private String fallbackForUnknown(String candidateUri) {
+        if (isCapacitorMisredirect(candidateUri)) {
+            return appDefaultRedirectUri;
+        }
+        if (candidateUri.startsWith("http://") || candidateUri.startsWith("https://")) {
+            return webDefaultRedirectUri;
+        }
+        return appDefaultRedirectUri;
+    }
+
+    private static boolean isCapacitorMisredirect(String candidateUri) {
+        return candidateUri.startsWith("https://localhost/")
+                || candidateUri.startsWith("capacitor://")
+                || candidateUri.startsWith("http://localhost/")
+                        && !candidateUri.startsWith("http://localhost:5173/")
+                        && !candidateUri.startsWith("http://localhost:5174/");
     }
 }

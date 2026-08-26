@@ -38,7 +38,7 @@ public class HttpCookieOAuth2AuthorizationRequestRepository implements Authoriza
 
         CookieUtils.deleteCookie(request, response, "redirect_uri");
 
-        String redirectUriAfterLogin = request.getParameter(POST_LOGIN_REDIRECT_PARAM);
+        String redirectUriAfterLogin = resolvePostLoginRedirectParam(request);
         OAuth2AuthorizationRequest toSave = authorizationRequest;
 
         if (redirectUriAfterLogin != null && !redirectUriAfterLogin.isBlank()) {
@@ -89,5 +89,18 @@ public class HttpCookieOAuth2AuthorizationRequestRepository implements Authoriza
         }
         String value = embedded.toString();
         return value.isBlank() ? null : value;
+    }
+
+    /** 앱은 post_login_redirect, 기존 웹·Admin 은 redirect_uri 파라미터 사용 */
+    private static String resolvePostLoginRedirectParam(HttpServletRequest request) {
+        String fromPostLogin = request.getParameter(POST_LOGIN_REDIRECT_PARAM);
+        if (fromPostLogin != null && !fromPostLogin.isBlank()) {
+            return fromPostLogin;
+        }
+        String legacy = request.getParameter("redirect_uri");
+        if (legacy != null && !legacy.isBlank()) {
+            return legacy;
+        }
+        return null;
     }
 }
