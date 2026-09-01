@@ -2,11 +2,11 @@ package com.chaewookim.accountbookformoms.domain.user.application;
 
 import com.chaewookim.accountbookformoms.domain.user.dao.RefreshTokenRepository;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.LoginRequest;
 import com.chaewookim.accountbookformoms.domain.user.dto.request.ReissueRequest;
 import com.chaewookim.accountbookformoms.domain.user.dto.response.TokenResponse;
 import com.chaewookim.accountbookformoms.domain.user.entity.RefreshToken;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
-import com.chaewookim.accountbookformoms.domain.user.dto.request.LoginRequest;
 import com.chaewookim.accountbookformoms.domain.user.enums.VerificationType;
 import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
@@ -14,6 +14,7 @@ import com.chaewookim.accountbookformoms.global.security.jwt.JwtTokenProvider;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,11 +25,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class AuthService {
 
+    private static final String OAUTH_CODE_KEY_PREFIX = "OAUTH2:CODE:";
+
     private final EmailVerificationService emailVerificationService;
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder encoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final RedisTemplate<String, String> redisTemplate;
 
     @Transactional
     public TokenResponse login(LoginRequest request) {
@@ -48,6 +52,25 @@ public class AuthService {
 
         log.info("Redis에 리프레시 토큰 저장 성공 - 유저: {}", user.getEmail());
         return new TokenResponse(accessToken, refreshTokenValue);
+    }
+
+    @Transactional
+    public TokenResponse exchangeOAuthCode(String code) {
+        if (code == null || code.isBlank()) {
+            throw new CustomException(UserErrorCode.INVALID_OAUTH_CODE);
+        }
+
+        String value = redisTemplate.opsForValue().getAndDelete(OAUTH_CODE_KEY_PREFIX + code);
+        if (value == null || value.isBlank()) {
+            throw new CustomException(UserErrorCode.INVALID_OAUTH_CODE);
+        }
+
+        String[] parts = value.split("\n", 3);
+        if (parts.length != 3) {
+            throw new CustomException(UserErrorCode.INVALID_OAUTH_CODE);
+        }
+
+        return new TokenResponse(parts[0], parts[1], Boolean.parseBoolean(parts[2]));
     }
 
     @Transactional

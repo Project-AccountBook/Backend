@@ -46,6 +46,9 @@ class AuthServiceTest {
     @Mock
     private JwtTokenProvider jwtTokenProvider;
 
+    @Mock
+    private org.springframework.data.redis.core.RedisTemplate<String, String> redisTemplate;
+
     @InjectMocks
     private AuthService authService;
 

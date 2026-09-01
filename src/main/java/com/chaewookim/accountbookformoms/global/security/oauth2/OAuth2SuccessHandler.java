@@ -4,30 +4,36 @@ import com.chaewookim.accountbookformoms.domain.user.dao.RefreshTokenRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.RefreshToken;
 import com.chaewookim.accountbookformoms.global.security.jwt.JwtTokenProvider;
 import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
+import com.chaewookim.accountbookformoms.global.util.CookieUtils;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseCookie;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import com.chaewookim.accountbookformoms.global.util.CookieUtils;
-import jakarta.servlet.http.Cookie;
-
 import java.io.IOException;
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.HexFormat;
 
 @Component
 @RequiredArgsConstructor
 public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
 
+    static final String OAUTH_CODE_KEY_PREFIX = "OAUTH2:CODE:";
+    private static final Duration OAUTH_CODE_TTL = Duration.ofSeconds(60);
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenRepository refreshTokenRepository;
     private final HttpCookieOAuth2AuthorizationRequestRepository httpCookieOAuth2AuthorizationRequestRepository;
     private final OAuth2RedirectUriValidator redirectUriValidator;
+    private final RedisTemplate<String, String> redisTemplate;
 
     @Value("${app.oauth2.admin-redirect-uri:https://admin-frontend-rho-five.vercel.app/oauth2/redirect}")
     private String adminRedirectUri;
@@ -46,6 +52,9 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         String refreshToken = jwtTokenProvider.createRefreshToken(email);
         refreshTokenRepository.save(new RefreshToken(email, refreshToken));
 
+        // AuthService를 주입하면 SecurityConfig ↔ AuthService 순환참조가 생기므로 여기서 직접 발급
+        String code = issueOAuthCode(accessToken, refreshToken, principal.isNewSocialSignup());
+
         String candidateUri = CookieUtils.getCookie(request, HttpCookieOAuth2AuthorizationRequestRepository.REDIRECT_URI_PARAM_COOKIE_NAME)
                 .map(Cookie::getValue)
                 .orElse(null);
@@ -56,26 +65,22 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             targetUrl = targetUrl.contains("localhost") ? adminRedirectUriLocal : adminRedirectUri;
         }
 
-        ResponseCookie refreshTokenCookie = ResponseCookie.from("refreshToken", refreshToken)
-                .httpOnly(true)
-                .secure(true)
-                .path("/")
-                .maxAge(14 * 24 * 60 * 60)
-                .sameSite("None")
-                .build();
-        response.addHeader(HttpHeaders.SET_COOKIE, refreshTokenCookie.toString());
-
-        UriComponentsBuilder redirectBuilder = UriComponentsBuilder.fromUriString(targetUrl)
-                .queryParam("accessToken", accessToken);
-
-        if (principal.isNewSocialSignup()) {
-            redirectBuilder.queryParam("isNewUser", "true");
-        }
-
-        targetUrl = redirectBuilder.build().toUriString();
+        targetUrl = UriComponentsBuilder.fromUriString(targetUrl)
+                .queryParam("code", code)
+                .build()
+                .toUriString();
 
         clearAuthenticationAttributes(request, response);
         getRedirectStrategy().sendRedirect(request, response, targetUrl);
+    }
+
+    private String issueOAuthCode(String accessToken, String refreshToken, boolean isNewUser) {
+        byte[] bytes = new byte[32];
+        SECURE_RANDOM.nextBytes(bytes);
+        String code = HexFormat.of().formatHex(bytes);
+        String value = accessToken + "\n" + refreshToken + "\n" + isNewUser;
+        redisTemplate.opsForValue().set(OAUTH_CODE_KEY_PREFIX + code, value, OAUTH_CODE_TTL);
+        return code;
     }
 
     protected void clearAuthenticationAttributes(HttpServletRequest request, HttpServletResponse response) {

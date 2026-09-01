@@ -29,6 +29,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Map;
+
 @Tag(name = "인증(Auth)", description = "로그인/로그아웃/토큰 재발급 API")
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -56,6 +58,17 @@ public class AuthController {
             HttpServletResponse response
     ) {
         TokenResponse tokenResponse = authService.login(request);
+        setRefreshTokenCookie(response, tokenResponse.refreshToken());
+        return ResponseEntity.ok(ApiResponse.success(tokenResponse));
+    }
+
+    @Operation(summary = "소셜 로그인 토큰 교환", description = "OAuth 리다이렉트의 one-time code를 Access Token으로 교환")
+    @PostMapping("/oauth2/token")
+    public ResponseEntity<ApiResponse<TokenResponse>> exchangeOAuth2Token(
+            @RequestBody Map<String, String> body,
+            HttpServletResponse response
+    ) {
+        TokenResponse tokenResponse = authService.exchangeOAuthCode(body.get("code"));
         setRefreshTokenCookie(response, tokenResponse.refreshToken());
         return ResponseEntity.ok(ApiResponse.success(tokenResponse));
     }
