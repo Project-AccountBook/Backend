@@ -1,85 +1,1 @@
-package com.chaewookim.accountbookformoms.global.security.oauth2;
-
-import com.chaewookim.accountbookformoms.domain.user.dao.RefreshTokenRepository;
-import com.chaewookim.accountbookformoms.domain.user.entity.RefreshToken;
-import com.chaewookim.accountbookformoms.global.security.jwt.JwtTokenProvider;
-import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseCookie;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
-import org.springframework.stereotype.Component;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.web.util.UriComponentsBuilder;
-
-import com.chaewookim.accountbookformoms.global.util.CookieUtils;
-import jakarta.servlet.http.Cookie;
-
-import java.io.IOException;
-
-@Component
-@RequiredArgsConstructor
-public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
-
-    private final JwtTokenProvider jwtTokenProvider;
-    private final RefreshTokenRepository refreshTokenRepository;
-    private final HttpCookieOAuth2AuthorizationRequestRepository httpCookieOAuth2AuthorizationRequestRepository;
-    private final OAuth2RedirectUriValidator redirectUriValidator;
-
-    @Value("${app.oauth2.admin-redirect-uri:https://admin-frontend-rho-five.vercel.app/oauth2/redirect}")
-    private String adminRedirectUri;
-
-    @Value("${app.oauth2.admin-redirect-uri-local:http://localhost:5174/oauth2/redirect}")
-    private String adminRedirectUriLocal;
-
-    @Override
-    public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException {
-
-        UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
-        String email = principal.getUsername();
-        String role = principal.getAuthorities().iterator().next().getAuthority();
-
-        String accessToken = jwtTokenProvider.createAccessToken(email, role);
-        String refreshToken = jwtTokenProvider.createRefreshToken(email);
-        refreshTokenRepository.save(new RefreshToken(email, refreshToken));
-
-        String candidateUri = CookieUtils.getCookie(request, HttpCookieOAuth2AuthorizationRequestRepository.REDIRECT_URI_PARAM_COOKIE_NAME)
-                .map(Cookie::getValue)
-                .orElse(null);
-
-        String targetUrl = redirectUriValidator.resolve(candidateUri);
-
-        if ("ROLE_ADMIN".equals(role)) {
-            targetUrl = targetUrl.contains("localhost") ? adminRedirectUriLocal : adminRedirectUri;
-        }
-
-        ResponseCookie refreshTokenCookie = ResponseCookie.from("refreshToken", refreshToken)
-                .httpOnly(true)
-                .secure(true)
-                .path("/")
-                .maxAge(14 * 24 * 60 * 60)
-                .sameSite("None")
-                .build();
-        response.addHeader(HttpHeaders.SET_COOKIE, refreshTokenCookie.toString());
-
-        UriComponentsBuilder redirectBuilder = UriComponentsBuilder.fromUriString(targetUrl)
-                .queryParam("accessToken", accessToken);
-
-        if (principal.isNewSocialSignup()) {
-            redirectBuilder.queryParam("isNewUser", "true");
-        }
-
-        targetUrl = redirectBuilder.build().toUriString();
-
-        clearAuthenticationAttributes(request, response);
-        getRedirectStrategy().sendRedirect(request, response, targetUrl);
-    }
-
-    protected void clearAuthenticationAttributes(HttpServletRequest request, HttpServletResponse response) {
-        super.clearAuthenticationAttributes(request);
-        httpCookieOAuth2AuthorizationRequestRepository.removeAuthorizationRequestCookies(request, response);
-    }
-}
+package com.chaewookim.accountbookformoms.global.security.oauth2;import com.chaewookim.accountbookformoms.domain.user.dao.RefreshTokenRepository;import com.chaewookim.accountbookformoms.domain.user.entity.RefreshToken;import com.chaewookim.accountbookformoms.global.security.jwt.JwtTokenProvider;import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;import jakarta.servlet.http.HttpServletRequest;import jakarta.servlet.http.HttpServletResponse;import lombok.RequiredArgsConstructor;import org.springframework.http.HttpHeaders;import org.springframework.http.ResponseCookie;import org.springframework.security.core.Authentication;import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;import org.springframework.stereotype.Component;import org.springframework.beans.factory.annotation.Value;import java.io.IOException;import java.net.URLEncoder;import java.nio.charset.StandardCharsets;@Component@RequiredArgsConstructorpublic class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler {    private final JwtTokenProvider jwtTokenProvider;    private final RefreshTokenRepository refreshTokenRepository;    private final HttpCookieOAuth2AuthorizationRequestRepository httpCookieOAuth2AuthorizationRequestRepository;    private final OAuth2RedirectUriValidator redirectUriValidator;    @Value("${app.oauth2.admin-redirect-uri:https://admin-frontend-rho-five.vercel.app/oauth2/redirect}")    private String adminRedirectUri;    @Value("${app.oauth2.admin-redirect-uri-local:http://localhost:5174/oauth2/redirect}")    private String adminRedirectUriLocal;    @Override    public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException {        UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();        String email = principal.getUsername();        String role = principal.getAuthorities().iterator().next().getAuthority();        String accessToken = jwtTokenProvider.createAccessToken(email, role);        String refreshToken = jwtTokenProvider.createRefreshToken(email);        refreshTokenRepository.save(new RefreshToken(email, refreshToken));        String candidateUri = httpCookieOAuth2AuthorizationRequestRepository.resolveRedirectUriAfterLogin(request);        String targetUrl = redirectUriValidator.resolve(candidateUri);        if ("ROLE_ADMIN".equals(role)) {            targetUrl = targetUrl.contains("localhost") ? adminRedirectUriLocal : adminRedirectUri;        }        ResponseCookie refreshTokenCookie = ResponseCookie.from("refreshToken", refreshToken)                .httpOnly(true)                .secure(true)                .path("/")                .maxAge(14 * 24 * 60 * 60)                .sameSite("None")                .build();        response.addHeader(HttpHeaders.SET_COOKIE, refreshTokenCookie.toString());        targetUrl = appendQueryParam(targetUrl, "accessToken", accessToken);        if (principal.isNewSocialSignup()) {            targetUrl = appendQueryParam(targetUrl, "isNewUser", "true");        }        clearAuthenticationAttributes(request, response);        getRedirectStrategy().sendRedirect(request, response, targetUrl);    }    protected void clearAuthenticationAttributes(HttpServletRequest request, HttpServletResponse response) {        super.clearAuthenticationAttributes(request);        httpCookieOAuth2AuthorizationRequestRepository.removeAuthorizationRequestCookies(request, response);    }    static String appendQueryParam(String url, String name, String value) {        String encoded = URLEncoder.encode(value, StandardCharsets.UTF_8);        return url + (url.contains("?") ? "&" : "?") + name + "=" + encoded;    }}
