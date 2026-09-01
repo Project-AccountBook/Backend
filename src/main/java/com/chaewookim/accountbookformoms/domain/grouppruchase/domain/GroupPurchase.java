@@ -40,7 +40,7 @@ public class GroupPurchase extends BaseEntity {
     private String content;          // 공동 구매 상세 본문
 
     @Column(nullable = false)
-    private int price;               // 인당 금액
+    private long price;               // 인당 금액
 
     @Column(nullable = false)
     private int minParticipants;     // 최소 성사 인원
@@ -79,7 +79,7 @@ public class GroupPurchase extends BaseEntity {
     @Builder
     public GroupPurchase(Long id, Long creatorId
             , Long categoryId, String title
-            , String content, int price
+            , String content, long price
             , int minParticipants, int maxParticipants
             , LocalDateTime deadline, String pickupLocation
             , Double latitude, Double longitude
@@ -104,7 +104,7 @@ public class GroupPurchase extends BaseEntity {
         this.creatorAccountId = creatorAccountId;
     }
 
-    public void update(Long categoryId, String title, String content, int price, int minParticipants, int maxParticipants, LocalDateTime deadline, String pickupLocation, String imageUrl) {
+    public void update(Long categoryId, String title, String content, long price, int minParticipants, int maxParticipants, LocalDateTime deadline, String pickupLocation, String imageUrl) {
         this.categoryId = categoryId;
         this.title = title;
         this.content = content;

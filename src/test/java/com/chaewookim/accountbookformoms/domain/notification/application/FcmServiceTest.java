@@ -1,5 +1,6 @@
 package com.chaewookim.accountbookformoms.domain.notification.application;
 
+import com.google.firebase.FirebaseApp;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.Message;
 import org.junit.jupiter.api.DisplayName;
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
+import java.util.List;
 import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -29,7 +31,11 @@ class FcmServiceTest {
         String body = "본문";
         Map<String, String> data = Map.of("key", "value");
 
-        try (MockedStatic<FirebaseMessaging> firebaseMessaging = mockStatic(FirebaseMessaging.class)) {
+        try (MockedStatic<FirebaseMessaging> firebaseMessaging = mockStatic(FirebaseMessaging.class);
+             MockedStatic<FirebaseApp> firebaseApp = mockStatic(FirebaseApp.class)) {
+             
+            firebaseApp.when(FirebaseApp::getApps).thenReturn(List.of(mock(FirebaseApp.class)));
+            
             FirebaseMessaging mockMessaging = mock(FirebaseMessaging.class);
             firebaseMessaging.when(FirebaseMessaging::getInstance).thenReturn(mockMessaging);
 

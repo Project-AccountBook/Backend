@@ -306,9 +306,8 @@ class DbIoBenchmark {
                     String type = types[(int) ((uid + k) % 3)];
                     em.createNativeQuery(
                             "INSERT INTO transaction_category "
-                          + "(user_id, name, type, include_in_savings_rate, include_in_investment_rate, "
-                          + " created_at, updated_at) "
-                          + "VALUES (?, ?, ?, false, false, NOW(), NOW())")
+                          + "(user_id, name, type, created_at, updated_at) "
+                          + "VALUES (?, ?, ?, NOW(), NOW())")
                             .setParameter(1, uid)
                             .setParameter(2, "cat_" + k)
                             .setParameter(3, type)
@@ -406,9 +405,9 @@ class DbIoBenchmark {
                 for (int i = 0; i < U4_ACCOUNT_COUNT; i++) {
                     long uid = i + 1; // user_id 1..60
                     Object idObj = em.createNativeQuery(
-                            "INSERT INTO account (user_id, account_name, initial_balance, current_balance, role, "
+                            "INSERT INTO account (user_id, account_name, initial_balance, current_balance, role, kind, "
                           + "goal_achieved_notified, created_at, updated_at) "
-                          + "VALUES (?, ?, 0, 0, 'CHECKING', false, NOW(), NOW())")
+                          + "VALUES (?, ?, 0, 0, 'CHECKING', 'ASSET', false, NOW(), NOW())")
                             .setParameter(1, uid)
                             .setParameter(2, "u4-acc-" + uid)
                             .executeUpdate();
@@ -581,9 +580,9 @@ class DbIoBenchmark {
             for (long uid = 1; uid <= ACCOUNT_USER_COUNT; uid++) {
                 for (int k = 0; k < ACCOUNT_PER_USER; k++) {
                     em.createNativeQuery(
-                            "INSERT INTO account (user_id, account_name, initial_balance, current_balance, role, "
+                            "INSERT INTO account (user_id, account_name, initial_balance, current_balance, role, kind, "
                           + "goal_achieved_notified, created_at, updated_at) "
-                          + "VALUES (?, ?, 0, 0, 'CHECKING', false, NOW(), NOW())")
+                          + "VALUES (?, ?, 0, 0, 'CHECKING', 'ASSET', false, NOW(), NOW())")
                             .setParameter(1, uid)
                             .setParameter(2, "acc-" + uid + "-" + k)
                             .executeUpdate();

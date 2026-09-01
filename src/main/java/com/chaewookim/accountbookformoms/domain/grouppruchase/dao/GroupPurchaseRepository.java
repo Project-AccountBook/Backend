@@ -17,11 +17,11 @@ import java.util.List;
 public interface GroupPurchaseRepository extends JpaRepository<GroupPurchase, Long> {
 
     @Query("SELECT gp FROM GroupPurchase gp " +
-           "WHERE gp.status = :status " +
+           "WHERE gp.status IN :statuses " +
            "AND (:region IS NULL OR gp.pickupLocation LIKE %:region%) " +
            "AND (:categoryId IS NULL OR gp.categoryId = :categoryId)")
     List<GroupPurchase> findActiveGroupPurchases(
-            @Param("status") PurchaseStatus status,
+            @Param("statuses") List<PurchaseStatus> statuses,
             @Param("region") String region,
             @Param("categoryId") Long categoryId,
             Sort sort
@@ -50,6 +50,12 @@ public interface GroupPurchaseRepository extends JpaRepository<GroupPurchase, Lo
     Page<GroupPurchase> findWishedGroupPurchases(
             @Param("userId") Long userId,
             Pageable pageable
+    );
+
+    @Query("SELECT gp FROM GroupPurchase gp WHERE gp.status = :status AND gp.deadline < :now")
+    List<GroupPurchase> findExpiredGroupPurchases(
+            @Param("status") PurchaseStatus status,
+            @Param("now") LocalDateTime now
     );
 }
 

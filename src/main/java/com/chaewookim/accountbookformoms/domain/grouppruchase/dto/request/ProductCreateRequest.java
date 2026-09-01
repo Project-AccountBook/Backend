@@ -9,7 +9,7 @@ public record ProductCreateRequest(
         String name,
 
         @Min(value = 0, message = "가격은 0원 이상이어야 합니다.")
-        int price,
+        long price,
 
         String description,
 

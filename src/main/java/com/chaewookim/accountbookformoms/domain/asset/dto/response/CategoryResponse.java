@@ -8,18 +8,14 @@ public record CategoryResponse(
         Long id,
         String name,
         TransactionType type,
-        boolean isCustom,
-        boolean includeInSavingsRate,
-        boolean includeInInvestmentRate
+        boolean isCustom
 ) {
     public static CategoryResponse from(TransactionCategory category) {
         return new CategoryResponse(
                 category.getId(),
                 category.getName(),
                 category.getType(),
-                category.getUser() != null,
-                category.isIncludeInSavingsRate(),
-                category.isIncludeInInvestmentRate()
+                category.getUser() != null
         );
     }
 }

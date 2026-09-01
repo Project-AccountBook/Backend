@@ -62,8 +62,11 @@ public class Comment extends BaseEntity {
     @Column(name = "is_accepted", nullable = false)
     private boolean accepted;
 
+    @Column(name = "is_secret", nullable = false)
+    private boolean isSecret;
+
     @Builder
-    public Comment(Long userId, Long referenceId, ReferenceType referenceType, Long parentId, String content) {
+    public Comment(Long userId, Long referenceId, ReferenceType referenceType, Long parentId, String content, Boolean isSecret) {
         this.userId = userId;
         this.referenceId = referenceId;
         this.referenceType = referenceType;
@@ -71,6 +74,7 @@ public class Comment extends BaseEntity {
         this.content = content;
         this.adminDeleted = false;
         this.accepted = false;
+        this.isSecret = isSecret != null ? isSecret : false;
     }
 
     public void update(String content) {

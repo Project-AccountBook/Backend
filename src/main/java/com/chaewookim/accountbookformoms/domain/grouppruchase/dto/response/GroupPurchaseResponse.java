@@ -11,7 +11,7 @@ public record GroupPurchaseResponse(
         Long categoryId,
         String title,
         String content,
-        int price,
+        long price,
         int minParticipants,
         int maxParticipants,
         int currentParticipants,

@@ -45,6 +45,9 @@ public abstract class ControllerTestSupport {
     protected OAuth2SuccessHandler oAuth2SuccessHandler;
 
     @MockBean
+    protected com.chaewookim.accountbookformoms.global.security.oauth2.HttpCookieOAuth2AuthorizationRequestRepository httpCookieOAuth2AuthorizationRequestRepository;
+
+    @MockBean
     protected GroupPurchaseService groupPurchaseService;
 
     @MockBean
@@ -61,4 +64,7 @@ public abstract class ControllerTestSupport {
 
     @MockBean
     protected ReportService reportService;
+
+    @MockBean
+    protected com.chaewookim.accountbookformoms.global.security.config.CorsProperties corsProperties;
 }

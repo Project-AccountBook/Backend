@@ -3,6 +3,7 @@ package com.chaewookim.accountbookformoms.global.security.config;
 import com.chaewookim.accountbookformoms.global.security.jwt.JwtFilter;
 import com.chaewookim.accountbookformoms.global.security.jwt.JwtTokenProvider;
 import com.chaewookim.accountbookformoms.global.security.oauth2.CustomOAuth2UserService;
+import com.chaewookim.accountbookformoms.global.security.oauth2.HttpCookieOAuth2AuthorizationRequestRepository;
 import com.chaewookim.accountbookformoms.global.security.oauth2.OAuth2SuccessHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,6 +22,10 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
+
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 
@@ -32,10 +37,11 @@ public class SecurityConfig {
     private final JwtTokenProvider jwtTokenProvider;
     private final CustomOAuth2UserService customOAuth2UserService;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
-    private final com.chaewookim.accountbookformoms.global.security.oauth2.HttpCookieOAuth2AuthorizationRequestRepository httpCookieOAuth2AuthorizationRequestRepository;
+    private final HttpCookieOAuth2AuthorizationRequestRepository httpCookieOAuth2AuthorizationRequestRepository;
 
-    @Value("${app.cors.allowed-origins}")
+    @Value("${app.cors.allowed-origins:http://localhost:5173}")
     private List<String> allowedOrigins;
+    private final CorsProperties corsProperties;
 
     // 비밀번호 암호화
     @Bean
@@ -46,10 +52,12 @@ public class SecurityConfig {
     // 시큐리티 필터 체인
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        
         http
-                // REST API이기 때문에 CSRF 보안 비활성화
+                // JWT 사용 방식(Authorization 헤더)이므로 CSRF 방어 비활성화
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                
                 // JWT 사용 예정이기 때문에 폼 로그인 & HTTP Basic 인증 비활성화
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
@@ -147,7 +155,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        configuration.setAllowedOrigins(allowedOrigins);
+        configuration.setAllowedOrigins(corsProperties.getAllowedOrigins());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);

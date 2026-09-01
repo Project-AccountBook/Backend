@@ -1,6 +1,7 @@
 package com.chaewookim.accountbookformoms.domain.asset.entity;
 
 import com.chaewookim.accountbookformoms.domain.asset.dto.request.TransactionRequest;
+import com.chaewookim.accountbookformoms.domain.asset.enums.AccountRole;
 import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.entity.BaseEntity;
@@ -78,11 +79,19 @@ public class Transaction extends BaseEntity {
     @Column(name = "snapshot_account_name")
     private String snapshotAccountName;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "snapshot_account_role")
+    private AccountRole snapshotAccountRole;
+
     @Column(name = "snapshot_target_account_id")
     private Long snapshotTargetAccountId;
 
     @Column(name = "snapshot_target_account_name")
     private String snapshotTargetAccountName;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "snapshot_target_account_role")
+    private AccountRole snapshotTargetAccountRole;
 
     @Column(nullable = false)
     private boolean accountArchived = false;
@@ -134,15 +143,18 @@ public class Transaction extends BaseEntity {
         if (this.account != null) {
             this.snapshotAccountId = this.account.getId();
             this.snapshotAccountName = this.account.getAccountName();
+            this.snapshotAccountRole = this.account.getRole();
             this.accountArchived = false;
         }
         if (this.targetAccount != null) {
             this.snapshotTargetAccountId = this.targetAccount.getId();
             this.snapshotTargetAccountName = this.targetAccount.getAccountName();
+            this.snapshotTargetAccountRole = this.targetAccount.getRole();
             this.targetAccountArchived = false;
         } else {
             this.snapshotTargetAccountId = null;
             this.snapshotTargetAccountName = null;
+            this.snapshotTargetAccountRole = null;
             this.targetAccountArchived = false;
         }
     }

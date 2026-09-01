@@ -1,10 +1,10 @@
 package com.chaewookim.accountbookformoms.domain.asset.dto.response;
 
 import com.chaewookim.accountbookformoms.domain.asset.entity.Account;
+import com.chaewookim.accountbookformoms.domain.asset.enums.AccountKind;
 import com.chaewookim.accountbookformoms.domain.asset.enums.AccountRole;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 
 public record AccountResponse(
@@ -14,6 +14,10 @@ public record AccountResponse(
         BigDecimal initialBalance,
         BigDecimal currentBalance,
         AccountRole role,
+        AccountKind kind,
+        BigDecimal creditLimit,
+        BigDecimal loanLimit,
+        BigDecimal disbursedAmount,
         BigDecimal goalAmount,
         LocalDate goalDate,
         Integer progressPercent
@@ -25,21 +29,13 @@ public record AccountResponse(
                 account.getInitialBalance(),
                 account.getCurrentBalance(),
                 account.getRole(),
+                account.getKind(),
+                account.getCreditLimit(),
+                account.getLoanLimit(),
+                account.getDisbursedAmount(),
                 account.getGoalAmount(),
                 account.getGoalDate(),
-                calculateProgressPercent(account.getCurrentBalance(), account.getGoalAmount())
+                account.calculateGoalProgressPercent()
         );
-    }
-
-    private static Integer calculateProgressPercent(BigDecimal currentBalance, BigDecimal goalAmount) {
-        if (goalAmount == null || goalAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            return null;
-        }
-        BigDecimal balance = currentBalance != null ? currentBalance : BigDecimal.ZERO;
-        int percent = balance
-                .multiply(BigDecimal.valueOf(100))
-                .divide(goalAmount, 0, RoundingMode.HALF_UP)
-                .intValue();
-        return Math.min(100, Math.max(0, percent));
     }
 }
