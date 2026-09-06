@@ -27,3 +27,5 @@ app:
       - "https://moneydiary.cloud"
       - "https://admin-frontend-rho-five.vercel.app"
       - "capacitor://localhost"
+  mail:
+    dev-log-code: false

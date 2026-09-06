@@ -4,6 +4,7 @@
 services:
   app:
     environment:
+      SPRING_PROFILES_ACTIVE: local
       ELASTICSEARCH_URIS: http://elasticsearch:9200
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/jointliving?useSSL=false&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true
       SPRING_DATA_REDIS_HOST: redis

@@ -288,6 +288,16 @@ CREATE INDEX idx_gp_deadline          ON group_purchase (deadline);
 - **[P0-7] Cloudflare 무료 플랜 프론트/API 앞단 배치**
 - **[P0-8] AWS/Kakao/FCM/Gmail Budget Alert 설정**
 
+**런타임 크래시 (Profile 분리 검증 중 발견, 2026-08-30)**
+- **[P0-9] SecurityConfig CORS 바인딩 버그 — 로컬 부팅 전면 실패**
+  - 위치: `SecurityConfig.java:37-38`
+  - 현상: `@Value("${app.cors.allowed-origins}") private List<String> allowedOrigins;` — Spring이 YAML 시퀀스를 indexed 프로퍼티(`app.cors.allowed-origins[0]`, `[1]`...)로 평탄화하므로 `@Value`가 정확한 키를 찾지 못함 → `Could not resolve placeholder 'app.cors.allowed-origins'` startup 실패
+  - 도입: 커밋 `f9edfe3` (2026-08-06, #162 CORS 보안 구현). 이후 로컬 `./gradlew bootRun` 지속 실패 상태 (git HEAD 원본 config에서도 재현 확인)
+  - prod 영향: 배포 이력에 따라 미상. 배포 컨테이너가 8/6 이전 이미지이거나 별도 env var 주입 중이라면 정상 부팅 가능. 확인 필요.
+  - 완화 (택1):
+    - (권장) `@ConfigurationProperties(prefix="app.cors")` 클래스 도입 — YAML 리스트 형식 유지
+    - (임시) SpEL로 comma-separated 변환: `@Value("#{'${app.cors.allowed-origins:}'.split(',')}")` + YAML을 문자열로 변환
+
 ---
 
 ### P1 — 배포 후 1주일 내
