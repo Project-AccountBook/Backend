@@ -4,8 +4,6 @@ import com.chaewookim.accountbookformoms.domain.user.dao.RefreshTokenRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.RefreshToken;
 import com.chaewookim.accountbookformoms.global.security.jwt.JwtTokenProvider;
 import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
-import com.chaewookim.accountbookformoms.global.util.CookieUtils;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -14,9 +12,10 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.HexFormat;
@@ -55,20 +54,15 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         // AuthService를 주입하면 SecurityConfig ↔ AuthService 순환참조가 생기므로 여기서 직접 발급
         String code = issueOAuthCode(accessToken, refreshToken, principal.isNewSocialSignup());
 
-        String candidateUri = CookieUtils.getCookie(request, HttpCookieOAuth2AuthorizationRequestRepository.REDIRECT_URI_PARAM_COOKIE_NAME)
-                .map(Cookie::getValue)
-                .orElse(null);
-
+        String candidateUri = httpCookieOAuth2AuthorizationRequestRepository.resolveRedirectUriAfterLogin(request);
         String targetUrl = redirectUriValidator.resolve(candidateUri);
 
         if ("ROLE_ADMIN".equals(role)) {
             targetUrl = targetUrl.contains("localhost") ? adminRedirectUriLocal : adminRedirectUri;
         }
 
-        targetUrl = UriComponentsBuilder.fromUriString(targetUrl)
-                .queryParam("code", code)
-                .build()
-                .toUriString();
+        // 앱 커스텀 스킴은 UriComponentsBuilder가 host/path를 깨뜨릴 수 있어 쿼리만 직접 붙인다
+        targetUrl = appendQueryParam(targetUrl, "code", code);
 
         clearAuthenticationAttributes(request, response);
         getRedirectStrategy().sendRedirect(request, response, targetUrl);
@@ -86,5 +80,10 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     protected void clearAuthenticationAttributes(HttpServletRequest request, HttpServletResponse response) {
         super.clearAuthenticationAttributes(request);
         httpCookieOAuth2AuthorizationRequestRepository.removeAuthorizationRequestCookies(request, response);
+    }
+
+    static String appendQueryParam(String url, String name, String value) {
+        String encoded = URLEncoder.encode(value, StandardCharsets.UTF_8);
+        return url + (url.contains("?") ? "&" : "?") + name + "=" + encoded;
     }
 }
