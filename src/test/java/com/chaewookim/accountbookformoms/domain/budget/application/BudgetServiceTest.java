@@ -49,6 +49,9 @@ class BudgetServiceTest {
     @Mock
     private FixedTransactionRepository fixedTransactionRepository;
 
+    @Mock
+    private org.springframework.cache.CacheManager cacheManager;
+
     @InjectMocks
     private BudgetService budgetService;
 

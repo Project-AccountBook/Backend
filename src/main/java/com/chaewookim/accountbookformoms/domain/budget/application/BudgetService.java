@@ -15,7 +15,10 @@ import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
 import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
+import com.chaewookim.accountbookformoms.global.config.RedisConfig;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +44,7 @@ public class BudgetService {
     private final FixedTransactionRepository fixedTransactionRepository;
     private final TransactionCategoryRepository categoryRepository;
     private final UserRepository userRepository;
+    private final CacheManager cacheManager;
 
     @Transactional
     public Long createBudget(Long userId, BudgetRequest request) {
@@ -55,7 +59,9 @@ public class BudgetService {
             Budget budget = deletedBudget.get();
             budget.restore();
             budget.update(request.totalBudget(), request.expectedExpense());
-            return budgetRepository.save(budget).getId();
+            Long restoredId = budgetRepository.save(budget).getId();
+            evictDashboardCache(userId, request.yearMonth());
+            return restoredId;
         }
 
         Budget budget = Budget.builder()
@@ -65,7 +71,9 @@ public class BudgetService {
                 .totalBudget(request.totalBudget())
                 .expectedExpense(request.expectedExpense())
                 .build();
-        return budgetRepository.save(budget).getId();
+        Long savedId = budgetRepository.save(budget).getId();
+        evictDashboardCache(userId, request.yearMonth());
+        return savedId;
     }
 
     public List<BudgetResponse> getMonthlyBudgetStatus(Long userId, String yearMonth) {
@@ -113,16 +121,19 @@ public class BudgetService {
         User user = userRepository.findById(userId).orElseThrow();
         user.updateLastBudgetAlertMonth(null);
         userRepository.save(user);
+        evictDashboardCache(userId, budget.getYearMonth());
     }
 
     @Transactional
     public void deleteBudget(Long userId, Long budgetId) {
         Budget budget = validateAndGet(userId, budgetId);
+        String yearMonth = budget.getYearMonth();
         budgetRepository.delete(budget);
 
         User user = userRepository.findById(userId).orElseThrow();
         user.updateLastBudgetAlertMonth(null);
         userRepository.save(user);
+        evictDashboardCache(userId, yearMonth);
     }
 
     public BudgetCopyResponse previewCopyFromLatest(Long userId, String targetYearMonth) {
@@ -439,6 +450,14 @@ public class BudgetService {
         LocalDate startDate = LocalDate.parse(yearMonth + "-01");
         LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
         return new LocalDate[]{startDate, endDate};
+    }
+
+    private void evictDashboardCache(Long userId, String yearMonth) {
+        Cache dashboardCache = cacheManager.getCache(RedisConfig.CACHE_DASHBOARD);
+        if (dashboardCache == null || yearMonth == null) {
+            return;
+        }
+        dashboardCache.evict(userId + ":" + yearMonth);
     }
 
     private record FixedExpenseSnapshot(
