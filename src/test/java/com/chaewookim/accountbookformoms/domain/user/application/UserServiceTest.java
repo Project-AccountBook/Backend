@@ -1,39 +1,53 @@
 package com.chaewookim.accountbookformoms.domain.user.application;
 
-import com.chaewookim.accountbookformoms.domain.user.dao.RefreshTokenRepository;
+import com.chaewookim.accountbookformoms.domain.notification.application.NotificationService;
+import com.chaewookim.accountbookformoms.domain.notification.application.UserDeviceService;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
-import com.chaewookim.accountbookformoms.domain.user.domain.RefreshToken;
-import com.chaewookim.accountbookformoms.domain.user.domain.User;
-import com.chaewookim.accountbookformoms.domain.user.dto.request.TokenReissueRequest;
-import com.chaewookim.accountbookformoms.domain.user.dto.request.UpdateRequest;
-import com.chaewookim.accountbookformoms.domain.user.dto.request.WithdrawRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.SignupRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.UpdatePasswordRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.UpdateProfileRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.response.SignupResponse;
+import com.chaewookim.accountbookformoms.domain.user.dto.response.UserProfileResponse;
+import com.chaewookim.accountbookformoms.domain.user.enums.UserRole;
+import com.chaewookim.accountbookformoms.domain.user.entity.User;
+import com.chaewookim.accountbookformoms.domain.user.entity.UserNotificationSetting;
+import com.chaewookim.accountbookformoms.domain.user.entity.UserSetting;
+import com.chaewookim.accountbookformoms.domain.user.enums.SocialProvider;
+import com.chaewookim.accountbookformoms.domain.user.enums.VerificationType;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
-import com.chaewookim.accountbookformoms.global.error.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.core.userdetails.UserDetails;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDate;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class UserServiceTest {
 
-    // 이게 사용할 것. 사용할 것에 가짜 객체들 주입
-    @InjectMocks
-    private UserService userService;
+    @Mock
+    private UserCommonService userCommonService;
 
-    // 가짜 레포지토리
+    @Mock
+    private InterestCategoryService interestCategoryService;
+
+    @Mock
+    private EmailVerificationService emailVerificationService;
+
     @Mock
     private UserRepository userRepository;
 
@@ -41,130 +55,183 @@ class UserServiceTest {
     private PasswordEncoder passwordEncoder;
 
     @Mock
-    private RefreshTokenRepository refreshTokenRepository;
+    private NotificationService notificationService;
+
+    @Mock
+    private UserDeviceService userDeviceService;
+
+    @Mock
+    private KakaoGeocodingClient kakaoGeocodingClient;
+
+    @InjectMocks
+    private UserService userService;
 
     @Test
-    @DisplayName("회원 정보 수정(username, email, address) 성공 테스트")
-    void updateUser_Success() {
-
-        // given: 준비
-        // 가짜 객체에 넣을 값들을 준비
-        String email = "updateEmail@gmail.com";
-        String username = "updateUsername";
-        String address = "updateAddress";
-        Long userId = 1L;
-
-        // 수정할 데이터 요청 객체 생성
-        UpdateRequest updateRequest = new UpdateRequest(username, email, address);
-
-        // 기존 유저 객체 생성
-        String originEmail = "originEmail";
-        User existingUser = User.forTestBuilder()
-                .id(userId)
-                .username("username")
-                .email(originEmail)
-                .password("password")
-                .address("address")
-                .build();
-
-        // 테스트 환경에서 id에 값을 넣어주지 못할 경우가 존재할 수 있기 때문에 강제 주입
-        ReflectionTestUtils.setField(existingUser, "id", userId);
-
-        // userRepository.findByEmail() 호출 시 existingUser를 리턴하라고 조작
-        given(userRepository.findByEmail(originEmail)).willReturn(Optional.of(existingUser));
-
-        // when: 실행
-        Long updateUserId = userService.updateUser(originEmail, updateRequest);
-
-        // then: 검증
-        // 리턴된 ID가 올바른지 확인
-        assertEquals(userId, updateUserId);
-
-        // 실제 객체 내용이 바뀌었는지 확인
-        assertEquals(email, existingUser.getEmail());
-        assertEquals(address, existingUser.getAddress());
-        assertEquals(username, existingUser.getUsername());
-    }
-
-
-    @Test
-    @DisplayName("회원 탈퇴 성공 테스트")
-    void withdrawUser_Success() {
+    @DisplayName("회원가입 - 성공")
+    void signUp_success_new_user() {
 
         // given
-        // 요청 객체
-        String email = "originEmail";
-        WithdrawRequest withdrawRequest = new WithdrawRequest("password", "reason");
+        SignupRequest request = new SignupRequest("test@email.com", "pw", "user", LocalDate.now(), "address");
+        User savedUser = User.builder().email("test@email.com").username("user").build();
 
-        // UserDetails
-        UserDetails userDetails = org.springframework.security.core.userdetails.User.builder()
-                .username(email)
-                .password("password")
-                .roles("USER")
-                .build();
+        given(emailVerificationService.isVerified(request.email(), VerificationType.SIGNUP)).willReturn(true);
+        given(userRepository.findByEmailIncludingDeleted(request.email())).willReturn(Optional.empty());
+        given(passwordEncoder.encode(request.password())).willReturn("encoded");
+        given(userCommonService.saveLocalUser(any(), any(), any(), any(), any(), any())).willReturn(savedUser);
 
-        // 사용자 객체
-        Long userId = 1L;
-        User user = User.forTestBuilder()
-                .id(userId)
-                .username("username")
-                .email(email)
-                .password("password")
-                .isAdmin(false)
-                .address("address")
-                .build();
-        ReflectionTestUtils.setField(user, "id", userId);
+        // when
+        SignupResponse response = userService.signUp(request);
 
-        // 비밀번호 검증 true
-        given(passwordEncoder.matches(withdrawRequest.password(), user.getPassword())).willReturn(true);
-
-        // user 조회
-        given(userRepository.findByEmail(email)).willReturn(Optional.of(user));
-
-        // when & then
-        userService.withdrawUser(userDetails, withdrawRequest);
-
-        verify(refreshTokenRepository, times(1)).deleteByUserId(userId);
-        verify(userRepository, times(1)).delete(user);
+        // then
+        assertThat(response.email()).isEqualTo(request.email());
+        verify(userCommonService).saveLocalUser(any(), any(), any(), any(), any(), any());
     }
 
     @Test
-    @DisplayName("회원 탈퇴 실패 테스트 - 비밀번호 불일치")
-    void withdrawUser_Failure_passwordNotMatch() {
+    @DisplayName("삭제된 유저 복구 - 성공")
+    void signUp_success_restore_user() {
 
         // given
-        // request obj
-        String email = "originEmail";
-        String password = "password";
-        WithdrawRequest withdrawRequest = new WithdrawRequest(password, "reason");
+        SignupRequest request = new SignupRequest("test@email.com", "pw", "restoredUser", LocalDate.now(), "address");
+        User deletedUser = User.builder().email("test@email.com").build();
+        deletedUser.delete();
 
-        // UserDetails obj
-        UserDetails userDetails = org.springframework.security.core.userdetails.User.builder()
-                .username(email)
-                .password(password)
-                .roles("USER")
-                .build();
+        given(emailVerificationService.isVerified(any(), any())).willReturn(true);
+        given(userRepository.findByEmailIncludingDeleted(request.email())).willReturn(Optional.of(deletedUser));
+        given(userCommonService.restoreUser(any(), any(), any(), any(), any())).willReturn(deletedUser);
 
-        // User obj
-        Long userId = 1L;
-        User user = User.forTestBuilder()
-                .id(userId)
-                .username("username")
-                .email(email)
-                .password("password")
-                .isAdmin(false)
-                .address("address")
-                .build();
-        ReflectionTestUtils.setField(user, "id", userId);
+        // when
+        SignupResponse response = userService.signUp(request);
 
-        // return User obj
-        given(userRepository.findByEmail(email)).willReturn(Optional.of(user));
+        // then
+        assertThat(response.email()).isEqualTo(request.email());
+        verify(userCommonService).restoreUser(any(), any(), any(), any(), any());
+    }
 
-        // 비밀번호 검증 - 실패로 설정
-        given(passwordEncoder.matches(withdrawRequest.password(), user.getPassword())).willReturn(false);
+    @Test
+    @DisplayName("회원가입 - 이메일 중복 예외 발생")
+    void signUp_fail_duplicate_email() {
+
+        // given
+        SignupRequest request = new SignupRequest("test@email.com", "pw", "user", LocalDate.now(), "address");
+        User activeUser = User.builder().email("test@email.com").build();
+
+        given(userRepository.findByEmailIncludingDeleted(request.email())).willReturn(Optional.of(activeUser));
 
         // when & then
-        CustomException exception = assertThrows(CustomException.class, () -> userService.withdrawUser(userDetails, withdrawRequest));
-        assertEquals(ErrorCode.PASSWORD_NOT_MATCH, exception.getErrorCode());
+        assertThatThrownBy(() -> userService.signUp(request)).isInstanceOf(CustomException.class);
+    }
+
+    @Test
+    @DisplayName("프로필 조회 -  성공")
+    void getMyProfile_success() {
+
+        // given
+        User user = mock(User.class);
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        given(user.getUserSetting()).willReturn(mock(UserSetting.class));
+        given(user.getUserNotificationSetting()).willReturn(mock(UserNotificationSetting.class));
+        given(user.getPassword()).willReturn("encoded");
+        given(user.getRole()).willReturn(UserRole.ROLE_USER);
+
+        // when
+        UserProfileResponse response = userService.getMyProfile(1L);
+
+        // then
+        assertThat(response).isNotNull();
+        assertThat(response.hasPassword()).isTrue();
+        assertThat(response.role()).isEqualTo("ROLE_USER");
+    }
+
+    @Test
+    @DisplayName("프로필 수정 - 성공")
+    void updateMyProfile_success() {
+
+        // given
+        User user = mock(User.class);
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        given(user.getUserSetting()).willReturn(mock(UserSetting.class));
+        given(user.getUserNotificationSetting()).willReturn(mock(UserNotificationSetting.class));
+        UpdateProfileRequest request = new UpdateProfileRequest("new", LocalDate.now(), "newAddress", 50, true, true, true, true, true);
+
+        // when
+        userService.updateMyProfile(1L, request);
+
+        // then
+        verify(user).updateProfile(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("비밀번호 변경 - 성공")
+    void updatePassword_success() {
+
+        // given
+        User user = User.builder().password("encoded").build();
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        given(passwordEncoder.matches("old", "encoded")).willReturn(true);
+        given(passwordEncoder.encode("new")).willReturn("newEncoded");
+
+        // when
+        userService.updatePassword(1L, new UpdatePasswordRequest("old", "new"));
+
+        // then
+        assertThat(user.getPassword()).isEqualTo("newEncoded");
+    }
+
+    @Test
+    @DisplayName("비밀번호 설정 - 소셜 가입 사용자 성공")
+    void updatePassword_success_socialUserWithoutPassword() {
+
+        // given
+        User user = User.builder()
+                .password(null)
+                .provider(SocialProvider.KAKAO)
+                .build();
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        given(passwordEncoder.encode("new")).willReturn("newEncoded");
+
+        // when
+        userService.updatePassword(1L, new UpdatePasswordRequest(null, "new"));
+
+        // then
+        assertThat(user.getPassword()).isEqualTo("newEncoded");
+    }
+
+    @Test
+    @DisplayName("비밀번호 변경 - 현재 비밀번호 불일치")
+    void updatePassword_fail_passwordNotMatch() {
+
+        // given
+        User user = User.builder()
+                .password("encoded")
+                .provider(SocialProvider.KAKAO)
+                .build();
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        given(passwordEncoder.matches("wrong", "encoded")).willReturn(false);
+
+        // when & then
+        assertThatThrownBy(() -> userService.updatePassword(1L, new UpdatePasswordRequest("wrong", "new")))
+                .isInstanceOf(CustomException.class);
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 - 성공")
+    void withdraw_success() {
+
+        // given
+        User user = mock(User.class);
+        UserNotificationSetting notificationSetting = mock(UserNotificationSetting.class);
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        given(user.getUserNotificationSetting()).willReturn(notificationSetting);
+
+        // when
+        userService.withdraw(1L);
+
+        // then
+        verify(notificationService).deleteAllByUserId(1L);
+        verify(notificationSetting).resetToDefaults();
+        verify(userDeviceService).removeToken(user);
+        verify(userRepository).delete(user);
+        verify(interestCategoryService).deleteAllByUserId(1L);
     }
 }

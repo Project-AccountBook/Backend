@@ -6,10 +6,13 @@ import org.springframework.http.HttpStatus;
 
 @Getter
 @RequiredArgsConstructor
-public enum ErrorCode {
+public enum ErrorCode implements BaseErrorCode {
 
     // 400 Bad Request
     INVALID_PARAMETER(HttpStatus.BAD_REQUEST, "파라미터 값을 확인해주세요."),
+    FILE_EMPTY(HttpStatus.BAD_REQUEST, "파일이 비어있습니다."),
+    FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, "파일 크기는 5MB 이하여야 합니다."),
+    INVALID_FILE_TYPE(HttpStatus.BAD_REQUEST, "이미지 파일(jpeg, png, webp, gif)만 업로드할 수 있습니다."),
 
     // 401 Unauthorized
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "유효하지 않은 토큰입니다."),
@@ -17,23 +20,8 @@ public enum ErrorCode {
     // 404 Not Found
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 사용자입니다."),
 
-    // 409 Conflict
-    DUPLICATE_EMAIL(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다."),
-
     // 500 Internal Server Error
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 에러입니다."),
-
-    // 로그인 실패
-    LOGIN_FAILED(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호를 확인해주세요."),
-
-    // RefreshToken 불일치
-    INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "리프레시 토큰이 올바르지 않습니다."),
-
-    // RefreshToken 찾지 못 함
-    REFRESH_TOKEN_NOT_FOUND(HttpStatus.NOT_FOUND, "리프레시 토큰이 존재하지 않습니다."),
-
-    // 비밀번호 불일치
-    PASSWORD_NOT_MATCH(HttpStatus.UNAUTHORIZED, "비밀번호가 일치하지 않습니다."),
 
     // 계좌 존재하지 않음
     ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 계좌가 존재하지 않습니다."),
@@ -51,7 +39,38 @@ public enum ErrorCode {
     ASSET_NOT_FOUND(HttpStatus.NOT_FOUND, "계좌를 찾을 수 없거나 접근 권한이 없습니다."),
 
     // 금액은 NULL이 될 수 없음
-    AMOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "금액은 비어있을 수 없습니다.");
+    AMOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "금액은 비어있을 수 없습니다."),
+
+    // 공동구매 관련 에러
+    GROUP_PURCHASE_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 공동구매를 찾을 수 없습니다."),
+    UNAUTHORIZED_GROUP_PURCHASE(HttpStatus.FORBIDDEN, "해당 공동구매에 대한 권한이 없습니다."),
+
+    // 공동구매 신청 관련 에러
+    APPLICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 공동구매 신청을 찾을 수 없습니다."),
+    UNAUTHORIZED_APPLICATION(HttpStatus.FORBIDDEN, "해당 신청에 대한 권한이 없습니다."),
+
+    // 상품 관련 에러
+    PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 상품을 찾을 수 없습니다."),
+
+    // 카테고리 관련 에러
+    CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 카테고리를 찾을 수 없습니다."),
+
+    // 신고 관련 에러
+    REPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 신고 내역을 찾을 수 없습니다."),
+    REPORT_ALREADY_PROCESSED(HttpStatus.BAD_REQUEST, "이미 처리된 신고 내역입니다."),
+    INVALID_REPORT_TARGET(HttpStatus.BAD_REQUEST, "신고 대상이 올바르지 않거나 존재하지 않습니다."),
+
+    // 공동구매 참여 관련 에러
+    GROUP_PURCHASE_ALREADY_JOINED(HttpStatus.BAD_REQUEST, "이미 참여 중인 공동구매입니다."),
+    GROUP_PURCHASE_NOT_JOINED(HttpStatus.BAD_REQUEST, "참여하지 않은 공동구매입니다."),
+    GROUP_PURCHASE_FULL(HttpStatus.BAD_REQUEST, "모집 인원이 마감되었습니다."),
+    GROUP_PURCHASE_NOT_RECRUITING(HttpStatus.BAD_REQUEST, "현재 모집 중인 공동구매가 아닙니다."),
+    GROUP_PURCHASE_DEADLINE_PASSED(HttpStatus.BAD_REQUEST, "마감 기한이 지난 공동구매입니다."),
+    GROUP_PURCHASE_MIN_NOT_REACHED(HttpStatus.BAD_REQUEST, "최소 모집 인원에 도달하지 못했습니다."),
+
+    // 락 획득 실패
+    LOCK_ACQUISITION_FAILED(HttpStatus.TOO_MANY_REQUESTS, "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.");
+
 
     private final HttpStatus status;
     private final String message;

@@ -1,0 +1,48 @@
+# 로컬 개발용 — ES를 같은 docker compose 스택에서 기동
+# 사용: docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+
+services:
+  app:
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      ELASTICSEARCH_URIS: http://elasticsearch:9200
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/jointliving?useSSL=false&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true
+      SPRING_DATA_REDIS_HOST: redis
+      FIREBASE_CREDENTIALS_PATH: file:/app/does-not-exist.json
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_started
+
+  mysql:
+    ports:
+      - "3306:3306"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  elasticsearch:
+    build:
+      context: ./docker/elasticsearch
+    container_name: joint-living-es
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.ml.enabled=false
+      - ES_JAVA_OPTS=-Xms128m -Xmx256m
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsSL http://localhost:9200/_cluster/health | grep -vq '\"status\":\"red\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  es-data:

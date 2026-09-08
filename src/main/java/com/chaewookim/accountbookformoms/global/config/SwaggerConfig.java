@@ -8,8 +8,10 @@ import io.swagger.v3.oas.models.security.SecurityScheme;
 import org.springdoc.core.models.GroupedOpenApi;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 
 @Configuration
+@Profile("!prod")
 public class SwaggerConfig {
 
     @Bean
@@ -57,6 +59,72 @@ public class SwaggerConfig {
                 .group("Category API")
                 .pathsToMatch(
                         "/api/v1/categories/**"
+                )
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi boardGroup() {
+        return GroupedOpenApi.builder()
+                .group("Board API")
+                .pathsToMatch(
+                        "/api/v1/boards/**"
+                )
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi commentGroup() {
+        return GroupedOpenApi.builder()
+                .group("Comment API")
+                .pathsToMatch(
+                        "/api/v1/comments/**"
+                )
+                .build();
+    }
+          
+    @Bean
+    public GroupedOpenApi adminBoardGroup() {
+        return GroupedOpenApi.builder()
+                .group("Admin Board API")
+                .pathsToMatch(
+                        "/api/v1/admin/boards/**"
+                )
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi adminCommentGroup() {
+        return GroupedOpenApi.builder()
+                .group("Admin Comment API")
+                .pathsToMatch(
+                        "/api/v1/admin/comments/**"
+                )
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi notificationGroup() {
+        return GroupedOpenApi.builder()
+                .group("Notification API")
+                .pathsToMatch(
+                        "/api/v1/notifications/**"
+                )
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi groupPurchaseGroup() {
+        return GroupedOpenApi.builder()
+                .group("Group Purchase API")
+                .pathsToMatch(
+                        "/api/v1/group-purchases/**",
+                        "/api/v1/group-purchase-applications/**",
+                        "/api/v1/products/**",
+                        "/api/v1/group-purchase-categories/**",
+                        "/api/v1/reports/**",
+                        "/api/v1/admin/group-purchases/**",
+                        "/api/v1/admin/reports/**"
                 )
                 .build();
     }

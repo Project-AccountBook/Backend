@@ -2,135 +2,137 @@ package com.chaewookim.accountbookformoms.domain.user.application;
 
 import com.chaewookim.accountbookformoms.domain.user.dao.RefreshTokenRepository;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
-import com.chaewookim.accountbookformoms.domain.user.domain.CustomUserDetails;
-import com.chaewookim.accountbookformoms.domain.user.domain.RefreshToken;
-import com.chaewookim.accountbookformoms.domain.user.domain.User;
 import com.chaewookim.accountbookformoms.domain.user.dto.request.LoginRequest;
-import com.chaewookim.accountbookformoms.domain.user.dto.request.LogoutRequest;
-import com.chaewookim.accountbookformoms.domain.user.dto.request.TokenReissueRequest;
-import com.chaewookim.accountbookformoms.domain.user.dto.response.LoginResponse;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.ReissueRequest;
 import com.chaewookim.accountbookformoms.domain.user.dto.response.TokenResponse;
+import com.chaewookim.accountbookformoms.domain.user.entity.RefreshToken;
+import com.chaewookim.accountbookformoms.domain.user.entity.User;
+import com.chaewookim.accountbookformoms.domain.user.enums.VerificationType;
+import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
-import com.chaewookim.accountbookformoms.global.error.ErrorCode;
-import com.chaewookim.accountbookformoms.global.jwt.JwtTokenProvider;
+import com.chaewookim.accountbookformoms.global.security.jwt.JwtTokenProvider;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Collections;
-import java.util.Date;
-
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class AuthService {
 
+    private static final String OAUTH_CODE_KEY_PREFIX = "OAUTH2:CODE:";
+
+    private final EmailVerificationService emailVerificationService;
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder encoder;
     private final JwtTokenProvider jwtTokenProvider;
-
-    private static final long REFRESH_TOKEN_VALID_TIME = 14 * 24 * 60 * 60 * 1000L;
+    private final RedisTemplate<String, String> redisTemplate;
 
     @Transactional
-    public LoginResponse login(LoginRequest request) {
+    public TokenResponse login(LoginRequest request) {
 
-        User user = userRepository.findByUsername(request.username())
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        User user = userRepository.findByEmail(request.email())
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
         if (!encoder.matches(request.password(), user.getPassword())) {
-            throw new CustomException(ErrorCode.USER_NOT_FOUND);
+            throw new CustomException(UserErrorCode.USER_NOT_FOUND);
         }
 
-        CustomUserDetails customUserDetails = new CustomUserDetails(
-                user.getId(),
-                user.getUsername(),
-                user.getPassword(),
-                user.getEmail(),
-                user.getRole()
-        );
+        String accessToken = jwtTokenProvider.createAccessToken(user.getEmail(), user.getRole().name());
+        String refreshTokenValue = jwtTokenProvider.createRefreshToken(user.getEmail());
 
-        Authentication authentication = new UsernamePasswordAuthenticationToken(
-                customUserDetails,
-                user.getPassword(),
-                Collections.singleton(new SimpleGrantedAuthority(user.getRole().getKey()))
-        );
+        RefreshToken refreshToken = new RefreshToken(user.getEmail(), refreshTokenValue);
+        refreshTokenRepository.save(refreshToken);
 
-        String accessToken = jwtTokenProvider.createAccessToken(authentication);
-        String refreshToken = jwtTokenProvider.createRefreshToken(authentication);
-
-        refreshTokenRepository.deleteByUserId(user.getId());
-
-        refreshTokenRepository.flush();
-
-        RefreshToken tokenEntity = new RefreshToken(refreshToken, user.getId(), new Date(new Date().getTime() + REFRESH_TOKEN_VALID_TIME));
-        refreshTokenRepository.save(tokenEntity);
-        log.info("tokenEntity = {}", tokenEntity.getToken());
-
-        return new LoginResponse(accessToken, refreshToken, user.getUsername());
+        log.info("Redis에 리프레시 토큰 저장 성공 - 유저: {}", user.getEmail());
+        return new TokenResponse(accessToken, refreshTokenValue);
     }
 
     @Transactional
-    public TokenResponse reissue(@Valid TokenReissueRequest request) {
-
-        // refresh token 자체를 검증
-        if (!jwtTokenProvider.validateToken(request.refreshToken())) {
-            throw new CustomException(ErrorCode.INVALID_REFRESH_TOKEN);
+    public TokenResponse exchangeOAuthCode(String code) {
+        if (code == null || code.isBlank()) {
+            throw new CustomException(UserErrorCode.INVALID_OAUTH_CODE);
         }
 
-        // 이메일 추출
-        String email = jwtTokenProvider.getSubject(request.refreshToken());
-
-        // DB에 저장된 refresh token 가져오기
-        RefreshToken savedToken = refreshTokenRepository.findByUserId(getUserIdByEmail(email))
-                .orElseThrow(() -> new CustomException(ErrorCode.REFRESH_TOKEN_NOT_FOUND));
-
-        // 요청 토큰과 db 토큰이 같은지 확인
-        if (!savedToken.getToken().equals(request.refreshToken())) {
-            throw new CustomException(ErrorCode.INVALID_REFRESH_TOKEN);
+        String value = redisTemplate.opsForValue().getAndDelete(OAUTH_CODE_KEY_PREFIX + code);
+        if (value == null || value.isBlank()) {
+            throw new CustomException(UserErrorCode.INVALID_OAUTH_CODE);
         }
 
-        // 추출한 이메일로 User 객체 생성
-        User user = userRepository.findByEmail(email).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        String[] parts = value.split("\n", 3);
+        if (parts.length != 3) {
+            throw new CustomException(UserErrorCode.INVALID_OAUTH_CODE);
+        }
 
-        // authentication 생성
-        Authentication authentication = new UsernamePasswordAuthenticationToken(user
-                .getEmail(),
-                null,
-                Collections.singleton(new SimpleGrantedAuthority(user.getRole().getKey()))
-        );
-
-        // 보안을 위해 토큰 둘 다 새로 발급
-        String newAccessToken = jwtTokenProvider.createAccessToken(authentication);
-        String newRefreshToken = jwtTokenProvider.createRefreshToken(authentication);
-
-        // 기존 것 지우고 저장
-        savedToken.updateToken(newRefreshToken);
-
-        return new TokenResponse(newAccessToken, newRefreshToken);
-    }
-
-    private Long getUserIdByEmail(String email) {
-
-        return userRepository.findByEmail(email).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND))
-                .getId();
+        return new TokenResponse(parts[0], parts[1], Boolean.parseBoolean(parts[2]));
     }
 
     @Transactional
-    public Void logout(LogoutRequest request) {
+    public TokenResponse reissue(@Valid ReissueRequest request) {
+
+        String refreshTokenValue = request.refreshToken();
 
         if (!jwtTokenProvider.validateToken(request.refreshToken())) {
-            throw new CustomException(ErrorCode.INVALID_REFRESH_TOKEN);
+            throw new CustomException(UserErrorCode.INVALID_REFRESH_TOKEN);
         }
 
-        refreshTokenRepository.deleteByToken(request.refreshToken());
+        RefreshToken savedToken = refreshTokenRepository.findByToken(refreshTokenValue)
+                .orElseThrow(() -> new CustomException(UserErrorCode.INVALID_REFRESH_TOKEN));
 
-        return null;
+        User user = userRepository.findByEmail(savedToken.getEmail())
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+
+        String newAccessToken = jwtTokenProvider.createAccessToken(user.getEmail(), user.getRole().name());
+        String newRefreshTokenValue = jwtTokenProvider.createRefreshToken(user.getEmail());
+
+        refreshTokenRepository.delete(savedToken);
+        RefreshToken newRefreshToken = new RefreshToken(user.getEmail(), newRefreshTokenValue);
+        refreshTokenRepository.save(newRefreshToken);
+
+        return new TokenResponse(newAccessToken, newRefreshTokenValue);
+    }
+
+    @Transactional
+    public void sendSignupVerificationCode(String email, String clientIp) {
+
+        if (userRepository.findByEmail(email).isPresent()) {
+            throw new CustomException(UserErrorCode.DUPLICATE_EMAIL);
+        }
+
+        emailVerificationService.sendVerificationCode(email, VerificationType.SIGNUP, clientIp);
+    }
+
+    @Transactional
+    public void requestPasswordReset(String email, String clientIp) {
+        userRepository.findByEmail(email).orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+        emailVerificationService.sendVerificationCode(email, VerificationType.RESET, clientIp);
+    }
+
+    @Transactional
+    public void resetPassword(String email, String code, String newPassword) {
+
+        boolean verified = emailVerificationService.isVerified(email, VerificationType.RESET)
+                || emailVerificationService.verifyCode(email, code, VerificationType.RESET);
+
+        if (!verified) {
+            throw new CustomException(UserErrorCode.INVALID_VERIFICATION_CODE);
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+        user.updatePassword(encoder.encode(newPassword));
+
+        emailVerificationService.deleteVerification(email, VerificationType.RESET);
+    }
+
+    @Transactional
+    public void logout(String email) {
+        refreshTokenRepository.deleteById(email);
     }
 }

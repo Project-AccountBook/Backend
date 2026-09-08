@@ -1,12 +1,13 @@
 package com.chaewookim.accountbookformoms.domain.user.api;
 
 import com.chaewookim.accountbookformoms.domain.user.application.UserService;
-import com.chaewookim.accountbookformoms.domain.user.domain.CustomUserDetails;
-import com.chaewookim.accountbookformoms.domain.user.dto.request.SignUpRequest;
-import com.chaewookim.accountbookformoms.domain.user.dto.request.UpdateRequest;
-import com.chaewookim.accountbookformoms.domain.user.dto.request.WithdrawRequest;
-import com.chaewookim.accountbookformoms.domain.user.dto.response.UserResponse;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.SignupRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.UpdatePasswordRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.UpdateProfileRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.response.SignupResponse;
+import com.chaewookim.accountbookformoms.domain.user.dto.response.UserProfileResponse;
 import com.chaewookim.accountbookformoms.global.common.ApiResponse;
+import com.chaewookim.accountbookformoms.global.security.principal.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -31,41 +32,46 @@ public class UserController {
 
     @Operation(summary = "회원가입", description = "새로운 회원 등록")
     @PostMapping("/signup")
-    public ResponseEntity<ApiResponse<Long>> signup(@RequestBody @Valid SignUpRequest request) {
-
+    public ResponseEntity<ApiResponse<SignupResponse>> signup(
+            @RequestBody @Valid SignupRequest request
+    ) {
         return ResponseEntity.ok(ApiResponse.success(userService.signUp(request)));
     }
 
-    @Operation(summary = "내 정보 조회", description = "로그인한 사용자의 정보 조회")
+    @Operation(summary = "내 프로필 조회", description = "로그인한 사용자의 프로필 및 설정 조회")
     @GetMapping("/me")
-    public ResponseEntity<ApiResponse<UserResponse>> getMyInfo(
-            @AuthenticationPrincipal CustomUserDetails userDetails
+    public ResponseEntity<ApiResponse<UserProfileResponse>> getMyProfile(
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
-
-        return ResponseEntity.ok(ApiResponse.success(UserResponse
-                .from(userService.getUserByUsername(userDetails.getUsername()))));
+        return ResponseEntity.ok(ApiResponse.success(userService.getMyProfile(principal.getUserId())));
     }
 
-
-    @Operation(summary = "정보 수정", description = "회원의 정보 수정")
-    @PatchMapping("/update")
-    public ResponseEntity<ApiResponse<Long>> update(
-            @RequestBody @Valid UpdateRequest request,
-            @AuthenticationPrincipal CustomUserDetails userDetails
+    @Operation(summary = "프로필 및 설정 수정", description = "사용자의 정보와 알림/포트폴리오 설정 수정")
+    @PatchMapping("/me")
+    public ResponseEntity<ApiResponse<Void>> updateMyProfile(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestBody @Valid UpdateProfileRequest request
     ) {
-
-        return ResponseEntity.ok(ApiResponse.success(userService.updateUser(userDetails.getUsername(), request)));
+        userService.updateMyProfile(principal.getUserId(), request);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
-    @Operation(summary = "회원 탈퇴", description = "비밀번호 확인 후 회원 탈퇴(Soft Delete) 처리")
+    @Operation(summary = "비밀번호 설정/변경", description = "비밀번호가 없으면 새로 설정하고, 있으면 기존 비밀번호 확인 후 변경")
+    @PatchMapping("/password")
+    public ResponseEntity<ApiResponse<Void>> updatePassword(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestBody @Valid UpdatePasswordRequest request
+    ) {
+        userService.updatePassword(principal.getUserId(), request);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @Operation(summary = "회원 탈퇴", description = "사용자 계정 삭제")
     @DeleteMapping("/withdraw")
-    public ResponseEntity<ApiResponse<String>> withdraw(
-            @RequestBody @Valid WithdrawRequest request,
-            @AuthenticationPrincipal CustomUserDetails userDetails
+    public ResponseEntity<ApiResponse<Void>> withdraw(
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
-
-        userService.withdrawUser(userDetails, request);
-
-        return ResponseEntity.ok(ApiResponse.success("회원 탈퇴가 완료되었습니다."));
+        userService.withdraw(principal.getUserId());
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

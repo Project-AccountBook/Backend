@@ -1,8 +1,9 @@
 package com.chaewookim.accountbookformoms.domain.user.dao;
 
-import com.chaewookim.accountbookformoms.domain.user.domain.User;
-import jakarta.validation.constraints.NotBlank;
+import com.chaewookim.accountbookformoms.domain.user.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -10,8 +11,16 @@ import java.util.Optional;
 @Repository
 public interface UserRepository extends JpaRepository<User,Long> {
 
-    boolean existsByEmail(String email);
     Optional<User> findByEmail(String email);
 
-    Optional<User> findByUsername(@NotBlank String username);
+    @Query(value = "SELECT * FROM user WHERE email = :email", nativeQuery = true)
+    Optional<User> findByEmailIncludingDeleted(@Param("email") String email);
+
+    @Query("""
+            SELECT u FROM User u
+            LEFT JOIN FETCH u.userNotificationSetting
+            LEFT JOIN FETCH u.userSetting
+            WHERE u.id = :id
+            """)
+    Optional<User> findByIdWithNotificationAndSettings(@Param("id") Long id);
 }

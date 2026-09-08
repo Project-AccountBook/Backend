@@ -1,0 +1,620 @@
+package com.chaewookim.accountbookformoms.domain.grouppruchase.application;
+
+import com.chaewookim.accountbookformoms.domain.budget.dao.BudgetRepository;
+import com.chaewookim.accountbookformoms.domain.asset.application.TransactionService;
+import com.chaewookim.accountbookformoms.domain.asset.dao.AccountRepository;
+import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionCategoryRepository;
+import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionRepository;
+import com.chaewookim.accountbookformoms.domain.asset.entity.Transaction;
+import com.chaewookim.accountbookformoms.domain.asset.dto.request.TransactionRequest;
+import com.chaewookim.accountbookformoms.domain.asset.entity.Account;
+import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory;
+import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseRepository;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseCategoryRepository;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseParticipantRepository;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.ReportRepository;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.WishlistRepository;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.GroupPurchase;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.GroupPurchaseParticipant;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.Category;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.Wishlist;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.PurchaseStatus;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.ReportTargetType;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseCreateRequest;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseUpdateRequest;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseResponse;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseJoinResponse;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseDashboardResponse;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseAdminResponse;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.event.GroupPurchaseCreatedEvent;
+import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
+import com.chaewookim.accountbookformoms.domain.user.entity.User;
+import com.chaewookim.accountbookformoms.global.error.CustomException;
+import com.chaewookim.accountbookformoms.global.error.ErrorCode;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.YearMonth;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class GroupPurchaseService {
+
+    private final GroupPurchaseRepository groupPurchaseRepository;
+    private final UserRepository userRepository;
+    private final GroupPurchaseCategoryRepository groupPurchaseCategoryRepository;
+    private final ReportRepository reportRepository;
+    private final WishlistRepository wishlistRepository;
+    private final GroupPurchaseParticipantRepository groupPurchaseParticipantRepository;
+    private final BudgetRepository budgetRepository;
+    private final TransactionRepository transactionRepository;
+    private final ApplicationEventPublisher eventPublisher;
+    private final TransactionService transactionService;
+    private final AccountRepository accountRepository;
+    private final TransactionCategoryRepository transactionCategoryRepository;
+
+    @Transactional
+    public GroupPurchaseResponse createGroupPurchase(Long creatorId, GroupPurchaseCreateRequest request) {
+        User creator = userRepository.findById(creatorId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        GroupPurchase groupPurchase = GroupPurchase.builder()
+                .creatorId(creatorId)
+                .categoryId(request.categoryId())
+                .title(request.title())
+                .content(request.content())
+                .price(request.price())
+                .minParticipants(request.minParticipants())
+                .maxParticipants(request.maxParticipants())
+                .deadline(request.deadline())
+                .pickupLocation(request.pickupLocation())
+                .imageUrl(request.imageUrl())
+                .latitude(creator.getLatitude())
+                .longitude(creator.getLongitude())
+                .creatorAccountId(request.accountId())
+                .build();
+
+        GroupPurchase saved = groupPurchaseRepository.save(groupPurchase);
+        
+        // 예약 결제로 변경됨에 따라 개설 시 즉시 결제하지 않음
+        // deductBudgetForUser(creatorId, request.accountId(), saved);
+
+        String categoryName = groupPurchaseCategoryRepository.findById(request.categoryId())
+                .map(Category::getName)
+                .orElse("기타");
+
+        eventPublisher.publishEvent(new GroupPurchaseCreatedEvent(
+                request.categoryId(),
+                categoryName,
+                "[" + categoryName + "] 새로운 공동구매가 시작되었습니다!",
+                saved.getId()
+        ));
+
+        String creatorNickname = userRepository.findById(creatorId)
+                .map(User::getUsername)
+                .orElse("탈퇴한 사용자");
+
+        return GroupPurchaseResponse.of(saved, creatorNickname);
+    }
+
+    @Transactional
+    public GroupPurchaseResponse getGroupPurchase(Long id) {
+        GroupPurchase groupPurchase = groupPurchaseRepository.findById(id)
+                .orElseThrow(() -> new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND));
+        groupPurchase.increaseViewCount();
+
+        String creatorNickname = userRepository.findById(groupPurchase.getCreatorId())
+                .map(User::getUsername)
+                .orElse("탈퇴한 사용자");
+
+        return GroupPurchaseResponse.of(groupPurchase, creatorNickname);
+    }
+
+    public List<GroupPurchaseResponse> getAllGroupPurchases(String region, Long categoryId, Boolean nearMe, Long currentUserId, String sortBy) {
+        String filterRegion = (region != null && !region.trim().isEmpty()) ? region.trim() : null;
+
+        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
+        if ("deadline".equalsIgnoreCase(sortBy)) {
+            sort = Sort.by(Sort.Direction.ASC, "deadline");
+        }
+
+        List<PurchaseStatus> statuses = List.of(PurchaseStatus.RECRUITING, PurchaseStatus.SUCCESS, PurchaseStatus.CLOSED);
+        List<GroupPurchase> list = groupPurchaseRepository.findActiveGroupPurchases(statuses, filterRegion, categoryId, sort);
+
+        if (Boolean.TRUE.equals(nearMe) && currentUserId != null) {
+            User user = userRepository.findById(currentUserId).orElse(null);
+            if (user != null) {
+                if (user.getLatitude() != null && user.getLongitude() != null) {
+                    list = list.stream()
+                            .filter(gp -> gp.getLatitude() != null && gp.getLongitude() != null)
+                            .filter(gp -> calculateDistance(user.getLatitude(), user.getLongitude(), gp.getLatitude(), gp.getLongitude()) <= 3.0)
+                            .collect(Collectors.toList());
+                } else if (user.getAddress() != null) {
+                    String neighborhood = extractNeighborhood(user.getAddress());
+                    if (neighborhood != null) {
+                        list = list.stream()
+                                .filter(gp -> gp.getPickupLocation() != null && gp.getPickupLocation().contains(neighborhood))
+                                .collect(Collectors.toList());
+                    }
+                }
+            }
+        }
+
+        List<Long> creatorIds = list.stream().map(GroupPurchase::getCreatorId).distinct().toList();
+        Map<Long, String> nicknameMap = userRepository.findAllById(creatorIds).stream()
+                .collect(Collectors.toMap(User::getId, User::getUsername));
+
+        return list.stream()
+                .map(gp -> {
+                    String nickname = nicknameMap.getOrDefault(gp.getCreatorId(), "탈퇴한 사용자");
+                    return GroupPurchaseResponse.of(gp, nickname);
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public GroupPurchaseResponse updateGroupPurchase(Long id, Long currentUserId, GroupPurchaseUpdateRequest request) {
+        GroupPurchase groupPurchase = groupPurchaseRepository.findById(id)
+                .orElseThrow(() -> new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND));
+
+        if (!groupPurchase.getCreatorId().equals(currentUserId)) {
+            throw new CustomException(ErrorCode.UNAUTHORIZED_GROUP_PURCHASE);
+        }
+
+        groupPurchase.update(
+                request.categoryId(),
+                request.title(),
+                request.content(),
+                request.price(),
+                request.minParticipants(),
+                request.maxParticipants(),
+                request.deadline(),
+                request.pickupLocation(),
+                request.imageUrl()
+        );
+
+        String creatorNickname = userRepository.findById(groupPurchase.getCreatorId())
+                .map(User::getUsername)
+                .orElse("탈퇴한 사용자");
+
+        return GroupPurchaseResponse.of(groupPurchase, creatorNickname);
+    }
+
+    @Transactional
+    public void deleteGroupPurchase(Long id, Long currentUserId) {
+        GroupPurchase groupPurchase = groupPurchaseRepository.findById(id)
+                .orElseThrow(() -> new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND));
+
+        if (!groupPurchase.getCreatorId().equals(currentUserId)) {
+            throw new CustomException(ErrorCode.UNAUTHORIZED_GROUP_PURCHASE);
+        }
+
+        groupPurchaseRepository.delete(groupPurchase);
+    }
+
+    @Transactional
+    public GroupPurchaseResponse earlyCloseGroupPurchase(Long id, Long currentUserId) {
+        GroupPurchase groupPurchase = groupPurchaseRepository.findById(id)
+                .orElseThrow(() -> new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND));
+
+        if (!groupPurchase.getCreatorId().equals(currentUserId)) {
+            throw new CustomException(ErrorCode.UNAUTHORIZED_GROUP_PURCHASE);
+        }
+
+        if (groupPurchase.getStatus() != PurchaseStatus.RECRUITING) {
+            throw new CustomException(ErrorCode.GROUP_PURCHASE_NOT_RECRUITING);
+        }
+
+        if (groupPurchase.getCurrentParticipants() < groupPurchase.getMinParticipants()) {
+            throw new CustomException(ErrorCode.GROUP_PURCHASE_MIN_NOT_REACHED);
+        }
+
+        groupPurchase.updateStatusByAdmin(PurchaseStatus.SUCCESS);
+
+        // 예약 결제로 변경됨에 따라 성공 시 일괄 결제 진행
+        deductBudgetForUser(groupPurchase.getCreatorId(), groupPurchase.getCreatorAccountId(), groupPurchase);
+        List<GroupPurchaseParticipant> participants = groupPurchaseParticipantRepository.findByGroupPurchaseId(id);
+        for (GroupPurchaseParticipant p : participants) {
+            deductBudgetForUser(p.getUserId(), p.getAccountId(), groupPurchase);
+        }
+
+        String creatorNickname = userRepository.findById(groupPurchase.getCreatorId())
+                .map(User::getUsername)
+                .orElse("탈퇴한 사용자");
+
+        return GroupPurchaseResponse.of(groupPurchase, creatorNickname);
+    }
+
+    private static final double EARTH_RADIUS_KM = 6371.0;
+
+    private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+        double latDistance = Math.toRadians(lat2 - lat1);
+        double lonDistance = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
+                 + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                 * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return EARTH_RADIUS_KM * c;
+    }
+
+    private String extractNeighborhood(String address) {
+        if (address == null || address.trim().isEmpty()) {
+            return null;
+        }
+        String[] parts = address.split("\\s+");
+        for (String part : parts) {
+            if (part.endsWith("동") || part.endsWith("읍") || part.endsWith("면")) {
+                return part;
+            }
+        }
+        for (String part : parts) {
+            if (part.endsWith("구")) {
+                return part;
+            }
+        }
+        return null;
+    }
+
+    public GroupPurchaseDashboardResponse getDashboardSummary() {
+        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+        LocalDateTime endOfDay = LocalDate.now().atTime(LocalTime.MAX);
+
+        long todayCreatedCount = groupPurchaseRepository.countByCreatedAtBetween(startOfDay, endOfDay);
+        long activeParticipantsCount = groupPurchaseRepository.sumCurrentParticipantsByStatus(PurchaseStatus.RECRUITING);
+
+        long recruitingCount = groupPurchaseRepository.countByStatus(PurchaseStatus.RECRUITING);
+        long successCount = groupPurchaseRepository.countByStatus(PurchaseStatus.SUCCESS)
+                + groupPurchaseRepository.countByStatus(PurchaseStatus.CLOSED);
+        long failedCount = groupPurchaseRepository.countByStatus(PurchaseStatus.FAILED);
+
+        long total = recruitingCount + successCount + failedCount;
+        double recruitingRatio = total == 0 ? 0.0 : Math.round(((double) recruitingCount / total * 100) * 100) / 100.0;
+        double successRatio = total == 0 ? 0.0 : Math.round(((double) successCount / total * 100) * 100) / 100.0;
+        double failedRatio = total == 0 ? 0.0 : Math.round(((double) failedCount / total * 100) * 100) / 100.0;
+
+        return new GroupPurchaseDashboardResponse(
+                todayCreatedCount,
+                activeParticipantsCount,
+                recruitingCount,
+                successCount,
+                failedCount,
+                recruitingRatio,
+                successRatio,
+                failedRatio
+        );
+    }
+
+    public Page<GroupPurchaseAdminResponse> getGroupPurchasesForAdmin(String status, Pageable pageable) {
+        return groupPurchaseRepository.findAllForAdmin(status, pageable)
+                .map(gp -> {
+                    String creatorUsername = userRepository.findById(gp.getCreatorId())
+                            .map(User::getUsername)
+                            .orElse("탈퇴한 사용자");
+                    String categoryName = groupPurchaseCategoryRepository.findById(gp.getCategoryId())
+                            .map(Category::getName)
+                            .orElse("미지정");
+                    long reportCount = reportRepository.countByTargetTypeAndTargetId(
+                            ReportTargetType.GROUP_PURCHASE,
+                            gp.getId()
+                        );
+                    return GroupPurchaseAdminResponse.of(gp, creatorUsername, categoryName, reportCount);
+                });
+    }
+
+    @Transactional
+    public void updateGroupPurchaseStatusByAdmin(Long id, PurchaseStatus status) {
+        GroupPurchase gp = groupPurchaseRepository.findById(id)
+                .orElseThrow(() -> new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND));
+        PurchaseStatus previousStatus = gp.getStatus();
+        gp.updateStatusByAdmin(status);
+        
+        // 예약 결제로 변경됨에 따라, 이미 결제된 SUCCESS 상태에서 FAILED 등으로 바뀔 때만 환불 처리
+        if (status == PurchaseStatus.FAILED && previousStatus == PurchaseStatus.SUCCESS) {
+            refundAllParticipants(gp);
+        }
+    }
+
+    @Transactional
+    public void deleteGroupPurchaseByAdmin(Long id) {
+        GroupPurchase gp = groupPurchaseRepository.findById(id)
+                .orElseThrow(() -> new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND));
+        groupPurchaseRepository.delete(gp);
+    }
+
+    @Transactional
+    public void deleteGroupPurchasesByAdmin(List<Long> ids) {
+        List<GroupPurchase> groupPurchases = groupPurchaseRepository.findAllById(ids);
+        groupPurchaseRepository.deleteAllInBatch(groupPurchases);
+    }
+
+    @Transactional
+    public boolean toggleWish(Long userId, Long groupPurchaseId) {
+        if (!groupPurchaseRepository.existsById(groupPurchaseId)) {
+            throw new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND);
+        }
+
+        return wishlistRepository.findByUserIdAndGroupPurchaseId(userId, groupPurchaseId)
+                .map(wish -> {
+                    wishlistRepository.delete(wish);
+                    return false;
+                })
+                .orElseGet(() -> {
+                    Wishlist wish = Wishlist.builder()
+                            .userId(userId)
+                            .groupPurchaseId(groupPurchaseId)
+                            .build();
+                    wishlistRepository.save(wish);
+                    return true;
+                });
+    }
+
+    public Page<GroupPurchaseResponse> getWishedGroupPurchases(Long userId, Pageable pageable) {
+        Page<GroupPurchase> page = groupPurchaseRepository.findWishedGroupPurchases(userId, pageable);
+
+        List<Long> creatorIds = page.getContent().stream().map(GroupPurchase::getCreatorId).distinct().toList();
+        Map<Long, String> nicknameMap = userRepository.findAllById(creatorIds).stream()
+                .collect(Collectors.toMap(User::getId, User::getUsername));
+
+        return page.map(gp -> {
+            String nickname = nicknameMap.getOrDefault(gp.getCreatorId(), "탈퇴한 사용자");
+            return GroupPurchaseResponse.of(gp, nickname);
+        });
+    }
+
+    @Transactional
+    public GroupPurchaseJoinResponse joinGroupPurchase(Long userId, Long groupPurchaseId, com.chaewookim.accountbookformoms.domain.grouppruchase.dto.request.GroupPurchaseJoinRequest request) {
+        GroupPurchase groupPurchase = groupPurchaseRepository.findById(groupPurchaseId)
+                .orElseThrow(() -> new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND));
+
+        if (groupPurchase.getStatus() != PurchaseStatus.RECRUITING) {
+            throw new CustomException(ErrorCode.GROUP_PURCHASE_NOT_RECRUITING);
+        }
+
+        if (groupPurchase.getDeadline().isBefore(LocalDateTime.now())) {
+            throw new CustomException(ErrorCode.GROUP_PURCHASE_DEADLINE_PASSED);
+        }
+
+        if (groupPurchaseParticipantRepository.existsByGroupPurchaseIdAndUserId(groupPurchaseId, userId)) {
+            throw new CustomException(ErrorCode.GROUP_PURCHASE_ALREADY_JOINED);
+        }
+
+        if (groupPurchase.getCurrentParticipants() >= groupPurchase.getMaxParticipants()) {
+            throw new CustomException(ErrorCode.GROUP_PURCHASE_FULL);
+        }
+
+        GroupPurchaseParticipant participant = GroupPurchaseParticipant.builder()
+                .groupPurchaseId(groupPurchaseId)
+                .userId(userId)
+                .accountId(request.accountId())
+                .build();
+        groupPurchaseParticipantRepository.save(participant);
+        
+        groupPurchase.join();
+
+        if (groupPurchase.getStatus() == PurchaseStatus.SUCCESS) {
+            // 인원 달성 성공 시, 예약되었던 모든 인원(개설자 포함) 일괄 결제 진행
+            deductBudgetForUser(groupPurchase.getCreatorId(), groupPurchase.getCreatorAccountId(), groupPurchase);
+            
+            List<GroupPurchaseParticipant> participants = groupPurchaseParticipantRepository.findByGroupPurchaseId(groupPurchaseId);
+            for (GroupPurchaseParticipant p : participants) {
+                deductBudgetForUser(p.getUserId(), p.getAccountId(), groupPurchase);
+            }
+        }
+
+        String creatorNickname = userRepository.findById(groupPurchase.getCreatorId())
+                .map(User::getUsername)
+                .orElse("탈퇴한 사용자");
+
+        GroupPurchaseResponse groupPurchaseResponse = GroupPurchaseResponse.of(groupPurchase, creatorNickname);
+
+        boolean budgetWarning = false;
+        BigDecimal remainingBudget = BigDecimal.ZERO;
+
+        String currentYearMonth = YearMonth.now().toString();
+        List<com.chaewookim.accountbookformoms.domain.budget.entity.Budget> budgets =
+                budgetRepository.findByUserIdAndYearMonth(userId, currentYearMonth);
+
+        if (!budgets.isEmpty()) {
+            BigDecimal totalPlannedBudgetSum = budgets.stream()
+                    .map(budget -> budget.getTotalBudget().add(budget.getExpectedExpense()))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            LocalDate startDate = LocalDate.parse(currentYearMonth + "-01");
+            LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
+            BigDecimal totalActualExpenseSum = transactionRepository.sumByUserAndType(userId, TransactionType.EXPENSE, startDate, endDate);
+            if (totalActualExpenseSum == null) {
+                totalActualExpenseSum = BigDecimal.ZERO;
+            }
+
+            remainingBudget = totalPlannedBudgetSum.subtract(totalActualExpenseSum);
+
+            BigDecimal purchasePrice = BigDecimal.valueOf(groupPurchase.getPrice());
+            if (remainingBudget.compareTo(purchasePrice) < 0) {
+                budgetWarning = true;
+            }
+        }
+
+        return new GroupPurchaseJoinResponse(groupPurchaseResponse, budgetWarning, remainingBudget);
+    }
+
+    @Transactional
+    public GroupPurchaseResponse leaveGroupPurchase(Long userId, Long groupPurchaseId) {
+        GroupPurchase groupPurchase = groupPurchaseRepository.findById(groupPurchaseId)
+                .orElseThrow(() -> new CustomException(ErrorCode.GROUP_PURCHASE_NOT_FOUND));
+
+        if (groupPurchase.getStatus() != PurchaseStatus.RECRUITING && groupPurchase.getStatus() != PurchaseStatus.SUCCESS) {
+            throw new CustomException(ErrorCode.GROUP_PURCHASE_NOT_RECRUITING);
+        }
+
+        if (groupPurchase.getDeadline().isBefore(LocalDateTime.now())) {
+            throw new CustomException(ErrorCode.GROUP_PURCHASE_NOT_RECRUITING);
+        }
+
+        GroupPurchaseParticipant participant = groupPurchaseParticipantRepository.findByGroupPurchaseIdAndUserId(groupPurchaseId, userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.GROUP_PURCHASE_NOT_JOINED));
+
+        groupPurchaseParticipantRepository.delete(participant);
+
+        PurchaseStatus previousStatus = groupPurchase.getStatus();
+        groupPurchase.leave();
+        
+        if (previousStatus == PurchaseStatus.SUCCESS) {
+            // 이미 결제(SUCCESS)가 일어난 뒤 누군가 이탈하여 인원이 미달되면, 전체 환불 후 다시 RECRUITING 상태로 돌아감
+            refundAllParticipants(groupPurchase);
+        }
+
+        String creatorNickname = userRepository.findById(groupPurchase.getCreatorId())
+                .map(User::getUsername)
+                .orElse("탈퇴한 사용자");
+
+        return GroupPurchaseResponse.of(groupPurchase, creatorNickname);
+    }
+
+    private void deductBudgetForUser(Long memberId, Long accountId, GroupPurchase groupPurchase) {
+        String categoryName = groupPurchaseCategoryRepository.findById(groupPurchase.getCategoryId())
+                .map(Category::getName)
+                .orElse("");
+        BigDecimal amount = BigDecimal.valueOf(groupPurchase.getPrice());
+        String description = "공동구매 지출: " + groupPurchase.getTitle() + " (공구 ID: " + groupPurchase.getId() + ")";
+
+        Account account = null;
+        if (accountId != null) {
+            account = accountRepository.findById(accountId).orElse(null);
+        }
+        if (account == null) {
+            List<Account> accounts = accountRepository.findByUserId(memberId);
+            if (!accounts.isEmpty()) {
+                account = accounts.get(0);
+            }
+        }
+
+        if (account == null) {
+            log.warn("가계부 자동 기입 실패: 사용자(ID={})의 자산 계좌가 존재하지 않습니다.", memberId);
+            throw new IllegalStateException("계좌가 존재하지 않아 결제를 진행할 수 없습니다.");
+        }
+
+        List<TransactionCategory> userCategories = transactionCategoryRepository.findAllByUserOrSystem(memberId);
+        TransactionCategory targetCategory = userCategories.stream()
+                .filter(c -> c.getType() == TransactionType.EXPENSE && c.getName().equals(categoryName))
+                .findFirst()
+                .orElseGet(() -> userCategories.stream()
+                        .filter(c -> c.getType() == TransactionType.EXPENSE && c.getName().equals("공동구매"))
+                        .findFirst()
+                        .orElse(null));
+
+        if (targetCategory == null) {
+            User user = userRepository.findById(memberId).orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
+            targetCategory = TransactionCategory.builder()
+                    .name("공동구매")
+                    .type(TransactionType.EXPENSE)
+                    .user(user)
+                    .build();
+            targetCategory = transactionCategoryRepository.save(targetCategory);
+        }
+
+        Transaction transaction = Transaction.builder()
+                .user(account.getUser())
+                .account(account)
+                .transactionCategory(targetCategory)
+                .type(TransactionType.EXPENSE)
+                .amount(amount)
+                .transactionDate(LocalDate.now())
+                .description(description)
+                .build();
+        transactionRepository.save(transaction);
+        account.changeBalance(amount.negate()); // 잔액이 부족하면 여기서 CustomException(AssetErrorCode.INSUFFICIENT_BALANCE) 발생 후 트랜잭션 롤백됨
+    }
+
+    private void refundBudgetForUser(Long memberId, Long accountId, GroupPurchase groupPurchase) {
+        try {
+            Account account = null;
+            if (accountId != null) {
+                account = accountRepository.findById(accountId).orElse(null);
+            }
+            if (account == null) {
+                List<Account> accounts = accountRepository.findByUserId(memberId);
+                if (!accounts.isEmpty()) {
+                    account = accounts.get(0);
+                }
+            }
+
+            if (account == null) {
+                return;
+            }
+
+            List<Transaction> transactions = transactionRepository.findByAccountIdAndDescriptionAndType(
+                    account.getId(), 
+                    "공동구매 지출: " + groupPurchase.getTitle() + " (공구 ID: " + groupPurchase.getId() + ")", 
+                    TransactionType.EXPENSE
+            );
+            
+            if (!transactions.isEmpty()) {
+                Transaction originalExpense = transactions.get(0);
+                
+                // 새로운 수입 내역(INCOME)을 생성하는 대신, 기존 지출 내역(EXPENSE)을 삭제하여 예산을 원상 복구함
+                transactionRepository.delete(originalExpense);
+                // 통장 잔고 롤백
+                account.changeBalance(originalExpense.getAmount());
+            }
+        } catch (Exception e) {
+            log.warn("가계부 환불(결제 취소) 실패: 사용자(ID={})의 지출 취소 중 예외가 발생했습니다. 메시지: {}", memberId, e.getMessage());
+        }
+    }
+
+    private void refundAllParticipants(GroupPurchase groupPurchase) {
+        // Refund Creator
+        refundBudgetForUser(groupPurchase.getCreatorId(), groupPurchase.getCreatorAccountId(), groupPurchase);
+        
+        // Refund Participants
+        List<GroupPurchaseParticipant> participants = groupPurchaseParticipantRepository.findByGroupPurchaseId(groupPurchase.getId());
+        for (GroupPurchaseParticipant participant : participants) {
+            refundBudgetForUser(participant.getUserId(), participant.getAccountId(), groupPurchase);
+        }
+    }
+
+    public List<Long> getJoinedGroupPurchaseIds(Long userId) {
+        return groupPurchaseParticipantRepository.findByUserId(userId).stream()
+                .map(GroupPurchaseParticipant::getGroupPurchaseId)
+                .collect(Collectors.toList());
+    }
+
+    public List<Long> getWishedGroupPurchaseIds(Long userId) {
+        return wishlistRepository.findByUserId(userId).stream()
+                .map(Wishlist::getGroupPurchaseId)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void processExpiredGroupPurchases(List<GroupPurchase> expiredPurchases) {
+        for (GroupPurchase gp : expiredPurchases) {
+            if (gp.getCurrentParticipants() >= gp.getMinParticipants()) {
+                gp.updateStatusByAdmin(PurchaseStatus.SUCCESS);
+                deductBudgetForUser(gp.getCreatorId(), gp.getCreatorAccountId(), gp);
+                List<GroupPurchaseParticipant> participants = groupPurchaseParticipantRepository.findByGroupPurchaseId(gp.getId());
+                for (GroupPurchaseParticipant p : participants) {
+                    deductBudgetForUser(p.getUserId(), p.getAccountId(), gp);
+                }
+            } else {
+                gp.updateStatusByAdmin(PurchaseStatus.FAILED);
+            }
+        }
+    }
+}

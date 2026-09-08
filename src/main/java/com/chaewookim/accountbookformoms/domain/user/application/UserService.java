@@ -1,87 +1,165 @@
 package com.chaewookim.accountbookformoms.domain.user.application;
 
-import com.chaewookim.accountbookformoms.domain.user.dao.RefreshTokenRepository;
+import com.chaewookim.accountbookformoms.domain.notification.application.NotificationService;
+import com.chaewookim.accountbookformoms.domain.notification.application.UserDeviceService;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
-import com.chaewookim.accountbookformoms.domain.user.domain.User;
-import com.chaewookim.accountbookformoms.domain.user.dto.request.SignUpRequest;
-import com.chaewookim.accountbookformoms.domain.user.dto.request.UpdateRequest;
-import com.chaewookim.accountbookformoms.domain.user.dto.request.WithdrawRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.LocationUpdateRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.SignupRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.UpdatePasswordRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.UpdateProfileRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.response.SignupResponse;
+import com.chaewookim.accountbookformoms.domain.user.dto.response.UserProfileResponse;
+import com.chaewookim.accountbookformoms.domain.user.entity.User;
+import com.chaewookim.accountbookformoms.domain.user.entity.UserNotificationSetting;
+import com.chaewookim.accountbookformoms.domain.user.entity.UserSetting;
+import com.chaewookim.accountbookformoms.domain.user.enums.SocialProvider;
+import com.chaewookim.accountbookformoms.domain.user.enums.VerificationType;
+import com.chaewookim.accountbookformoms.domain.user.error.UserErrorCode;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
-import com.chaewookim.accountbookformoms.global.error.ErrorCode;
-import com.chaewookim.accountbookformoms.global.event.UserSignedUpEvent;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.security.core.userdetails.UserDetails;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Objects;
+import java.util.Optional;
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class UserService {
 
+    private final UserCommonService userCommonService;
+    private final InterestCategoryService interestCategoryService;
+    private final EmailVerificationService emailVerificationService;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final RefreshTokenRepository refreshTokenRepository;
-
-    private final ApplicationEventPublisher eventPublisher;
+    private final KakaoGeocodingClient kakaoGeocodingClient;
+    private final UserLocationService userLocationService;
+    private final NotificationService notificationService;
+    private final UserDeviceService userDeviceService;
 
     @Transactional
-    public Long signUp(SignUpRequest request) {
+    public SignupResponse signUp(SignupRequest request) {
 
-        if (userRepository.existsByEmail(request.email())) {
-            throw new CustomException(ErrorCode.DUPLICATE_EMAIL);
+        if (!emailVerificationService.isVerified(request.email(), VerificationType.SIGNUP)) {
+            throw new CustomException(UserErrorCode.EMAIL_NOT_VERIFIED);
         }
 
         String encoded = passwordEncoder.encode(request.password());
 
-        User user = User.builder()
-                .email(request.email())
-                .username(request.username())
-                .password(encoded)
-                .birthDate(request.birthDate())
-                .address(request.address())
-                .build();
+        SignupResponse response = userRepository.findByEmailIncludingDeleted(request.email())
+                .map(user -> {
+                    if (user.getDeletedAt() == null) {
+                        throw new CustomException(UserErrorCode.DUPLICATE_EMAIL);
+                    }
+                    userCommonService.restoreUser(user, request.username(), encoded, request.birthDate(), request.address());
+                    return new SignupResponse(user.getId(), user.getEmail(), user.getUsername());
+                })
+                .orElseGet(() -> {
+                    User savedUser = userCommonService.saveLocalUser(request.email(), encoded, request.username(), SocialProvider.LOCAL, request.birthDate(), request.address());
+                    return new SignupResponse(savedUser.getId(), savedUser.getEmail(), savedUser.getUsername());
+                });
 
-        User savedUser = userRepository.save(user);
-
-        eventPublisher.publishEvent(new UserSignedUpEvent(savedUser.getId()));
-
-        return userRepository.findByEmail(request.email()).orElseThrow(
-                () -> new CustomException(ErrorCode.USER_NOT_FOUND)).getId();
+        emailVerificationService.deleteVerification(request.email(), VerificationType.SIGNUP);
+        geocodeAndPersistLocation(response.userId(), request.address());
+        return response;
     }
 
-    public User getUserByUsername(String username) {
+    public UserProfileResponse getMyProfile(Long userId) {
 
-        return userRepository.findByUsername(username).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+        UserSetting settings = user.getUserSetting();
+        UserNotificationSetting notificationSetting = user.getUserNotificationSetting();
+
+        return new UserProfileResponse(
+                user.getId(), user.getEmail(), user.getUsername(), user.getRole().name(),
+                user.getBirthDate(), user.getAddress(),
+                user.getPassword() != null,
+                settings.getBudgetAlertThreshold(), settings.getIsPortfolioPublic(),
+                notificationSetting.getIsBudgetAlertEnabled(), notificationSetting.getIsInterestCategoryEnabled(),
+                notificationSetting.isGoalAlertEnabledOrDefault(), notificationSetting.getIsSystemAlertEnabled()
+        );
     }
 
     @Transactional
-    public Long updateUser(String username, @Valid UpdateRequest request) {
+    public void updateMyProfile(Long userId, UpdateProfileRequest request) {
 
-        return userRepository.findByUsername(username).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND))
-                .updateUser(request)
-                .getId();
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+
+        String previousAddress = user.getAddress();
+        boolean shouldGeocode = request.address() != null
+                && (!Objects.equals(previousAddress, request.address()) || user.getLatitude() == null || user.getLongitude() == null);
+
+        user.updateProfile(request.username(), request.birthDate(), request.address());
+        user.getUserSetting().updateSettings(request.budgetAlertThreshold(), request.isPortfolioPublic());
+        user.getUserNotificationSetting().updateNotificationSettings(
+                request.isBudgetAlertEnabled(),
+                request.isInterestCategoryEnabled(),
+                request.isGoalAlertEnabled(),
+                request.isSystemAlertEnabled()
+        );
+        user.updateLastBudgetAlertMonth(null);
+
+        if (shouldGeocode) {
+            geocodeAndPersistLocation(userId, request.address());
+        }
     }
 
-    @Transactional
-    public void withdrawUser(UserDetails userDetails, @Valid WithdrawRequest request) {
+    /**
+     * 주소 문자열을 Kakao 지오코딩으로 위경도 변환 후 DB + Redis GEO 동기화.
+     * 지오코딩 실패는 회원가입/프로필 저장 흐름을 깨지 않도록 로그만 남기고 무시.
+     */
+    private void geocodeAndPersistLocation(Long userId, String address) {
+        if (address == null || address.isBlank()) return;
 
-        // 현재 로그인된 유저 찾기
-        String username = userDetails.getUsername();
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-
-        // 비밀번호 검증
-        if (!passwordEncoder.matches(request.password(), user.getPassword())) {
-            throw new CustomException(ErrorCode.PASSWORD_NOT_MATCH);
+        Optional<KakaoGeocodingClient.Coordinates> coords = kakaoGeocodingClient.geocode(address);
+        if (coords.isEmpty()) {
+            log.info("주소 지오코딩 실패로 위치 저장 스킵 - userId: {}, address: {}", userId, address);
+            return;
         }
 
-        // 리프레시 토큰 정리
-        refreshTokenRepository.deleteByUserId(user.getId());
+        try {
+            userLocationService.updateLocation(
+                    userId,
+                    new LocationUpdateRequest(coords.get().latitude(), coords.get().longitude())
+            );
+        } catch (Exception e) {
+            log.warn("위치 저장 실패 - userId: {}, message: {}", userId, e.getMessage());
+        }
+    }
 
-        // 삭제 진행
+    @Transactional
+    public void updatePassword(Long userId, UpdatePasswordRequest request) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+
+        if (user.getPassword() != null) {
+            if (request.currentPassword() == null ||
+                    !passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
+                throw new CustomException(UserErrorCode.PASSWORD_NOT_MATCH);
+            }
+        }
+
+        String newEncodedPassword = passwordEncoder.encode(request.newPassword());
+        user.updatePassword(newEncodedPassword);
+    }
+
+    @Transactional
+    public void withdraw(Long userId) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+
+        notificationService.deleteAllByUserId(userId);
+        user.getUserNotificationSetting().resetToDefaults();
+        userDeviceService.removeToken(user);
+        interestCategoryService.deleteAllByUserId(userId);
         userRepository.delete(user);
     }
 }

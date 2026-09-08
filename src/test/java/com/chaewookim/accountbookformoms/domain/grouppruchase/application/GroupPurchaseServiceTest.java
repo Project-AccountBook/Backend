@@ -1,0 +1,589 @@
+package com.chaewookim.accountbookformoms.domain.grouppruchase.application;
+
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseRepository;
+import com.chaewookim.accountbookformoms.domain.budget.dao.BudgetRepository;
+import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionRepository;
+import com.chaewookim.accountbookformoms.domain.asset.enums.TransactionType;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseJoinResponse;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseCategoryRepository;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.GroupPurchaseParticipantRepository;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.ReportRepository;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.GroupPurchase;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.GroupPurchaseParticipant;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.Category;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.PurchaseStatus;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.ReportTargetType;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dao.WishlistRepository;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.Wishlist;
+import com.chaewookim.accountbookformoms.domain.asset.application.TransactionService;
+import com.chaewookim.accountbookformoms.domain.asset.dao.AccountRepository;
+import com.chaewookim.accountbookformoms.domain.asset.dao.TransactionCategoryRepository;
+import com.chaewookim.accountbookformoms.domain.asset.entity.Account;
+import com.chaewookim.accountbookformoms.domain.asset.entity.TransactionCategory;
+import com.chaewookim.accountbookformoms.domain.asset.dto.request.TransactionRequest;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.YearMonth;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.PurchaseStatus;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.domain.enums.ReportTargetType;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseResponse;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseDashboardResponse;
+import com.chaewookim.accountbookformoms.domain.grouppruchase.dto.response.GroupPurchaseAdminResponse;
+import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
+import com.chaewookim.accountbookformoms.domain.user.entity.User;
+import com.chaewookim.accountbookformoms.global.error.CustomException;
+import com.chaewookim.accountbookformoms.global.error.ErrorCode;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.util.List;
+import java.util.Optional;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.LocalDateTime;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
+
+@ExtendWith(MockitoExtension.class)
+class GroupPurchaseServiceTest {
+
+    @Mock
+    private GroupPurchaseRepository groupPurchaseRepository;
+
+    @Mock
+    private UserRepository userRepository;
+
+    @Mock
+    private GroupPurchaseCategoryRepository groupPurchaseCategoryRepository;
+
+    @Mock
+    private ReportRepository reportRepository;
+
+    @Mock
+    private WishlistRepository wishlistRepository;
+
+    @Mock
+    private GroupPurchaseParticipantRepository groupPurchaseParticipantRepository;
+
+    @Mock
+    private BudgetRepository budgetRepository;
+
+    @Mock
+    private TransactionRepository transactionRepository;
+
+    @Mock
+    private TransactionService transactionService;
+
+    @Mock
+    private AccountRepository accountRepository;
+
+    @Mock
+    private TransactionCategoryRepository transactionCategoryRepository;
+
+    @InjectMocks
+    private GroupPurchaseService groupPurchaseService;
+
+    @Test
+    @DisplayName("대시보드 요약 조회 성공 — 정확한 비율 연산 확인")
+    void getDashboardSummary_success() {
+        // given
+        given(groupPurchaseRepository.countByCreatedAtBetween(any(LocalDateTime.class), any(LocalDateTime.class)))
+                .willReturn(5L); // 오늘 개설된 공구 수 5개
+
+        given(groupPurchaseRepository.sumCurrentParticipantsByStatus(PurchaseStatus.RECRUITING))
+                .willReturn(15L); // 실시간 참여 중인 인원 수 15명
+
+        // 상태별 개수 모킹 (총 9개: RECRUITING=3, SUCCESS=2, CLOSED=1, FAILED=3)
+        // 진행 비율: 3/9 = 33.33%
+        // 성공 비율: (2+1)/9 = 33.33%
+        // 무산 비율: 3/9 = 33.33%
+        given(groupPurchaseRepository.countByStatus(PurchaseStatus.RECRUITING)).willReturn(3L);
+        given(groupPurchaseRepository.countByStatus(PurchaseStatus.SUCCESS)).willReturn(2L);
+        given(groupPurchaseRepository.countByStatus(PurchaseStatus.CLOSED)).willReturn(1L);
+        given(groupPurchaseRepository.countByStatus(PurchaseStatus.FAILED)).willReturn(3L);
+
+        // when
+        GroupPurchaseDashboardResponse response = groupPurchaseService.getDashboardSummary();
+
+        // then
+        assertThat(response.todayCreatedCount()).isEqualTo(5L);
+        assertThat(response.activeParticipantsCount()).isEqualTo(15L);
+        assertThat(response.recruitingCount()).isEqualTo(3L);
+        assertThat(response.successCount()).isEqualTo(3L); // SUCCESS(2) + CLOSED(1) = 3
+        assertThat(response.failedCount()).isEqualTo(3L);
+        assertThat(response.recruitingRatio()).isEqualTo(33.33);
+        assertThat(response.successRatio()).isEqualTo(33.33);
+        assertThat(response.failedRatio()).isEqualTo(33.33);
+    }
+
+    @Test
+    @DisplayName("대시보드 요약 조회 성공 — 등록된 공구가 하나도 없을 때 (0 나누기 예방)")
+    void getDashboardSummary_empty() {
+        // given
+        given(groupPurchaseRepository.countByCreatedAtBetween(any(LocalDateTime.class), any(LocalDateTime.class)))
+                .willReturn(0L);
+        given(groupPurchaseRepository.sumCurrentParticipantsByStatus(PurchaseStatus.RECRUITING))
+                .willReturn(0L);
+
+        given(groupPurchaseRepository.countByStatus(PurchaseStatus.RECRUITING)).willReturn(0L);
+        given(groupPurchaseRepository.countByStatus(PurchaseStatus.SUCCESS)).willReturn(0L);
+        given(groupPurchaseRepository.countByStatus(PurchaseStatus.CLOSED)).willReturn(0L);
+        given(groupPurchaseRepository.countByStatus(PurchaseStatus.FAILED)).willReturn(0L);
+
+        // when
+        GroupPurchaseDashboardResponse response = groupPurchaseService.getDashboardSummary();
+
+        // then
+        assertThat(response.todayCreatedCount()).isZero();
+        assertThat(response.activeParticipantsCount()).isZero();
+        assertThat(response.recruitingRatio()).isZero();
+        assertThat(response.successRatio()).isZero();
+        assertThat(response.failedRatio()).isZero();
+    }
+
+    @Test
+    @DisplayName("어드민 모니터링 목록 조회 성공 — DTO 매핑 및 조인 정보 검증")
+    void getGroupPurchasesForAdmin_success() {
+        // given
+        Pageable pageable = PageRequest.of(0, 10);
+        GroupPurchase gp = GroupPurchase.builder()
+                .id(101L)
+                .creatorId(2L)
+                .categoryId(3L)
+                .title("공구 게시글")
+                .build();
+        ReflectionTestUtils.setField(gp, "createdAt", LocalDateTime.now());
+
+        Page<GroupPurchase> gpPage = new PageImpl<>(List.of(gp), pageable, 1);
+        given(groupPurchaseRepository.findAllForAdmin("RECRUITING", pageable)).willReturn(gpPage);
+
+        User user = User.forTestBuilder()
+                .id(2L)
+                .username("작성자")
+                .build();
+        given(userRepository.findById(2L)).willReturn(Optional.of(user));
+
+        Category category = Category.builder()
+                .id(3L)
+                .name("식료품")
+                .build();
+        given(groupPurchaseCategoryRepository.findById(3L)).willReturn(Optional.of(category));
+
+        given(reportRepository.countByTargetTypeAndTargetId(ReportTargetType.GROUP_PURCHASE, 101L)).willReturn(4L);
+
+        // when
+        Page<GroupPurchaseAdminResponse> responsePage = groupPurchaseService.getGroupPurchasesForAdmin("RECRUITING", pageable);
+
+        // then
+        assertThat(responsePage.getContent()).hasSize(1);
+        GroupPurchaseAdminResponse dto = responsePage.getContent().get(0);
+        assertThat(dto.id()).isEqualTo(101L);
+        assertThat(dto.creatorUsername()).isEqualTo("작성자");
+        assertThat(dto.categoryName()).isEqualTo("식료품");
+        assertThat(dto.reportCount()).isEqualTo(4L);
+    }
+
+    @Test
+    @DisplayName("찜 토글 성공 — 찜하기 등록")
+    void toggleWish_create_success() {
+        // given
+        given(groupPurchaseRepository.existsById(101L)).willReturn(true);
+        given(wishlistRepository.findByUserIdAndGroupPurchaseId(2L, 101L)).willReturn(Optional.empty());
+
+        // when
+        boolean result = groupPurchaseService.toggleWish(2L, 101L);
+
+        // then
+        assertThat(result).isTrue();
+        verify(wishlistRepository).save(any(Wishlist.class));
+    }
+
+    @Test
+    @DisplayName("찜 토글 성공 — 찜하기 해제")
+    void toggleWish_delete_success() {
+        // given
+        given(groupPurchaseRepository.existsById(101L)).willReturn(true);
+        Wishlist wish = Wishlist.builder().userId(2L).groupPurchaseId(101L).build();
+        given(wishlistRepository.findByUserIdAndGroupPurchaseId(2L, 101L)).willReturn(Optional.of(wish));
+
+        // when
+        boolean result = groupPurchaseService.toggleWish(2L, 101L);
+
+        // then
+        assertThat(result).isFalse();
+        verify(wishlistRepository).delete(wish);
+    }
+
+    @Test
+    @DisplayName("찜 토글 실패 — 존재하지 않는 공동구매 글")
+    void toggleWish_fail_not_found() {
+        // given
+        given(groupPurchaseRepository.existsById(101L)).willReturn(false);
+
+        // when & then
+        assertThatThrownBy(() -> groupPurchaseService.toggleWish(2L, 101L))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.GROUP_PURCHASE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("찜한 목록 페이징 조회 성공")
+    void getWishedGroupPurchases_success() {
+        // given
+        Pageable pageable = PageRequest.of(0, 10);
+        GroupPurchase gp = GroupPurchase.builder()
+                .id(101L)
+                .creatorId(2L)
+                .categoryId(3L)
+                .title("공구 게시글")
+                .build();
+        ReflectionTestUtils.setField(gp, "createdAt", LocalDateTime.now());
+
+        Page<GroupPurchase> gpPage = new PageImpl<>(List.of(gp), pageable, 1);
+        given(groupPurchaseRepository.findWishedGroupPurchases(2L, pageable)).willReturn(gpPage);
+
+        // when
+        Page<GroupPurchaseResponse> responsePage = groupPurchaseService.getWishedGroupPurchases(2L, pageable);
+
+        // then
+        assertThat(responsePage.getContent()).hasSize(1);
+        assertThat(responsePage.getContent().get(0).id()).isEqualTo(101L);
+    }
+
+    @Test
+    @DisplayName("공동구매 상세 단건 조회 성공 — 조회수 증가, 닉네임 및 참여율 계산 확인")
+    void getGroupPurchase_success() {
+        // given
+        GroupPurchase gp = GroupPurchase.builder()
+                .id(101L)
+                .creatorId(2L)
+                .categoryId(3L)
+                .title("공구 상세 정보")
+                .minParticipants(5)
+                .maxParticipants(10)
+                .pickupLocation("서울시 마포구")
+                .imageUrl("http://image.com/test.jpg")
+                .build();
+        ReflectionTestUtils.setField(gp, "currentParticipants", 2); // 2/10 = 20.0%
+        ReflectionTestUtils.setField(gp, "viewCount", 0);
+
+        given(groupPurchaseRepository.findById(101L)).willReturn(Optional.of(gp));
+
+        User user = User.forTestBuilder()
+                .id(2L)
+                .username("개설자닉네임")
+                .build();
+        given(userRepository.findById(2L)).willReturn(Optional.of(user));
+
+        // when
+        GroupPurchaseResponse response = groupPurchaseService.getGroupPurchase(101L);
+
+        // then
+        assertThat(response.id()).isEqualTo(101L);
+        assertThat(response.creatorNickname()).isEqualTo("개설자닉네임");
+        assertThat(response.achievementRate()).isEqualTo(20.0);
+        assertThat(response.imageUrl()).isEqualTo("http://image.com/test.jpg");
+        assertThat(gp.getViewCount()).isEqualTo(1); // 엔티티의 조회수가 1 증가했는지 검증
+    }
+
+    @Test
+    @DisplayName("공동구매 상세 단건 조회 실패 — 존재하지 않는 공동구매 ID")
+    void getGroupPurchase_notFound() {
+        // given
+        given(groupPurchaseRepository.findById(999L)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> groupPurchaseService.getGroupPurchase(999L))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.GROUP_PURCHASE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("공동구매 참여 성공 — 정상 참여 및 참여자 수 증가, 100% 미만 시 RECRUITING 유지")
+    void joinGroupPurchase_success() {
+        // given
+        GroupPurchase gp = GroupPurchase.builder()
+                .id(101L)
+                .creatorId(2L)
+                .maxParticipants(10)
+                .build();
+        ReflectionTestUtils.setField(gp, "currentParticipants", 1);
+        ReflectionTestUtils.setField(gp, "status", PurchaseStatus.RECRUITING);
+
+        given(groupPurchaseRepository.findById(101L)).willReturn(Optional.of(gp));
+        given(groupPurchaseParticipantRepository.existsByGroupPurchaseIdAndUserId(101L, 3L)).willReturn(false);
+        given(budgetRepository.findByUserIdAndYearMonth(any(), any())).willReturn(List.of());
+
+        User creator = User.forTestBuilder().id(2L).username("개설자").build();
+        given(userRepository.findById(2L)).willReturn(Optional.of(creator));
+
+        // when
+        GroupPurchaseJoinResponse response = groupPurchaseService.joinGroupPurchase(3L, 101L);
+
+        // then
+        assertThat(response.groupPurchase().currentParticipants()).isEqualTo(2);
+        assertThat(response.groupPurchase().status()).isEqualTo(PurchaseStatus.RECRUITING);
+        verify(groupPurchaseParticipantRepository).save(any(GroupPurchaseParticipant.class));
+    }
+
+    @Test
+    @DisplayName("공동구매 참여 성공 — 참여로 정원 도달 시 SUCCESS 상태 변경")
+    void joinGroupPurchase_reach_max_success() {
+        // given
+        GroupPurchase gp = GroupPurchase.builder()
+                .id(101L)
+                .creatorId(2L)
+                .maxParticipants(5)
+                .build();
+        ReflectionTestUtils.setField(gp, "currentParticipants", 4);
+        ReflectionTestUtils.setField(gp, "status", PurchaseStatus.RECRUITING);
+
+        given(groupPurchaseRepository.findById(101L)).willReturn(Optional.of(gp));
+        given(groupPurchaseParticipantRepository.existsByGroupPurchaseIdAndUserId(101L, 3L)).willReturn(false);
+        given(budgetRepository.findByUserIdAndYearMonth(any(), any())).willReturn(List.of());
+
+        User creator = User.forTestBuilder().id(2L).username("개설자").build();
+        given(userRepository.findById(2L)).willReturn(Optional.of(creator));
+
+        // 자동 지출 기입용 Mock 설정 (조용히 스킵되도록 자산 계좌를 빈 목록으로 설정)
+        given(accountRepository.findByUserId(any())).willReturn(List.of());
+
+        // when
+        GroupPurchaseJoinResponse response = groupPurchaseService.joinGroupPurchase(3L, 101L);
+
+        // then
+        assertThat(response.groupPurchase().currentParticipants()).isEqualTo(5);
+        assertThat(response.groupPurchase().status()).isEqualTo(PurchaseStatus.SUCCESS);
+    }
+
+    @Test
+    @DisplayName("공동구매 참여 실패 — 정원 가득 참")
+    void joinGroupPurchase_full_fail() {
+        // given
+        GroupPurchase gp = GroupPurchase.builder()
+                .id(101L)
+                .creatorId(2L)
+                .maxParticipants(5)
+                .build();
+        ReflectionTestUtils.setField(gp, "currentParticipants", 5);
+        ReflectionTestUtils.setField(gp, "status", PurchaseStatus.RECRUITING);
+
+        given(groupPurchaseRepository.findById(101L)).willReturn(Optional.of(gp));
+
+        // when & then
+        assertThatThrownBy(() -> groupPurchaseService.joinGroupPurchase(3L, 101L))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.GROUP_PURCHASE_FULL);
+    }
+
+    @Test
+    @DisplayName("공동구매 참여 실패 — 이미 참여한 회원")
+    void joinGroupPurchase_alreadyJoined_fail() {
+        // given
+        GroupPurchase gp = GroupPurchase.builder()
+                .id(101L)
+                .creatorId(2L)
+                .maxParticipants(10)
+                .build();
+        ReflectionTestUtils.setField(gp, "status", PurchaseStatus.RECRUITING);
+
+        given(groupPurchaseRepository.findById(101L)).willReturn(Optional.of(gp));
+        given(groupPurchaseParticipantRepository.existsByGroupPurchaseIdAndUserId(101L, 3L)).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> groupPurchaseService.joinGroupPurchase(3L, 101L))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.GROUP_PURCHASE_ALREADY_JOINED);
+    }
+
+    @Test
+    @DisplayName("공동구매 참여 취소 성공 — 취소 시 RECRUITING 상태 복구 검증")
+    void leaveGroupPurchase_success() {
+        // given
+        GroupPurchase gp = GroupPurchase.builder()
+                .id(101L)
+                .creatorId(2L)
+                .maxParticipants(5)
+                .deadline(LocalDateTime.now().plusDays(2))
+                .build();
+        ReflectionTestUtils.setField(gp, "currentParticipants", 5);
+        ReflectionTestUtils.setField(gp, "status", PurchaseStatus.SUCCESS);
+
+        given(groupPurchaseRepository.findById(101L)).willReturn(Optional.of(gp));
+
+        GroupPurchaseParticipant participant = GroupPurchaseParticipant.builder()
+                .groupPurchaseId(101L)
+                .userId(3L)
+                .build();
+        given(groupPurchaseParticipantRepository.findByGroupPurchaseIdAndUserId(101L, 3L)).willReturn(Optional.of(participant));
+
+        User creator = User.forTestBuilder().id(2L).username("개설자").build();
+        given(userRepository.findById(2L)).willReturn(Optional.of(creator));
+
+        // when
+        GroupPurchaseResponse response = groupPurchaseService.leaveGroupPurchase(3L, 101L);
+
+        // then
+        assertThat(response.currentParticipants()).isEqualTo(4);
+        assertThat(response.status()).isEqualTo(PurchaseStatus.RECRUITING);
+        verify(groupPurchaseParticipantRepository).delete(participant);
+    }
+
+    @Test
+    @DisplayName("공동구매 참여 성공 — 가계부 예산 설정되어 있으나 잔액 부족 시 budgetWarning = true 확인")
+    void joinGroupPurchase_budgetWarning_true() {
+        // given
+        GroupPurchase gp = GroupPurchase.builder()
+                .id(101L)
+                .creatorId(2L)
+                .price(50000)
+                .maxParticipants(10)
+                .build();
+        ReflectionTestUtils.setField(gp, "currentParticipants", 1);
+        ReflectionTestUtils.setField(gp, "status", PurchaseStatus.RECRUITING);
+
+        given(groupPurchaseRepository.findById(101L)).willReturn(Optional.of(gp));
+        given(groupPurchaseParticipantRepository.existsByGroupPurchaseIdAndUserId(101L, 3L)).willReturn(false);
+
+        User creator = User.forTestBuilder().id(2L).username("개설자").build();
+        given(userRepository.findById(2L)).willReturn(Optional.of(creator));
+
+        com.chaewookim.accountbookformoms.domain.budget.entity.Budget budget =
+                com.chaewookim.accountbookformoms.domain.budget.entity.Budget.builder()
+                        .totalBudget(BigDecimal.valueOf(80000))
+                        .expectedExpense(BigDecimal.valueOf(20000))
+                        .build();
+
+        String currentYearMonth = YearMonth.now().toString();
+        given(budgetRepository.findByUserIdAndYearMonth(3L, currentYearMonth)).willReturn(List.of(budget));
+
+        given(transactionRepository.sumByUserAndType(eq(3L), eq(TransactionType.EXPENSE), any(LocalDate.class), any(LocalDate.class)))
+                .willReturn(BigDecimal.valueOf(90000));
+
+        // when
+        GroupPurchaseJoinResponse response = groupPurchaseService.joinGroupPurchase(3L, 101L);
+
+        // then
+        assertThat(response.budgetWarning()).isTrue();
+        assertThat(response.remainingBudget()).isEqualByComparingTo(BigDecimal.valueOf(10000));
+        assertThat(response.groupPurchase().currentParticipants()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("공동구매 참여 성공 — 가계부 예산이 충분하여 budgetWarning = false 확인")
+    void joinGroupPurchase_budgetWarning_false() {
+        // given
+        GroupPurchase gp = GroupPurchase.builder()
+                .id(101L)
+                .creatorId(2L)
+                .price(10000)
+                .maxParticipants(10)
+                .build();
+        ReflectionTestUtils.setField(gp, "currentParticipants", 1);
+        ReflectionTestUtils.setField(gp, "status", PurchaseStatus.RECRUITING);
+
+        given(groupPurchaseRepository.findById(101L)).willReturn(Optional.of(gp));
+        given(groupPurchaseParticipantRepository.existsByGroupPurchaseIdAndUserId(101L, 3L)).willReturn(false);
+
+        User creator = User.forTestBuilder().id(2L).username("개설자").build();
+        given(userRepository.findById(2L)).willReturn(Optional.of(creator));
+
+        com.chaewookim.accountbookformoms.domain.budget.entity.Budget budget =
+                com.chaewookim.accountbookformoms.domain.budget.entity.Budget.builder()
+                        .totalBudget(BigDecimal.valueOf(80000))
+                        .expectedExpense(BigDecimal.valueOf(20000))
+                        .build();
+
+        String currentYearMonth = YearMonth.now().toString();
+        given(budgetRepository.findByUserIdAndYearMonth(3L, currentYearMonth)).willReturn(List.of(budget));
+
+        given(transactionRepository.sumByUserAndType(eq(3L), eq(TransactionType.EXPENSE), any(LocalDate.class), any(LocalDate.class)))
+                .willReturn(BigDecimal.valueOf(50000));
+
+        // when
+        GroupPurchaseJoinResponse response = groupPurchaseService.joinGroupPurchase(3L, 101L);
+
+        // then
+        assertThat(response.budgetWarning()).isFalse();
+        assertThat(response.remainingBudget()).isEqualByComparingTo(BigDecimal.valueOf(50000));
+        assertThat(response.groupPurchase().currentParticipants()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("공동구매 참여 성공 — 정원 도달로 SUCCESS 시 참여자 전원 가계부 자동 지출 내역 기입 검증")
+    void joinGroupPurchase_reach_max_success_and_create_transactions() {
+        // given
+        GroupPurchase gp = GroupPurchase.builder()
+                .id(101L)
+                .creatorId(2L) // 개설자 ID
+                .categoryId(3L)
+                .price(15000)
+                .maxParticipants(3)
+                .title("맛있는 밀키트 공구")
+                .build();
+        ReflectionTestUtils.setField(gp, "currentParticipants", 2);
+        ReflectionTestUtils.setField(gp, "status", PurchaseStatus.RECRUITING);
+
+        given(groupPurchaseRepository.findById(101L)).willReturn(Optional.of(gp));
+        given(groupPurchaseParticipantRepository.existsByGroupPurchaseIdAndUserId(101L, 3L)).willReturn(false);
+        given(budgetRepository.findByUserIdAndYearMonth(any(), any())).willReturn(List.of());
+
+        User creator = User.forTestBuilder().id(2L).username("개설자").build();
+        given(userRepository.findById(2L)).willReturn(Optional.of(creator));
+
+        // 1. 카테고리 정보 모킹
+        Category category = Category.builder().id(3L).name("밀키트").build();
+        given(groupPurchaseCategoryRepository.findById(3L)).willReturn(Optional.of(category));
+
+        // 2. 참여자 리스트 모킹 (참가자 1명)
+        GroupPurchaseParticipant participant = GroupPurchaseParticipant.builder()
+                .groupPurchaseId(101L)
+                .userId(3L) // 참가자 ID
+                .build();
+        given(groupPurchaseParticipantRepository.findByGroupPurchaseId(101L)).willReturn(List.of(participant));
+
+        // 3. 계좌 모킹
+        Account creatorAccount = Account.builder().initialBalance(BigDecimal.valueOf(50000)).build();
+        ReflectionTestUtils.setField(creatorAccount, "id", 201L);
+        Account participantAccount = Account.builder().initialBalance(BigDecimal.valueOf(30000)).build();
+        ReflectionTestUtils.setField(participantAccount, "id", 301L);
+
+        given(accountRepository.findByUserId(2L)).willReturn(List.of(creatorAccount));
+        given(accountRepository.findByUserId(3L)).willReturn(List.of(participantAccount));
+
+        // 4. 가계부 카테고리 모킹
+        TransactionCategory tCategory = TransactionCategory.builder()
+                .name("밀키트")
+                .type(TransactionType.EXPENSE)
+                .build();
+        ReflectionTestUtils.setField(tCategory, "id", 401L);
+        given(transactionCategoryRepository.findAllByUserOrSystem(2L)).willReturn(List.of(tCategory));
+        given(transactionCategoryRepository.findAllByUserOrSystem(3L)).willReturn(List.of(tCategory));
+
+        // when
+        GroupPurchaseJoinResponse response = groupPurchaseService.joinGroupPurchase(3L, 101L);
+
+        // then
+        assertThat(response.groupPurchase().currentParticipants()).isEqualTo(3);
+        assertThat(response.groupPurchase().status()).isEqualTo(PurchaseStatus.SUCCESS);
+
+        // 5. 개설자(2L)와 참가자(3L) 각각에 대해 지출 생성 서비스 메서드가 정확히 1번씩 호출되었는지 검증
+        verify(transactionService, times(1)).createTransaction(eq(2L), any(TransactionRequest.class));
+        verify(transactionService, times(1)).createTransaction(eq(3L), any(TransactionRequest.class));
+    }
+}

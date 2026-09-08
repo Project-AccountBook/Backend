@@ -2,171 +2,207 @@ package com.chaewookim.accountbookformoms.domain.user.application;
 
 import com.chaewookim.accountbookformoms.domain.user.dao.RefreshTokenRepository;
 import com.chaewookim.accountbookformoms.domain.user.dao.UserRepository;
-import com.chaewookim.accountbookformoms.domain.user.domain.RefreshToken;
-import com.chaewookim.accountbookformoms.domain.user.domain.User;
-import com.chaewookim.accountbookformoms.domain.user.dto.request.LogoutRequest;
-import com.chaewookim.accountbookformoms.domain.user.dto.request.TokenReissueRequest;
-import com.chaewookim.accountbookformoms.domain.user.dto.request.UpdateRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.LoginRequest;
+import com.chaewookim.accountbookformoms.domain.user.dto.request.ReissueRequest;
 import com.chaewookim.accountbookformoms.domain.user.dto.response.TokenResponse;
+import com.chaewookim.accountbookformoms.domain.user.entity.RefreshToken;
+import com.chaewookim.accountbookformoms.domain.user.entity.User;
+import com.chaewookim.accountbookformoms.domain.user.enums.UserRole;
+import com.chaewookim.accountbookformoms.domain.user.enums.VerificationType;
 import com.chaewookim.accountbookformoms.global.error.CustomException;
-import com.chaewookim.accountbookformoms.global.error.ErrorCode;
-import com.chaewookim.accountbookformoms.global.jwt.JwtTokenProvider;
+import com.chaewookim.accountbookformoms.global.security.jwt.JwtTokenProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.core.Authentication;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
-    @InjectMocks
-    private AuthService authService;
+    @Mock
+    private EmailVerificationService emailVerificationService;
 
     @Mock
     private RefreshTokenRepository refreshTokenRepository;
 
     @Mock
+    private UserRepository userRepository;
+
+    @Mock
+    private PasswordEncoder encoder;
+
+    @Mock
     private JwtTokenProvider jwtTokenProvider;
 
     @Mock
-    private UserRepository userRepository;
+    private org.springframework.data.redis.core.RedisTemplate<String, String> redisTemplate;
+
+    @InjectMocks
+    private AuthService authService;
 
     @Test
-    @DisplayName("토큰 재발급 성공 테스트")
-    void refreshToken_Success() {
+    @DisplayName("로그인 - 성공")
+    void login_success() {
 
         // given
-        // 가짜 요청 객체
-        String requestToken = "token";
-        TokenReissueRequest request = new TokenReissueRequest(requestToken);
+        LoginRequest request = new LoginRequest("test@email.com", "password123");
+        User user = User.builder().email("test@email.com").password("encoded").role(UserRole.ROLE_USER).build();
 
-        // 기존 객체 정보
-        Long userId = 1L;
-        String email = "email@gmail.com";
-        String newAccessToken = "newAccessToken";
-        String newRefreshToken = "newRefreshToken";
+        given(userRepository.findByEmail(request.email())).willReturn(Optional.of(user));
+        given(encoder.matches(request.password(), user.getPassword())).willReturn(true);
+        given(jwtTokenProvider.createAccessToken(any(), any())).willReturn("new-access");
+        given(jwtTokenProvider.createRefreshToken(any())).willReturn("new-refresh");
 
-        // User 객체
-        User user = User.forTestBuilder()
-                .id(userId)
-                .username("username")
-                .email(email)
-                .password("passowrd")
-                .isAdmin(false)
-                .address("집")
-                .build();
+        // when
+        TokenResponse response = authService.login(request);
 
-        // 명시적으로 userId 넣어줌
-        ReflectionTestUtils.setField(user, "id", userId);
+        // then
+        assertThat(response.accessToken()).isEqualTo("new-access");
+        assertThat(response.refreshToken()).isEqualTo("new-refresh");
+        verify(refreshTokenRepository).save(any(RefreshToken.class));
+    }
 
-        // 저장된 객체 생성
-        RefreshToken savedToken = RefreshToken.forTestBuilder()
-                .userId(userId)
-                .token(requestToken)
-                .build();
+    @Test
+    @DisplayName("토큰 재발급 - 성공")
+    void reissue_success() {
 
-        // 토큰 유효성 검사 통과
-        given(jwtTokenProvider.validateToken(requestToken)).willReturn(true);
+        // given
+        String oldToken = "old-refresh";
+        String email = "test@email.com";
+        ReissueRequest request = new ReissueRequest(oldToken);
+        RefreshToken savedToken = new RefreshToken(email, oldToken);
+        User user = User.builder().email(email).role(UserRole.ROLE_USER).build();
 
-        // 토큰에서 이메일 추출
-        given(jwtTokenProvider.getSubject(requestToken)).willReturn(email);
-
-        // 이메일로 유저 찾기
+        given(jwtTokenProvider.validateToken(oldToken)).willReturn(true);
+        given(refreshTokenRepository.findByToken(oldToken)).willReturn(Optional.of(savedToken));
         given(userRepository.findByEmail(email)).willReturn(Optional.of(user));
-
-        // 유저 id로 저장된 토큰 검색
-        given(refreshTokenRepository.findByUserId(userId)).willReturn(Optional.of(savedToken));
-
-        // 새 토큰 생성 결과 설정
-        given(jwtTokenProvider.createAccessToken(any(Authentication.class))).willReturn(newAccessToken);
-        given(jwtTokenProvider.createRefreshToken(any(Authentication.class))).willReturn(newRefreshToken);
+        given(jwtTokenProvider.createAccessToken(any(), any())).willReturn("new-access");
+        given(jwtTokenProvider.createRefreshToken(any())).willReturn("new-refresh");
 
         // when
         TokenResponse response = authService.reissue(request);
 
         // then
-        // 응답에 새 토큰 잘 들어갔는지
-        assertEquals(newAccessToken, response.accessToken());
-        assertEquals(newRefreshToken, response.refreshToken());
-
-        // dirty checking으로 기존 토큰 객체 값이 새 토큰으로 바뀌었는지 확인
-        assertEquals(newRefreshToken, savedToken.getToken());
+        assertThat(response.accessToken()).isEqualTo("new-access");
+        assertThat(response.refreshToken()).isEqualTo("new-refresh");
+        verify(refreshTokenRepository).delete(savedToken);
+        verify(refreshTokenRepository).save(any(RefreshToken.class));
     }
 
     @Test
-    @DisplayName("토큰 재발급 실패 테스트 - 유효하지 않은 토큰")
-    void refreshToken_Failure_invalidToken() {
+    @DisplayName("토큰 재발급 - 유효하지 않은 토큰 예외 발생")
+    void reissue_fail_invalid_token() {
 
         // given
-        String invalidToken = "invalidToken";
-        TokenReissueRequest request = new TokenReissueRequest(invalidToken);
-
-        // validateToken이 false를 return
-        given(jwtTokenProvider.validateToken(invalidToken)).willReturn(false);
+        ReissueRequest request = new ReissueRequest("invalid-token");
+        given(jwtTokenProvider.validateToken(any())).willReturn(false);
 
         // when & then
-        // 예외 발생 검증
-        CustomException exception = assertThrows(CustomException.class, () -> authService.reissue(request));
-
-        // 예외 상세 검증
-        assertEquals(ErrorCode.INVALID_REFRESH_TOKEN, exception.getErrorCode());
+        assertThatThrownBy(() -> authService.reissue(request)).isInstanceOf(CustomException.class);
     }
 
-
     @Test
-    @DisplayName("로그아웃 성공 테스트")
-    void logout_Success() {
+    @DisplayName("비밀번호 재설정 요청 - 성공")
+    void requestPasswordReset_success() {
 
         // given
-        // 요청 객체
-        String requestToken = "token";
-        LogoutRequest request = new LogoutRequest(requestToken);
-
-        // 사용자 객체
-        User user = User.forTestBuilder()
-                .id(1L)
-                .username("username")
-                .email("email")
-                .password("password")
-                .isAdmin(false)
-                .address("address")
-                .build();
-        ReflectionTestUtils.setField(user, "id", 1L);
-
-        // 토큰 true 반환
-        given(jwtTokenProvider.validateToken(requestToken)).willReturn(true);
+        String email = "test@email.com";
+        User user = User.builder().email(email).build();
+        given(userRepository.findByEmail(email)).willReturn(Optional.of(user));
 
         // when
-        authService.logout(request);
+        authService.requestPasswordReset(email, "127.0.0.1");
 
         // then
-        verify(refreshTokenRepository, times(1)).deleteByToken(requestToken);
+        verify(emailVerificationService).sendVerificationCode(email, VerificationType.RESET, "127.0.0.1");
     }
 
     @Test
-    @DisplayName("로그아웃 실패 테스트 - 유효하지 않은 토큰")
-    void logout_Failure_invalidToken() {
+    @DisplayName("비밀번호 재설정 - 이미 인증된 경우 성공")
+    void resetPassword_success_when_already_verified() {
 
         // given
-        String invalidToken = "invalidToken";
+        String email = "test@email.com";
+        String code = "123456";
+        String newPassword = "newPassword123!";
+        String encodedPassword = "encodedPassword";
+        User user = User.builder().email(email).password("old").build();
 
-        // validate 반환값을 false로 설정
-        given(jwtTokenProvider.validateToken(invalidToken)).willReturn(false);
+        given(emailVerificationService.isVerified(email, VerificationType.RESET)).willReturn(true);
+        given(userRepository.findByEmail(email)).willReturn(Optional.of(user));
+        given(encoder.encode(newPassword)).willReturn(encodedPassword);
+
+        // when
+        authService.resetPassword(email, code, newPassword);
+
+        // then
+        assertThat(user.getPassword()).isEqualTo(encodedPassword);
+        verify(emailVerificationService, never()).verifyCode(email, code, VerificationType.RESET);
+        verify(emailVerificationService).deleteVerification(email, VerificationType.RESET);
+    }
+
+    @Test
+    @DisplayName("비밀번호 재설정 - 성공")
+    void resetPassword_success() {
+
+        // given
+        String email = "test@email.com";
+        String code = "123456";
+        String newPassword = "newPassword123";
+        String encodedPassword = "encodedPassword";
+        User user = User.builder().email(email).password("old").build();
+
+        given(emailVerificationService.isVerified(email, VerificationType.RESET)).willReturn(false);
+        given(emailVerificationService.verifyCode(email, code, VerificationType.RESET)).willReturn(true);
+        given(userRepository.findByEmail(email)).willReturn(Optional.of(user));
+        given(encoder.encode(newPassword)).willReturn(encodedPassword);
+
+        // when
+        authService.resetPassword(email, code, newPassword);
+
+        // then
+        assertThat(user.getPassword()).isEqualTo(encodedPassword);
+        verify(emailVerificationService).deleteVerification(email, VerificationType.RESET);
+    }
+
+    @Test
+    @DisplayName("비밀번호 재설정 - 인증번호 불일치 예외")
+    void resetPassword_fail_invalid_code() {
+
+        // given
+        String email = "test@email.com";
+        String code = "wrong-code";
+        given(emailVerificationService.isVerified(email, VerificationType.RESET)).willReturn(false);
+        given(emailVerificationService.verifyCode(email, code, VerificationType.RESET)).willReturn(false);
 
         // when & then
-        CustomException exception = assertThrows(CustomException.class, () -> authService.logout(new LogoutRequest(invalidToken)));
-        assertEquals(ErrorCode.INVALID_REFRESH_TOKEN, exception.getErrorCode());
+        assertThatThrownBy(() -> authService.resetPassword(email, code, "newPassword"))
+                .isInstanceOf(CustomException.class);
+    }
+
+    @Test
+    @DisplayName("로그아웃 - 성공")
+    void logout_success() {
+
+        // given
+        String email = "test@email.com";
+
+        // when
+        authService.logout(email);
+
+        // then
+        verify(refreshTokenRepository).deleteById(email);
     }
 }
