@@ -105,22 +105,40 @@ class EmailVerificationServiceTest {
     @Test
     @DisplayName("인증번호 검증 - 성공")
     void verifyCode_success() {
-        given(valueOperations.get(anyString())).willReturn("123456");
+        given(valueOperations.get("VERIFY:SIGNUP:test@email.com")).willReturn("123456");
 
         boolean result = emailVerificationService.verifyCode("test@email.com", "123456", VerificationType.SIGNUP);
 
         assertThat(result).isTrue();
-        verify(redisTemplate).delete(anyString());
+        verify(redisTemplate).delete("VERIFY:SIGNUP:test@email.com");
+        verify(redisTemplate).delete("VERIFY_ATTEMPT:SIGNUP:test@email.com");
     }
 
     @Test
-    @DisplayName("인증번호 검증 - 실패(코드 불일치)")
+    @DisplayName("인증번호 검증 - 실패(코드 불일치, 시도 횟수 미만)")
     void verifyCode_fail() {
-        given(valueOperations.get(anyString())).willReturn("654321");
+        given(valueOperations.get("VERIFY:SIGNUP:test@email.com")).willReturn("654321");
+        given(valueOperations.increment("VERIFY_ATTEMPT:SIGNUP:test@email.com")).willReturn(1L);
 
         boolean result = emailVerificationService.verifyCode("test@email.com", "123456", VerificationType.SIGNUP);
 
         assertThat(result).isFalse();
+        verify(redisTemplate).expire("VERIFY_ATTEMPT:SIGNUP:test@email.com", Duration.ofMinutes(3));
+        verify(redisTemplate, never()).delete("VERIFY:SIGNUP:test@email.com");
+    }
+
+    @Test
+    @DisplayName("인증번호 검증 - 5회 실패 시 코드 폐기 후 재발급 유도")
+    void verifyCode_exceedsAttempts() {
+        given(valueOperations.get("VERIFY:SIGNUP:test@email.com")).willReturn("654321");
+        given(valueOperations.increment("VERIFY_ATTEMPT:SIGNUP:test@email.com")).willReturn(5L);
+
+        assertThatThrownBy(() ->
+                emailVerificationService.verifyCode("test@email.com", "123456", VerificationType.SIGNUP)
+        ).isInstanceOf(CustomException.class);
+
+        verify(redisTemplate).delete("VERIFY:SIGNUP:test@email.com");
+        verify(redisTemplate).delete("VERIFY_ATTEMPT:SIGNUP:test@email.com");
     }
 
     @Test

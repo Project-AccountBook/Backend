@@ -55,9 +55,9 @@ public class ExpenseCompareService {
         LocalDate endDate = ym.atEndOfMonth();
 
         List<CategoryExpenseResponse> fixedCategories = toCategoryResponses(
-                fixedTransactionRepository.sumByUserCategory(userId, TYPE, startDate, endDate));
+                transactionRepository.sumByUserCategoryAndGenerated(userId, TYPE, true, startDate, endDate));
         List<CategoryExpenseResponse> variableCategories = toCategoryResponses(
-                transactionRepository.sumByUserCategory(userId, TYPE, startDate, endDate));
+                transactionRepository.sumByUserCategoryAndGenerated(userId, TYPE, false, startDate, endDate));
 
         BigDecimal fixedTotal = sumCategoryAmount(fixedCategories);
         BigDecimal variableTotal = sumCategoryAmount(variableCategories);
@@ -326,9 +326,9 @@ public class ExpenseCompareService {
         LocalDate startDate = ym.atDay(1);
         LocalDate endDate = ym.atEndOfMonth();
         List<CategoryExpenseResponse> fixedCategories = toCategoryResponses(
-                fixedTransactionRepository.sumByUserCategory(user.getId(), TYPE, startDate, endDate));
+                transactionRepository.sumByUserCategoryAndGenerated(user.getId(), TYPE, true, startDate, endDate));
         List<CategoryExpenseResponse> variableCategories = toCategoryResponses(
-                transactionRepository.sumByUserCategory(user.getId(), TYPE, startDate, endDate));
+                transactionRepository.sumByUserCategoryAndGenerated(user.getId(), TYPE, false, startDate, endDate));
         BigDecimal fixedTotal = sumCategoryAmount(fixedCategories);
         BigDecimal variableTotal = sumCategoryAmount(variableCategories);
         return new UserExpenseDetailResponse(

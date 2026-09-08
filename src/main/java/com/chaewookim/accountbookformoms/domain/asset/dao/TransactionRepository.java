@@ -121,6 +121,40 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
                                            @Param("endDate") LocalDate endDate);
 
     /**
+     * 실제 거래만 고정 실행 여부({@code generated})로 나눠 카테고리별 합계.
+     * 아직 실행되지 않은 FixedTransaction 템플릿은 포함하지 않는다.
+     */
+    @Query("""
+            SELECT t.transactionCategory.id, t.transactionCategory.name, SUM(t.amount)
+              FROM Transaction t
+             WHERE t.user.id = :userId
+               AND t.type = :type
+               AND t.fixedTransactionGenerated = :generated
+               AND t.transactionDate BETWEEN :startDate AND :endDate
+             GROUP BY t.transactionCategory.id, t.transactionCategory.name
+            """)
+    List<Object[]> sumByUserCategoryAndGenerated(@Param("userId") Long userId,
+                                                 @Param("type") TransactionType type,
+                                                 @Param("generated") boolean generated,
+                                                 @Param("startDate") LocalDate startDate,
+                                                 @Param("endDate") LocalDate endDate);
+
+    @Query("""
+            SELECT COALESCE(SUM(t.amount), 0)
+              FROM Transaction t
+             WHERE t.user.id = :userId
+               AND t.type = :type
+               AND t.fixedTransactionGenerated = true
+               AND t.transactionCategory.id = :categoryId
+               AND t.transactionDate BETWEEN :startDate AND :endDate
+            """)
+    BigDecimal sumGeneratedByUserAndTypeAndCategory(@Param("userId") Long userId,
+                                                    @Param("type") TransactionType type,
+                                                    @Param("categoryId") Long categoryId,
+                                                    @Param("startDate") LocalDate startDate,
+                                                    @Param("endDate") LocalDate endDate);
+
+    /**
      * 공개 설정 사용자들의 (user)별 월 합계.
      * 반환 컬럼: [userId, username, sumAmount]
      */

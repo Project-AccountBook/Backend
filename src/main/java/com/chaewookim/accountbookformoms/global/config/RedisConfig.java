@@ -31,7 +31,7 @@ public class RedisConfig {
     // Board HOT 랭킹 캐시 (type + days + limit 키, cross-user hit)
     public static final String CACHE_BOARD_HOT = "board:hot";
 
-    // 대시보드 (userId + yearMonth 키, 거래 수정 시 CacheEvict)
+    // 대시보드 (userId + yearMonth 키, 거래·예산 수정 시 CacheEvict)
     public static final String CACHE_DASHBOARD = "dashboard";
 
     // Phase 2: 그룹 평균 캐시 (userId 미포함 키 → cross-user hit)

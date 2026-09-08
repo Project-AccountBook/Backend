@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -27,6 +28,8 @@ public class EmailVerificationService {
     private static final Duration VERIFIED_TTL = Duration.ofMinutes(10);
     private static final int MAX_PER_EMAIL_PER_DAY = 5;
     private static final int MAX_PER_IP_PER_DAY = 20;
+    private static final int MAX_VERIFY_ATTEMPTS = 5;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final RedisTemplate<String, String> redisTemplate;
     private final AsyncVerificationEmailSender asyncVerificationEmailSender;
@@ -51,6 +54,7 @@ public class EmailVerificationService {
         }
 
         String code = generateRandomCode();
+        redisTemplate.delete(attemptKey(type, email));
         redisTemplate.opsForValue().set(verifyKey(type, email), code, CODE_TTL);
         redisTemplate.opsForValue().set(lockKey, "locked", COOLDOWN);
         incrementDailyCount(emailCountKey);
@@ -68,11 +72,28 @@ public class EmailVerificationService {
         String key = verifyKey(type, email);
         String savedCode = redisTemplate.opsForValue().get(key);
 
-        if (savedCode != null && savedCode.equals(code)) {
+        if (savedCode == null) {
+            return false;
+        }
+
+        if (savedCode.equals(code)) {
             redisTemplate.opsForValue().set(verifiedKey(type, email), "true", VERIFIED_TTL);
             redisTemplate.delete(key);
+            redisTemplate.delete(attemptKey(type, email));
             return true;
         }
+
+        Long attempts = redisTemplate.opsForValue().increment(attemptKey(type, email));
+        if (attempts != null && attempts == 1L) {
+            redisTemplate.expire(attemptKey(type, email), CODE_TTL);
+        }
+
+        if (attempts != null && attempts >= MAX_VERIFY_ATTEMPTS) {
+            redisTemplate.delete(key);
+            redisTemplate.delete(attemptKey(type, email));
+            throw new CustomException(UserErrorCode.VERIFICATION_ATTEMPTS_EXCEEDED);
+        }
+
         return false;
     }
 
@@ -115,6 +136,10 @@ public class EmailVerificationService {
         return "VERIFIED:" + type + ":" + email;
     }
 
+    private static String attemptKey(VerificationType type, String email) {
+        return "VERIFY_ATTEMPT:" + type + ":" + email;
+    }
+
     private static String emailCountKey(VerificationType type, String email, String day) {
         return "RL:EMAIL:" + type + ":" + email + ":" + day;
     }
@@ -124,6 +149,6 @@ public class EmailVerificationService {
     }
 
     private String generateRandomCode() {
-        return String.valueOf((int) (Math.random() * 900000) + 100000);
+        return String.valueOf(SECURE_RANDOM.nextInt(900000) + 100000);
     }
 }
